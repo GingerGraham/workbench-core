@@ -1,0 +1,7 @@
+# Machine-local Ansible host state — never committed (see
+# ansible/host_vars/localhost.yml.example for the template).
+ansible/host_vars/localhost.yml
+
+# Editor/OS noise
+.DS_Store
+*.swp
