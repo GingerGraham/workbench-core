@@ -1,0 +1,19 @@
+[Unit]
+Description=workbench-core sync timer (fixed-interval poll; the sync engine self-throttles to the current dynamic cadence — see contracts/tracking-spec.md §Cadence)
+
+[Timer]
+# Fires every 5 minutes, unconditionally. This interval never changes and
+# is never re-registered — the actual weekly/5-minute cadence decision is
+# made in userspace by lib/sync/engine.sh's workbench_sync_due() on every
+# firing, based on current TRACK_MODE state across all registered modules.
+# Reconfiguring a live systemd timer's own OnCalendar/OnUnitActiveSec
+# requires `systemctl daemon-reload` plus a timer restart — exactly the
+# "restart of the timer infrastructure" ARCHITECTURE.md §9.4 says a
+# tracking-mode change must never require. Polling cheaply and
+# self-throttling sidesteps that entirely.
+OnCalendar=*:0/5
+Persistent=true
+Unit=workbench-sync.service
+
+[Install]
+WantedBy=timers.target
