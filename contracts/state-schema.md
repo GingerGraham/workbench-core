@@ -42,8 +42,11 @@ valid single path component.
 
 ### `sync.conf`
 
-Plain `KEY=VALUE`, one assignment per line, read via `source` in a subshell
-(`workbench_module_conf_get`) or rewritten one key at a time
+Plain `KEY=VALUE`, one assignment per line, read as inert data via
+`grep`/`cut` — deliberately **not** `source`d, since this file lives on
+disk and is machine-writable; sourcing it would execute anything placed
+there rather than just reading key/value pairs (`workbench_module_conf_get`,
+`lib/sync/state.sh`) — or rewritten one key at a time
 (`workbench_module_conf_set`) without disturbing other keys:
 
 | Key | Meaning | Default if absent |

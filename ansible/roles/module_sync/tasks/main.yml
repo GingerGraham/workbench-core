@@ -42,3 +42,104 @@
   loop_control:
     label: "{{ item.item.name }}"
   when: item.rc | default(0) != 0
+
+# ── Scheduled sync (ARCHITECTURE.md §9.4/D8, contracts/tracking-spec.md
+#    §Cadence) ────────────────────────────────────────────────────────────
+# Installs the single, fixed-interval OS timer that invokes
+# `wb sync run-if-due` every 5 minutes — the actual weekly-vs-5-minute
+# cadence decision is made in userspace (lib/sync/engine.sh's
+# workbench_sync_due()) on every firing, never by reconfiguring this timer
+# itself (flagged in review: the templates existed but nothing rendered or
+# installed them, so scheduled sync never actually ran). Best-effort: a
+# missing systemd --user session bus (common in a container with no login
+# session) or launchctl failure is reported, not fatal to the rest of
+# convergence — `wb update`/`wb sync run-if-due` remain available manually
+# either way.
+
+- name: Ensure ~/.config/systemd/user exists (Linux)
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/.config/systemd/user"
+    state: directory
+    mode: "0755"
+  when: ansible_facts['system'] == 'Linux'
+
+- name: Render the systemd user service + timer units (Linux)
+  ansible.builtin.template:
+    src: "systemd/{{ item }}.j2"
+    dest: "{{ ansible_env.HOME }}/.config/systemd/user/{{ item }}"
+    mode: "0644"
+  loop:
+    - workbench-sync.service
+    - workbench-sync.timer
+  when: ansible_facts['system'] == 'Linux'
+  register: workbench_systemd_units
+
+- name: Enable and start the workbench-sync timer (Linux, systemd --user)
+  ansible.builtin.systemd:
+    name: workbench-sync.timer
+    scope: user
+    daemon_reload: "{{ workbench_systemd_units.changed | default(false) }}"
+    enabled: true
+    state: started
+  when: ansible_facts['system'] == 'Linux'
+  register: workbench_systemd_timer_result
+  # ignore_errors (not failed_when: false) — failed_when unconditionally
+  # clears the task's own `failed` field, which is exactly what the next
+  # task below needs to see to decide whether to report anything. This bit
+  # me in testing: with failed_when: false, "Service is in unknown state"
+  # (no user session bus — common in a container with no login session)
+  # came back as failed_when_result: false / failed: false, so the report
+  # task's `when: ...failed` never fired and the problem went silently
+  # unreported.
+  ignore_errors: true
+
+- name: Report if the systemd user timer could not be started
+  ansible.builtin.debug:
+    msg: >-
+      Could not enable/start workbench-sync.timer via `systemctl --user`
+      (no active user session bus? try `loginctl enable-linger $USER` and
+      re-run `wb apply`). Scheduled sync will not run automatically until
+      this is resolved — `wb update`/`wb sync run-if-due` still work
+      manually in the meantime. Error: {{ workbench_systemd_timer_result.msg | default('unknown') }}
+  when:
+    - ansible_facts['system'] == 'Linux'
+    - workbench_systemd_timer_result.failed | default(false)
+
+- name: Ensure ~/Library/LaunchAgents exists (macOS)
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/Library/LaunchAgents"
+    state: directory
+    mode: "0755"
+  when: ansible_facts['system'] == 'Darwin'
+
+- name: Render the launchd agent (macOS)
+  ansible.builtin.template:
+    src: "launchd/com.workbench.sync.plist.j2"
+    dest: "{{ ansible_env.HOME }}/Library/LaunchAgents/com.workbench.sync.plist"
+    mode: "0644"
+  when: ansible_facts['system'] == 'Darwin'
+  register: workbench_launchd_plist
+
+- name: Load the launchd agent (macOS)
+  ansible.builtin.command:
+    argv:
+      - launchctl
+      - load
+      - -w
+      - "{{ ansible_env.HOME }}/Library/LaunchAgents/com.workbench.sync.plist"
+  when:
+    - ansible_facts['system'] == 'Darwin'
+    - workbench_launchd_plist.changed | default(false)
+  changed_when: true
+  failed_when: false
+  register: workbench_launchd_result
+
+- name: Report if the launchd agent could not be loaded
+  ansible.builtin.debug:
+    msg: >-
+      `launchctl load` for com.workbench.sync failed (rc={{ workbench_launchd_result.rc | default('?') }}).
+      Scheduled sync will not run automatically until this is resolved —
+      `wb update`/`wb sync run-if-due` still work manually in the meantime.
+  when:
+    - ansible_facts['system'] == 'Darwin'
+    - workbench_launchd_result.rc | default(0) != 0

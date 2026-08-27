@@ -165,7 +165,18 @@ workbench_ssh_bootstrap_module() {
         return 1
     }
 
+    local key_path="${HOME}/.ssh/${key_name}"
+    local key_is_new="false"
+    [[ -f "${key_path}" ]] || key_is_new="true"
+
     workbench_ssh_generate_deploy_key "${key_name}" "${key_name}@$(hostname 2>/dev/null || echo workbench)"
+
+    if [[ "${key_is_new}" == "true" && -f "${key_path}.pub" ]]; then
+        printf '\nACTION REQUIRED for %s — add this deploy key (read-only, allow write access: NO):\n' "${name}" >&2
+        printf '  %s -> Settings -> Deploy keys -> Add deploy key\n\n' "${host}" >&2
+        cat "${key_path}.pub" >&2
+        printf '\n' >&2
+    fi
 
     _wb_ssh_ensure_conf_file "${WORKBENCH_SSH_CONFIG_D_FILE}"
     if grep -qx "Host ${alias}" "${WORKBENCH_SSH_CONFIG_D_FILE}" 2>/dev/null; then

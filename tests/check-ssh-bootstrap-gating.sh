@@ -103,6 +103,17 @@ else
     fail "deploy keypair was not generated"
 fi
 
+# A newly-generated key's public content and "add this deploy key"
+# instructions must actually be printed (flagged in review: the docstring
+# promised this and docs/getting-started.md relies on it, but nothing
+# actually printed the key).
+if grep -q "ACTION REQUIRED" /tmp/wb-ssh-3.log && grep -q "ssh-ed25519" /tmp/wb-ssh-3.log; then
+    ok "bootstrap prints the newly-generated public key with 'ACTION REQUIRED' instructions"
+else
+    fail "bootstrap did not print the public key / instructions for a newly-generated key"
+    cat /tmp/wb-ssh-3.log
+fi
+
 if [[ "$(stat -c '%a' "${HOME}/.ssh/workbench-awsconfd" 2>/dev/null || stat -f '%Lp' "${HOME}/.ssh/workbench-awsconfd")" == "600" ]]; then
     ok "the private key file has 600 permissions"
 else
@@ -161,6 +172,11 @@ if [[ "${alias_count}" -eq 1 ]]; then
     ok "re-running bootstrap does not duplicate the SSH config.d alias block"
 else
     fail "re-running bootstrap duplicated the alias block (count: ${alias_count})"
+fi
+if grep -q "ACTION REQUIRED" /tmp/wb-ssh-4.log; then
+    fail "re-running bootstrap re-printed the deploy-key instructions for an already-bootstrapped module"
+else
+    ok "re-running bootstrap does not re-print deploy-key instructions once already bootstrapped"
 fi
 
 echo

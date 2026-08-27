@@ -61,6 +61,24 @@ means either `ansible-core` itself needs attention (check
 `ansible/host_vars/localhost.yml` couldn't be reached; the printed error
 names which task failed.
 
+## Modules aren't syncing automatically — I have to run `wb update` by hand
+
+`wb install`/`wb apply` install a fixed-interval OS timer (systemd user
+timer on Linux, a launchd agent on macOS) that fires `wb sync run-if-due`
+every 5 minutes; the engine itself decides whether that firing should
+actually do anything (see `contracts/tracking-spec.md` §Cadence). If that
+timer never got installed — a container or minimal server with no active
+login session has no `systemd --user` bus, which `wb apply`'s output will
+report as "Could not enable/start workbench-sync.timer" rather than fail
+silently — scheduled sync won't run at all. Two ways to fix it:
+
+- Enable lingering so a user session (and its bus) exists without an
+  active login: `loginctl enable-linger "$USER"`, then re-run `wb apply`.
+- Or just call `wb update` (or `wb sync run-if-due`) yourself, e.g. from
+  your own cron/systemd setup, or by hand whenever you want to check for
+  updates — nothing else about `workbench-core` depends on the timer
+  actually being installed.
+
 ## Something looks like `git` is being used where the docs say it shouldn't be
 
 For a public repo on `latest`/`tag:`/`commit:` tracking, no `git` should
