@@ -243,3 +243,22 @@ _get_aliases_in() {
     fi
     echo
 }
+
+# ── Introspection: get-functions ─────────────────────────────────────────
+# The generalised get-functions (ARCHITECTURE.md §3): walks every registered
+# module's declared shell/installer/getter entries — driven entirely by
+# each module's own register: block, never a hardcoded registry in core.
+# Delegates to `wb functions` (bin/wb) rather than re-implementing the
+# module-enumeration/manifest-reading logic a second time here — core's own
+# `current` snapshot always contains bin/wb, since the whole repo (bin/
+# included) is exactly what gets fetched/symlinked as core's own module
+# content (principle 4: core is module zero, no special-cased shape).
+get-functions() {
+    local core_current="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/modules/core/current"
+    if [[ -x "${core_current}/bin/wb" ]]; then
+        "${core_current}/bin/wb" functions
+    else
+        log_error "get-functions: workbench-core's bin/wb not found under ${core_current} — is core registered? (wb status)"
+        return 1
+    fi
+}

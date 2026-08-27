@@ -234,6 +234,13 @@ _wb_cmd_functions() {
         local manifest
         manifest="$(workbench_module_current_dir "${name}")/.dotfiles-sync.yml"
         [[ -f "${manifest}" ]] || continue
+
+        local installer_src
+        while IFS= read -r installer_src; do
+            [[ -z "${installer_src}" ]] && continue
+            printf '    %-10s %s\n' "[installers]" "${installer_src}"
+        done < <(workbench_manifest_register_installer_entries "${manifest}")
+
         local getter_name getter_fn getter_label
         while IFS='|' read -r getter_name getter_fn getter_label; do
             [[ -z "${getter_name}" ]] && continue
