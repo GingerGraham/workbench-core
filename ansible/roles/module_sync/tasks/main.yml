@@ -1,0 +1,44 @@
+---
+# module_sync — registers whatever `workbench_modules` (host_vars)
+# declares, for parity with modules added directly via `wb add`/
+# `--bundle`. Deliberately thin: this role NEVER re-implements fetch,
+# resolve, or deploy logic — every task here just invokes `bin/wb add`,
+# the exact same hot-path entry point a human runs directly, which in turn
+# calls the exact same lib/sync/engine.sh functions the timer calls
+# (ARCHITECTURE.md §8's "Ansible never re-implements the deploy loop
+# itself," extended here from the deploy step to the fetch/distribution
+# step too, per the build brief's Phase 8).
+#
+# register.list/deploy resolution themselves are read live from each
+# module's manifest at sync time (lib/manifest/parse.sh, lib/sync/engine.sh)
+# rather than pre-rendered into separate deploy.list/hooks.list files by
+# this role — see ARCHITECTURE.md §12 for why (parse.sh is already pure
+# bash/awk and hot-path-safe, so there is nothing left for Ansible to usefully
+# pre-flatten).
+#
+# `wb add` is idempotent (a no-op, loudly, on an already-registered module)
+# so this task is safe to re-run on every `wb apply` without re-fetching
+# anything that hasn't changed upstream.
+
+- name: Register each declared module via wb add (idempotent)
+  ansible.builtin.command:
+    argv: >-
+      {{
+        [workbench_core_install_dir + '/bin/wb', 'add', item.name, item.url]
+        + (['--private'] if item.private | default(false) else [])
+        + (['--allow-hooks'] if item.allow_hooks | default(false) else [])
+      }}
+  loop: "{{ workbench_modules | default([]) }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: workbench_module_sync_result
+  changed_when: "'registered and synced successfully' in workbench_module_sync_result.stderr"
+  failed_when: false
+
+- name: Report any module that failed to register/sync
+  ansible.builtin.debug:
+    msg: "{{ item.item.name }}: {{ item.stderr }}"
+  loop: "{{ workbench_module_sync_result.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item.rc | default(0) != 0

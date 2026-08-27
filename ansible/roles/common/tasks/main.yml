@@ -1,0 +1,28 @@
+---
+# common — XDG dirs + base prereqs (ARCHITECTURE.md §4/§8). Idempotent by
+# construction (Ansible's `file`/`command` modules). Prereq installation
+# itself is NOT re-implemented here — `wb install` already ran
+# lib/core/prereqs.sh's check/install pass in pure shell before Ansible was
+# ever invoked; this role only ensures the directories every module
+# (core included) needs exist.
+
+- name: Ensure workbench XDG directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ workbench_xdg_config_home }}/workbench"
+    - "{{ workbench_xdg_config_home }}/workbench/local"
+    - "{{ workbench_xdg_config_home }}/workbench/user"
+    - "{{ workbench_xdg_config_home }}/workbench/core"
+    - "{{ workbench_xdg_data_home }}/workbench"
+    - "{{ workbench_xdg_data_home }}/workbench/modules"
+    - "{{ workbench_xdg_cache_home }}/workbench"
+
+- name: Ensure the version taxonomy file exists (never overwritten once present)
+  ansible.builtin.copy:
+    src: "{{ workbench_core_install_dir }}/lib/core/version-defaults.conf"
+    dest: "{{ workbench_xdg_config_home }}/workbench/core/version"
+    force: false
+    mode: "0644"

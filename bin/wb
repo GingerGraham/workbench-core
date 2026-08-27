@@ -1,0 +1,267 @@
+#!/usr/bin/env bash
+# bin/wb — the workbench-core CLI dispatcher.
+#
+# install/apply/add/remove/track/dev/sync/update/status/functions
+# (ARCHITECTURE.md §10). This script sources the whole shell library once
+# and dispatches to it — it deliberately contains no fetch/deploy/resolve
+# logic of its own (that all lives in lib/, shared with the loader and the
+# timer).
+set -uo pipefail
+
+WB_BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WB_ROOT="$(cd "${WB_BIN_DIR}/.." && pwd)"
+LIB="${WB_ROOT}/lib"
+export WORKBENCH_CORE_INSTALL_DIR="${WB_ROOT}"
+
+for _wb_f in \
+    core/log.sh core/functions.sh core/semver.sh core/version.sh core/prereqs.sh \
+    manifest/parse.sh \
+    sync/state.sh \
+    distribution/resolve.sh distribution/fetch-tarball.sh distribution/fetch-git-snapshot.sh distribution/snapshot.sh \
+    sync/engine.sh \
+    ssh/bootstrap.sh \
+    modules/catalog.sh modules/add.sh modules/remove.sh modules/track.sh modules/dev.sh modules/sync-toggle.sh \
+    ; do
+    # shellcheck disable=SC1090
+    source "${LIB}/${_wb_f}"
+done
+unset _wb_f
+
+_wb_usage() {
+    cat <<'EOF'
+Usage: wb <command> [args]
+
+  install [--bundle <name>]   First-run convergence: prereqs, core bootstrap,
+                               host-state generation, Ansible apply.
+  apply                       Re-run convergence without interactive prompts.
+  add <name> [url] [--private] [--allow-hooks]
+                               Hot-path module registration.
+  remove <name>               Idempotent, non-destructive deregistration.
+  track <name> --latest | --branch <b> | --tag <t> | --commit <sha>
+                               Set a module's tracking mode/ref.
+  dev [<name>]                Guided wrapper over `track`.
+  sync enable|disable [<name>]
+                               Toggle a module's sync.enabled (no name = core).
+  sync run-if-due              Internal: invoked by the timer; a no-op unless
+                               the current cadence interval has elapsed.
+  update [<name>]              On-demand sync-and-deploy, bypassing cadence.
+  status                       Per-module drift / tracking state / cadence.
+  functions                    Generalised get-functions.
+EOF
+}
+
+# ── install / apply ───────────────────────────────────────────────────────
+_wb_bootstrap_core_module() {
+    # Core's own initial registration: `wb install` is invoked from a
+    # running checkout of workbench-core itself (a `git clone` + `./bin/wb
+    # install`, or a release tarball extraction) — there is nothing to
+    # fetch that isn't already sitting right here. Rather than special-case
+    # core's *sync* engine (which still fetches core exactly like any other
+    # module on every subsequent cycle — principle 4), this bootstrap step
+    # only special-cases the very first "where does core's `current` point
+    # at" question, the same way workbench-precursor's install.sh detected
+    # dev-vs-release mode from `.git`'s presence. See ARCHITECTURE.md §9.6 —
+    # this running checkout IS the "developer's own working clone" case,
+    # just for core rather than an ecosystem module.
+    if workbench_is_registered core && [[ -d "$(workbench_module_current_dir core)" ]]; then
+        log_info "wb install: core is already bootstrapped"
+        return 0
+    fi
+
+    local module_dir snapshot_dir
+    module_dir="$(workbench_module_dir core)"
+    mkdir -p "${module_dir}/snapshots"
+    snapshot_dir="${module_dir}/snapshots/local-checkout"
+    [[ -L "${snapshot_dir}" || -e "${snapshot_dir}" ]] || ln -s "${WB_ROOT}" "${snapshot_dir}"
+    workbench_snapshot_swap core "${snapshot_dir}"
+
+    local track_mode="latest"
+    if [[ -d "${WB_ROOT}/.git" ]]; then
+        local branch
+        branch="$(git -C "${WB_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+        track_mode="branch:${branch}"
+    fi
+
+    workbench_module_conf_set core REPO_URL "https://github.com/GingerGraham/workbench-core.git"
+    workbench_module_conf_set core PRIVATE "false"
+    workbench_module_conf_set core TRACK_MODE "${track_mode}"
+    workbench_module_conf_set core REGISTERED "true"
+    workbench_module_conf_set core SYNC_ENABLED "true"
+    workbench_module_conf_set core ALLOW_HOOKS "false"
+    workbench_module_conf_set core RESOLVED_SHA "local-checkout"
+
+    workbench_render_register_list core
+    log_info "wb install: core bootstrapped from ${WB_ROOT} (tracking ${track_mode})"
+}
+
+_wb_write_rc_stub() {
+    local rc_file="$1" marker="# workbench-core loader"
+    local loader_path="\${XDG_DATA_HOME:-\${HOME}/.local/share}/workbench/modules/core/current/lib/loader.sh"
+    local stub_line="[ -f \"${loader_path}\" ] && source \"${loader_path}\"  ${marker}"
+
+    touch "${rc_file}"
+    if grep -qF "${marker}" "${rc_file}" 2>/dev/null; then
+        return 0
+    fi
+    printf '\n%s\n' "${stub_line}" >> "${rc_file}"
+    log_info "wb install: added loader stub to ${rc_file}"
+}
+
+_wb_cmd_install() {
+    local bundle=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --bundle) bundle="$2"; shift ;;
+            *) log_error "wb install: unknown argument '$1'"; return 2 ;;
+        esac
+        shift
+    done
+
+    log_info "wb install: checking prerequisites..."
+    workbench_check_shell_prereqs >/dev/null
+    if [[ "$(workbench_missing_shell_prereqs | wc -l | tr -d ' ')" -gt 0 ]]; then
+        workbench_install_shell_prereqs || log_warn "wb install: could not install all missing prerequisites automatically — install them manually and re-run"
+    fi
+
+    workbench_ensure_version_file
+
+    mkdir -p "${XDG_CONFIG_HOME:-${HOME}/.config}/workbench" \
+             "${XDG_DATA_HOME:-${HOME}/.local/share}/workbench" \
+             "${XDG_CACHE_HOME:-${HOME}/.cache}/workbench"
+
+    _wb_bootstrap_core_module
+
+    _wb_write_rc_stub "${HOME}/.bashrc"
+    if [[ -n "${ZSH_VERSION:-}" || -f "${HOME}/.zshrc" ]]; then
+        _wb_write_rc_stub "${HOME}/.zshrc"
+    fi
+
+    if [[ -n "${bundle}" ]]; then
+        local member
+        while IFS= read -r member; do
+            [[ -z "${member}" ]] && continue
+            workbench_cmd_add "${member}"
+        done < <(workbench_catalog_bundle_modules "${bundle}")
+    fi
+
+    workbench_ssh_bootstrap_all
+
+    if command -v ansible-playbook &>/dev/null; then
+        log_info "wb install: running Ansible convergence..."
+        (
+            cd "${WB_ROOT}/ansible" && \
+            ANSIBLE_CONFIG="${WB_ROOT}/ansible/ansible.cfg" \
+            ansible-playbook -i inventory/localhost.yml \
+                -e "workbench_core_install_dir=${WB_ROOT}" \
+                playbooks/core.yml
+        ) || log_warn "wb install: Ansible convergence reported a failure — the pure-shell bootstrap above already produced a working shell; see output for what Ansible additionally couldn't do"
+    else
+        log_warn "wb install: ansible-playbook not found — skipping the Ansible convergence step (host_vars templating etc.). The shell itself is already fully bootstrapped."
+    fi
+
+    log_info "wb install: done. Start a new shell (or 'source ~/.bashrc') to load workbench-core."
+}
+
+_wb_cmd_apply() {
+    _wb_cmd_install "$@"
+}
+
+# ── sync ───────────────────────────────────────────────────────────────────
+_wb_cmd_sync() {
+    local sub="${1:-}"; shift || true
+    case "${sub}" in
+        enable|disable) workbench_cmd_sync_toggle "${sub}" "$@" ;;
+        run-if-due)
+            if workbench_sync_due; then
+                workbench_sync_all "scheduled"
+            else
+                log_debug "wb sync run-if-due: not due yet"
+            fi
+            ;;
+        *)
+            log_error "wb sync: usage: wb sync enable|disable [<name>] | wb sync run-if-due"
+            return 2
+            ;;
+    esac
+}
+
+# ── update ─────────────────────────────────────────────────────────────────
+_wb_cmd_update() {
+    local name="${1:-}"
+    if [[ -n "${name}" ]]; then
+        workbench_sync_module "${name}" "manual"
+    else
+        workbench_sync_all "manual"
+    fi
+}
+
+# ── status ─────────────────────────────────────────────────────────────────
+_wb_cmd_status() {
+    local name mode ref sha enabled registered fast="no"
+    [[ "$(workbench_cadence_seconds)" -eq "${WORKBENCH_CADENCE_FAST_SECONDS}" ]] && fast="yes"
+
+    printf '%-20s %-10s %-20s %-10s %-10s %-10s\n' "MODULE" "MODE" "REF" "SHA" "SYNC" "REGISTERED"
+    while IFS= read -r name; do
+        [[ -z "${name}" ]] && continue
+        mode="$(workbench_module_conf_get "${name}" TRACK_MODE latest)"
+        ref="$(workbench_module_conf_get "${name}" TRACK_REF "")"
+        sha="$(workbench_module_conf_get "${name}" RESOLVED_SHA "")"
+        enabled="$(workbench_module_conf_get "${name}" SYNC_ENABLED true)"
+        registered="$(workbench_module_conf_get "${name}" REGISTERED true)"
+        printf '%-20s %-10s %-20s %-10s %-10s %-10s\n' "${name}" "${mode}" "${ref:--}" "${sha:0:10}" "${enabled}" "${registered}"
+    done < <(workbench_list_all_modules)
+
+    echo
+    echo "Fast (5-minute) cadence active: ${fast}"
+}
+
+# ── functions ──────────────────────────────────────────────────────────────
+_wb_cmd_functions() {
+    local name reglist filepath tier
+    echo
+    echo "[INFO] Registered shell functions/getters, by module:"
+    while IFS= read -r name; do
+        [[ -z "${name}" ]] && continue
+        reglist="$(workbench_module_dir "${name}")/register.list"
+        [[ -f "${reglist}" ]] || continue
+        echo
+        echo "  ${name}:"
+        while IFS='|' read -r filepath tier; do
+            [[ -z "${filepath}" ]] && continue
+            printf '    %-10s %s\n' "[${tier}]" "${filepath}"
+        done < "${reglist}"
+
+        local manifest
+        manifest="$(workbench_module_current_dir "${name}")/.dotfiles-sync.yml"
+        [[ -f "${manifest}" ]] || continue
+        local getter_name getter_fn getter_label
+        while IFS='|' read -r getter_name getter_fn getter_label; do
+            [[ -z "${getter_name}" ]] && continue
+            printf '    %-10s %-24s %s\n' "[getter]" "${getter_fn}" "${getter_label}"
+        done < <(workbench_manifest_register_getter_entries "${manifest}")
+    done < <(workbench_list_loadable_modules)
+    echo
+}
+
+# ── dispatch ───────────────────────────────────────────────────────────────
+_wb_cmd="${1:-}"
+[[ $# -gt 0 ]] && shift
+
+case "${_wb_cmd}" in
+    install)   _wb_cmd_install "$@" ;;
+    apply)     _wb_cmd_apply "$@" ;;
+    add)       workbench_cmd_add "$@" ;;
+    remove)    workbench_cmd_remove "$@" ;;
+    track)     workbench_cmd_track "$@" ;;
+    dev)       workbench_cmd_dev "$@" ;;
+    sync)      _wb_cmd_sync "$@" ;;
+    update)    _wb_cmd_update "$@" ;;
+    status)    _wb_cmd_status "$@" ;;
+    functions) _wb_cmd_functions "$@" ;;
+    -h|--help|help|"") _wb_usage ;;
+    *)
+        echo "wb: unknown command '${_wb_cmd}'" >&2
+        _wb_usage >&2
+        exit 2
+        ;;
+esac

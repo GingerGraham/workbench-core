@@ -1,0 +1,14 @@
+---
+# workbench_core_install_dir is passed explicitly via `-e` by `wb install`/
+# `wb apply` (bin/wb already knows its own location) — not defaulted here,
+# since a self-referencing `{{ workbench_core_install_dir | default(...) }}`
+# in this play's own vars: is a Jinja2 recursive-template error, not a
+# working default. host_vars/localhost.yml can still override it if run
+# without `-e` (e.g. ansible-playbook invoked by hand).
+- name: workbench-core convergence
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  roles:
+    - common
+    - module_sync

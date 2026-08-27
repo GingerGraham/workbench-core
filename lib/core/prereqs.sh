@@ -91,11 +91,16 @@ workbench_install_shell_prereqs() {
     local bin
     for bin in "${missing[@]}"; do
         case "${PACKAGE_MANAGER}:${bin}" in
-            apt:column|dnf:column|yum:column|zypper:column) pkgs+=(util-linux) ;;
+            # column moved out of util-linux into bsdextrautils on modern
+            # Debian/Ubuntu (confirmed on Ubuntu 24.04 during this build —
+            # `util-linux` alone does not provide it there); still bundled
+            # in util-linux itself on RHEL/Fedora, SUSE, Arch, and Homebrew.
+            apt:column)                                    pkgs+=(bsdextrautils) ;;
+            dnf:column|yum:column|zypper:column)            pkgs+=(util-linux) ;;
             pacman:column)                                 pkgs+=(util-linux) ;;
             brew:column)                                   pkgs+=(util-linux) ;;
-            *:ssh-keyscan|*:ssh-keygen)                     pkgs+=(openssh-clients) ;;
             apt:ssh-keyscan|apt:ssh-keygen|pacman:ssh-keyscan|pacman:ssh-keygen) pkgs+=(openssh-client) ;;
+            *:ssh-keyscan|*:ssh-keygen)                     pkgs+=(openssh-clients) ;;
             *:*)                                           pkgs+=("${bin}") ;;
         esac
     done

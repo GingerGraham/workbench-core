@@ -1,0 +1,24 @@
+# Copy to ansible/host_vars/localhost.yml (gitignored) and edit for your
+# machine. Everything here is optional — `wb install` works with none of it
+# set, converging core alone.
+
+# Absolute path to this checkout — same value `wb install` already computes
+# and exports as WORKBENCH_CORE_INSTALL_DIR; only needed here because
+# Ansible's own templates (workbench-sync.service.j2 etc.) can't see a
+# shell-exported variable.
+workbench_core_install_dir: "{{ playbook_dir }}/.."
+
+# Additional modules to converge via Ansible, beyond whatever `wb add`
+# already registered directly (ARCHITECTURE.md §8 — Ansible renders
+# sync.conf for these, then invokes the same engine `wb add` uses; it never
+# re-implements fetch/deploy itself). Empty by default — every module in
+# Wave B is normally registered via `wb add`/`--bundle` directly, which
+# already performs an equivalent convergence without needing Ansible at
+# all. This list exists for parity/idempotency-checking: a full `wb apply`
+# re-run against machine state declared here must be a no-op.
+workbench_modules: []
+# workbench_modules:
+#   - name: awsconfd
+#     url: git@github.com:you/awsconfd.git
+#     private: true
+#     allow_hooks: false
