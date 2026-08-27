@@ -1,0 +1,19 @@
+# .dotfiles-sync.yml — workbench-core's own manifest.
+#
+# Core is "module zero" (ARCHITECTURE.md principle 4): it registers its own
+# shell content through the exact same register: mechanism, and syncs
+# itself through the exact same distribution/sync engine, that any other
+# module uses. This file is what makes that literally true rather than
+# aspirational — see contracts/manifest-spec.md for the full field
+# reference.
+version: 1
+branch: main
+
+core_api: ">=1.0 <2.0"
+sync:
+  enabled: true
+
+register:
+  shell:
+    - src: lib/core/functions.sh
+      tier: core
