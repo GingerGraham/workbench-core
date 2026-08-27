@@ -80,8 +80,15 @@ workbench_snapshot_prune() {
     snapshots_dir="${module_dir}/snapshots"
     [[ -d "${snapshots_dir}" ]] || return 0
 
+    # Plain `readlink` (no -f) is sufficient and portable: workbench_snapshot_swap
+    # always writes `current` as an absolute-path symlink (workbench_snapshot_path
+    # builds from workbench_module_dir, itself absolute), so there's no relative
+    # target to resolve. `-f` is a GNU coreutils extension BSD/macOS readlink
+    # does not have at all — using it here would silently break pruning's own
+    # "never delete what current points at" guarantee on macOS (current_target
+    # would come back empty, matching nothing).
     current_target=""
-    [[ -L "${module_dir}/current" ]] && current_target="$(cd "${module_dir}" && readlink -f current 2>/dev/null || true)"
+    [[ -L "${module_dir}/current" ]] && current_target="$(readlink "${module_dir}/current" 2>/dev/null || true)"
 
     local -a all=()
     local d

@@ -131,11 +131,21 @@ register:
 - `tier` — one of `env` / `core` / `tools` / `platform` / `distro` / `lazy`,
   matching the loader's tier order (see the Core API loader docs). Governs
   load order and eagerness the same way it does for core's own files.
-- `dest` — **not a field.** The engine computes it as
-  `${WORKBENCH_HOME}/modules.d/<module-name>/<basename>`. A manifest that
-  supplies `dest` here fails validation loudly — this is deliberate: a
+- `dest` — **not a field.** The engine computes it: each `register.list`
+  entry the sync engine writes points at `<module>/current/<src>` — i.e.
+  your file, exactly where it already lives inside your own module's
+  fetched snapshot (`${XDG_DATA_HOME}/workbench/modules/<name>/current/`),
+  never copied or symlinked anywhere else (see
+  `contracts/state-schema.md`'s `register.list` section and
+  `workbench_render_register_list()` in `lib/sync/engine.sh`). A manifest
+  that supplies `dest` here fails validation loudly — this is deliberate: a
   `register:` entry structurally cannot target anything outside its own
   module namespace, so there is no denylist to defend, and none is needed.
+  (An earlier design draft described a separate
+  `${WORKBENCH_HOME}/modules.d/<module-name>/<basename>` symlink tree for
+  this — the sync engine reading `register.list` straight out of each
+  module's own `current` snapshot makes that indirection unnecessary; see
+  `ARCHITECTURE.md` §12 D16.)
 
 ### `register.installers[]`
 

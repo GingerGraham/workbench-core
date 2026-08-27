@@ -122,6 +122,32 @@ fi
 out="$(bash "${WB}" track widget --tag v1.0.0 2>&1)"
 echo "${out}" | grep -q "already tracking" && ok "wb track on an already-set value is a no-op with a clear message" || fail "wb track did not report the already-tracking no-op"
 
+# ── 7. wb track rejects unsafe ref values before ever writing sync.conf
+#    (flagged in review: an unvalidated ref value could corrupt the
+#    line-based KEY=VALUE file). ────────────────────────────────────────────
+mode_before="$(grep '^TRACK_MODE=' "${XDG_DATA_HOME}/workbench/modules/widget/sync.conf")"
+out="$(bash "${WB}" track widget --branch "bad ref with spaces" 2>&1)"
+mode_after="$(grep '^TRACK_MODE=' "${XDG_DATA_HOME}/workbench/modules/widget/sync.conf")"
+if echo "${out}" | grep -qi "must not contain whitespace" && [[ "${mode_before}" == "${mode_after}" ]]; then
+    ok "wb track rejects a branch value containing whitespace, without touching sync.conf"
+else
+    fail "wb track did not reject an unsafe branch value: ${out}"
+fi
+
+out="$(bash "${WB}" track widget --commit "not-hex" 2>&1)"
+if echo "${out}" | grep -qi "must be a 7-40 character hex sha"; then
+    ok "wb track rejects a non-hex --commit value"
+else
+    fail "wb track did not reject a non-hex --commit value: ${out}"
+fi
+
+out="$(bash "${WB}" track widget --commit "abc123" 2>&1)"
+if echo "${out}" | grep -qi "must be a 7-40 character hex sha"; then
+    ok "wb track rejects a too-short --commit value"
+else
+    fail "wb track did not reject a too-short --commit value: ${out}"
+fi
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."

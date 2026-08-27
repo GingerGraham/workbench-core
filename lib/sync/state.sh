@@ -39,19 +39,32 @@ workbench_module_current_dir() {
 }
 
 # workbench_module_conf_get <name> <VAR> [default]
-# Reads one KEY from a module's sync.conf without polluting the caller's
-# environment (sourced in a subshell). Prints [default] (or nothing) if the
-# module, its sync.conf, or the key is absent.
+# Reads one KEY from a module's sync.conf. Prints [default] (or nothing) if
+# the module, its sync.conf, or the key is absent.
+#
+# Reads sync.conf as plain data (grep/cut), not via `source` — sync.conf is
+# a machine-writable file on disk (workbench_module_conf_set rewrites it in
+# place, and nothing stops a user from hand-editing it), so sourcing it
+# would execute arbitrary shell content placed there rather than just
+# reading KEY=VALUE pairs. <VAR> is validated as a plain shell-identifier
+# (no `eval`, no injection surface via the variable name either) before
+# it's ever used to build the grep pattern.
 workbench_module_conf_get() {
     local name="$1" var="$2" default="${3:-}"
-    local conf
+    case "${var}" in
+        [A-Za-z_]*[A-Za-z0-9_]|[A-Za-z_]) ;;
+        *)
+            log_error "workbench_module_conf_get: invalid variable name '${var}'"
+            return 1
+            ;;
+    esac
+
+    local conf value
     conf="$(workbench_module_conf_path "${name}")"
     [[ -f "${conf}" ]] || { printf '%s\n' "${default}"; return 0; }
-    (
-        # shellcheck disable=SC1090
-        source "${conf}"
-        eval "printf '%s\n' \"\${${var}:-${default}}\""
-    )
+
+    value="$(grep -E "^${var}=" "${conf}" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
+    printf '%s\n' "${value:-${default}}"
 }
 
 # workbench_module_conf_set <name> <VAR> <value>
