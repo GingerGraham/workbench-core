@@ -26,7 +26,13 @@ _wb_prereqs_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # Binary -> minimum-viable description, in check order. gpg is optional
 # (only needed if GPG-related functionality is used later, e.g. by a future
 # workbench-gpg module) — checked and reported, never blocks install.
-_WB_SHELL_PREREQS_REQUIRED=(awk sed tr grep column git curl ssh-keyscan)
+# ssh-keygen is required alongside ssh-keyscan (Phase 6's deploy-key
+# generation, lib/ssh/bootstrap.sh) — not called out as a separate line item
+# in the original gap list, but bundled in the same openssh-client(s)
+# package on every distro checked, so no separate install-mapping is needed
+# beyond what ssh-keyscan already requires (see
+# workbench_install_shell_prereqs' package-name mapping below).
+_WB_SHELL_PREREQS_REQUIRED=(awk sed tr grep column git curl ssh-keyscan ssh-keygen)
 _WB_SHELL_PREREQS_OPTIONAL=(gpg)
 
 # workbench_check_shell_prereqs
@@ -88,8 +94,8 @@ workbench_install_shell_prereqs() {
             apt:column|dnf:column|yum:column|zypper:column) pkgs+=(util-linux) ;;
             pacman:column)                                 pkgs+=(util-linux) ;;
             brew:column)                                   pkgs+=(util-linux) ;;
-            *:ssh-keyscan)                                 pkgs+=(openssh-clients) ;;
-            apt:ssh-keyscan|pacman:ssh-keyscan)             pkgs+=(openssh-client) ;;
+            *:ssh-keyscan|*:ssh-keygen)                     pkgs+=(openssh-clients) ;;
+            apt:ssh-keyscan|apt:ssh-keygen|pacman:ssh-keyscan|pacman:ssh-keygen) pkgs+=(openssh-client) ;;
             *:*)                                           pkgs+=("${bin}") ;;
         esac
     done
