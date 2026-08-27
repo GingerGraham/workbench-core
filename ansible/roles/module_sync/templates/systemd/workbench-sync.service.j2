@@ -1,0 +1,6 @@
+[Unit]
+Description=workbench-core sync (run-if-due — see workbench-sync.timer)
+
+[Service]
+Type=oneshot
+ExecStart={{ workbench_core_install_dir }}/bin/wb sync run-if-due

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.workbench.sync</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{{ workbench_core_install_dir }}/bin/wb</string>
+        <string>sync</string>
+        <string>run-if-due</string>
+    </array>
+    <!-- Same fixed-interval-poll-plus-userspace-self-throttle design as the
+         systemd timer (see workbench-sync.timer.j2's comment): launchd's
+         StartInterval is likewise a plist value that requires unloading and
+         reloading the job to change, so it is deliberately never touched
+         after install — lib/sync/engine.sh's workbench_sync_due() decides
+         on every firing whether this cycle should actually do anything. -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+    <key>StandardOutPath</key>
+    <string>{{ ansible_env.HOME }}/.local/share/workbench/sync.log</string>
+    <key>StandardErrorPath</key>
+    <string>{{ ansible_env.HOME }}/.local/share/workbench/sync.log</string>
+</dict>
+</plist>

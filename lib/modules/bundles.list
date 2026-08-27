@@ -1,0 +1,12 @@
+# Named bundles — <bundle-name>|<comma-separated module names>
+#
+# Pure sugar over repeated `wb add` calls (ARCHITECTURE.md principle 4,
+# §10) — `wb install --bundle workstation` is exactly equivalent to one
+# `wb add` call per listed name, nothing more. Empty of resolvable members
+# until the modules.list catalog in this same directory is populated
+# (Wave C); mirrors the three `dotfiles` profiles for continuity.
+#
+# Example (uncomment once the referenced modules exist in modules.list):
+# workstation|git,gpg,ssh,shell
+# server|git,ssh,shell
+# minimal|git,ssh

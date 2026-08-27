@@ -1,0 +1,13 @@
+# Known-modules catalog — <name>|<url>|<private:true|false>
+#
+# Empty of real entries until Wave C, per ARCHITECTURE.md §10/§11 — the
+# ecosystem modules (workbench-git, workbench-gpg, workbench-ssh,
+# workbench-shell) don't exist as repos yet. `wb add <name>` still works
+# for any name today by passing a url explicitly; this file only saves
+# typing the url once modules exist to list here.
+#
+# Example (uncomment and edit once a real repo exists):
+# git|https://github.com/<you>/workbench-git.git|false
+# gpg|https://github.com/<you>/workbench-gpg.git|false
+# ssh|https://github.com/<you>/workbench-ssh.git|false
+# shell|https://github.com/<you>/workbench-shell.git|false
