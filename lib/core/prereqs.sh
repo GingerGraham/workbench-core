@@ -23,6 +23,8 @@ _wb_prereqs_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # shellcheck source=lib/core/semver.sh
 [[ -f "${_wb_prereqs_lib_dir}/semver.sh" ]] && source "${_wb_prereqs_lib_dir}/semver.sh"
 
+command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/core/prereqs.sh" "0.1.0" || true
+
 # Binary -> minimum-viable description, in check order. gpg is optional
 # (only needed if GPG-related functionality is used later, e.g. by a future
 # workbench-gpg module) — checked and reported, never blocks install.

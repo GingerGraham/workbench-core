@@ -45,6 +45,21 @@ _wb_loader_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # shellcheck source=lib/sync/state.sh
 [[ -f "${_wb_loader_lib_dir}/sync/state.sh" ]] && source "${_wb_loader_lib_dir}/sync/state.sh"
 
+# No explicit source of core/version.sh here on purpose — that would be
+# exactly the kind of hardcoded "core" special-case this file must never
+# have (principle 4, tests/check-loader-multi-root.sh's own check for it).
+# lib/core/version.sh is registered like any other core-tier content
+# (.dotfiles-sync.yml) and reaches this process the same generic way
+# functions.sh already does, via the tier-sourcing loop below — so the
+# registration/debug-log lines wait until after that loop, where
+# workbench_register_script_version is available if core's own tier loaded
+# at all (silently absent otherwise, e.g. a synthetic test with no core
+# module registered — no different from any other module's content). See
+# the actual registration/debug-log calls after the tier loop below —
+# placing them here instead, before core's own tier has been sourced,
+# would make workbench_register_script_version unavailable and the
+# registration a silent no-op almost every real run.
+
 # ── OS / WSL / Distro / Shell / Arch detection ────────────────────────────────
 # Duplicated minimally here (rather than sourced from core's own
 # functions.sh) because core's functions.sh is itself only reachable via
@@ -224,6 +239,25 @@ if command -v workbench_list_loadable_modules &>/dev/null; then
     unset _wb_tier
 else
     log_warn "loader: lib/sync/state.sh not found — no modules were loaded (core itself may not be registered yet; run 'wb install')"
+fi
+
+# Script-version registration + hot-path version logging (bootstrap-fix
+# brief §5.2/§5.3), debug-gated by the same WORKBENCH_DEBUG flag log_debug
+# already uses above. Placed after the tier loop, not before: both
+# workbench_register_script_version and workbench_release_version reach
+# this shell the same generic way any other core-tier content does
+# (lib/core/version.sh via register.list), so neither is available until
+# that content has actually been sourced.
+command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/loader.sh" "0.1.0" || true
+# Gated on WORKBENCH_DEBUG explicitly, before ever calling
+# workbench_release_version — not just left to log_debug's own internal
+# gate. Bash evaluates a command's arguments (the $(...) substitution)
+# before the command (log_debug) itself runs, so `log_debug
+# "...$(workbench_release_version)..."` would fork a subshell and exec
+# `head` on the VERSION file on *every* shell start regardless of the flag,
+# silently contradicting this being debug-gated at all.
+if [[ "${WORKBENCH_DEBUG:-false}" == "true" ]] && command -v workbench_release_version &>/dev/null; then
+    log_debug "loader: workbench-core release $(workbench_release_version), lib/loader.sh v0.1.0"
 fi
 
 # ── Prompt fallback ────────────────────────────────────────────────────────

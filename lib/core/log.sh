@@ -19,3 +19,5 @@ if ! command -v log_debug &>/dev/null; then
         return 0
     }
 fi
+
+command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/core/log.sh" "0.1.0" || true

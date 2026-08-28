@@ -14,7 +14,7 @@ LIB="${WB_ROOT}/lib"
 export WORKBENCH_CORE_INSTALL_DIR="${WB_ROOT}"
 
 for _wb_f in \
-    core/log.sh core/functions.sh core/semver.sh core/version.sh core/prereqs.sh \
+    core/log.sh core/version.sh core/functions.sh core/semver.sh core/prereqs.sh \
     manifest/parse.sh \
     sync/state.sh \
     distribution/resolve.sh distribution/fetch-tarball.sh distribution/fetch-git-snapshot.sh distribution/snapshot.sh \
@@ -26,6 +26,13 @@ for _wb_f in \
     source "${LIB}/${_wb_f}"
 done
 unset _wb_f
+# core/version.sh loads second (right after core/log.sh, which every
+# workbench_register_script_version call site below needs for nothing but
+# every registration call itself needs core/version.sh already sourced) so
+# every other file's own registration line — guarded with
+# `command -v workbench_register_script_version &>/dev/null &&` for when
+# it's sourced standalone elsewhere — actually fires during this pass.
+command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "bin/wb" "0.1.0" || true
 
 _wb_usage() {
     cat <<'EOF'
@@ -47,22 +54,26 @@ Usage: wb <command> [args]
   update [<name>]              On-demand sync-and-deploy, bypassing cadence.
   status                       Per-module drift / tracking state / cadence.
   functions                    Generalised get-functions.
+  version                      Release version and every loaded file's own
+                               script-local version.
 EOF
 }
 
 # ── install / apply ───────────────────────────────────────────────────────
 _wb_bootstrap_core_module() {
-    # Core's own initial registration: `wb install` is invoked from a
-    # running checkout of workbench-core itself (a `git clone` + `./bin/wb
-    # install`, or a release tarball extraction) — there is nothing to
-    # fetch that isn't already sitting right here. Rather than special-case
-    # core's *sync* engine (which still fetches core exactly like any other
-    # module on every subsequent cycle — principle 4), this bootstrap step
-    # only special-cases the very first "where does core's `current` point
-    # at" question, the same way workbench-precursor's install.sh detected
-    # dev-vs-release mode from `.git`'s presence. See ARCHITECTURE.md §9.6 —
-    # this running checkout IS the "developer's own working clone" case,
-    # just for core rather than an ecosystem module.
+    # Core's own initial registration — but only reached by ONE of the two
+    # ways `wb install` ever runs. The production path is `bootstrap.sh`
+    # (repo root): it fetches a real, immutable snapshot into
+    # snapshots/<ref-slug>-<shortsha>/, writes core's sync.conf itself
+    # (TRACK_MODE=latest, a real RESOLVED_SHA), and only then hands off to
+    # `bin/wb install` — by the time this function runs in that case, core
+    # is already registered and the early-return below fires; this
+    # function's body never executes for a bootstrap.sh-driven install at
+    # all. The `.git`-presence branch further down is reached in exactly
+    # one case: a developer's own `git clone` + `./bin/wb install`
+    # (ARCHITECTURE.md §9.6's "developer's own working clone"), where there
+    # genuinely is nothing to fetch because this running checkout already
+    # IS the content — see fix-brief §3.3.
     if workbench_is_registered core && [[ -d "$(workbench_module_current_dir core)" ]]; then
         log_info "wb install: core is already bootstrapped"
         return 0
@@ -117,6 +128,7 @@ _wb_cmd_install() {
         shift
     done
 
+    log_info "wb install: workbench-core release: $(workbench_release_version)"
     log_info "wb install: checking prerequisites..."
     workbench_check_shell_prereqs >/dev/null
     if [[ "$(workbench_missing_shell_prereqs | wc -l | tr -d ' ')" -gt 0 ]]; then
@@ -172,6 +184,7 @@ _wb_cmd_sync() {
     case "${sub}" in
         enable|disable) workbench_cmd_sync_toggle "${sub}" "$@" ;;
         run-if-due)
+            log_debug "wb sync run-if-due: workbench-core release $(workbench_release_version), bin/wb v0.1.0"
             if workbench_sync_due; then
                 workbench_sync_all "scheduled"
             else
@@ -188,11 +201,19 @@ _wb_cmd_sync() {
 # ── update ─────────────────────────────────────────────────────────────────
 _wb_cmd_update() {
     local name="${1:-}"
+    log_debug "wb update: workbench-core release $(workbench_release_version), bin/wb v0.1.0"
     if [[ -n "${name}" ]]; then
         workbench_sync_module "${name}" "manual"
     else
         workbench_sync_all "manual"
     fi
+}
+
+# ── version ────────────────────────────────────────────────────────────────
+_wb_cmd_version() {
+    log_info "workbench-core release: $(workbench_release_version)"
+    log_info "loaded script versions:"
+    workbench_print_script_versions
 }
 
 # ── status ─────────────────────────────────────────────────────────────────
@@ -265,6 +286,7 @@ case "${_wb_cmd}" in
     update)    _wb_cmd_update "$@" ;;
     status)    _wb_cmd_status "$@" ;;
     functions) _wb_cmd_functions "$@" ;;
+    version)   _wb_cmd_version "$@" ;;
     -h|--help|help|"") _wb_usage ;;
     *)
         echo "wb: unknown command '${_wb_cmd}'" >&2

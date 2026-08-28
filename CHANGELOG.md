@@ -6,6 +6,33 @@ All notable changes to `workbench-core` are documented here.
 
 ### Added
 
+- **`bootstrap.sh`** (repo root): the canonical, documented production
+  install path — `curl -fsSL .../bootstrap.sh | bash`. No `git` anywhere;
+  resolves the latest `vX.Y.Z` release tag (falling back to `main`,
+  permanently, when no tag exists yet), fetches it straight into the real
+  `snapshots/<ref-slug>-<shortsha>/` path (never a scratch/temp directory),
+  writes core's own `sync.conf`, and hands off to `bin/wb install`.
+  Idempotent — re-running it hands off to convergence instead of
+  re-fetching. Closes the drift between the intended tarball-based install
+  design and the git-clone-only path the first-pass build actually shipped
+  (see `ARCHITECTURE.md` §9.1a, D17). The `git clone` + `./bin/wb install`
+  path is unchanged and still correct — it's now documented as "Developer
+  setup" rather than the only path.
+- **`wb version`**: new subcommand printing the release version
+  (`workbench_release_version()`, reading the new repo-root `VERSION` file)
+  and every loaded file's own script-local version. `wb install`/`wb apply`
+  print the release version once at the start; `wb update`/
+  `sync run-if-due`/the loader log it at `log_debug`, gated by
+  `WORKBENCH_DEBUG`. Script-local versions are tracked via a new
+  registration helper (`workbench_register_script_version()`/
+  `workbench_print_script_versions()`, `lib/core/version.sh`) rather than a
+  repeated same-named variable, avoiding clobbering across `bin/wb`'s
+  ~20-file single-process source pass. See `ARCHITECTURE.md` §6.1, D18.
+- `VERSION` file (repo root, `unreleased` until the first tag is cut) —
+  the release/tag version, distinct from the existing contract-version
+  integers and the new per-file script-local versions.
+- `tests/check-bootstrap.sh` and `tests/check-wb-version.sh`.
+
 - Initial `workbench-core` build (Wave B): version taxonomy, Core API
   surface (elevation helpers, distro/OS/WSL/shell/arch detection, getter
   introspection), manifest contract with `register:` ingestion, the

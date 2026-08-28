@@ -3,6 +3,8 @@
 # verb `wb dev` (lib/modules/dev.sh) wraps; returning a module to production
 # is `wb track <name> --latest`, not a separate command.
 
+command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/modules/track.sh" "0.1.0" || true
+
 # _wb_track_ref_is_safe <value>
 # TRACK_REF ends up written verbatim into sync.conf (a line-based
 # KEY=VALUE file) and, for `latest`/`branch:`, into a snapshot directory
