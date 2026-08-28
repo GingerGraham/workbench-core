@@ -249,8 +249,16 @@ fi
 # (lib/core/version.sh via register.list), so neither is available until
 # that content has actually been sourced.
 command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/loader.sh" "0.1.0" || true
-command -v workbench_release_version &>/dev/null && \
+# Gated on WORKBENCH_DEBUG explicitly, before ever calling
+# workbench_release_version — not just left to log_debug's own internal
+# gate. Bash evaluates a command's arguments (the $(...) substitution)
+# before the command (log_debug) itself runs, so `log_debug
+# "...$(workbench_release_version)..."` would fork a subshell and exec
+# `head` on the VERSION file on *every* shell start regardless of the flag,
+# silently contradicting this being debug-gated at all.
+if [[ "${WORKBENCH_DEBUG:-false}" == "true" ]] && command -v workbench_release_version &>/dev/null; then
     log_debug "loader: workbench-core release $(workbench_release_version), lib/loader.sh v0.1.0"
+fi
 
 # ── Prompt fallback ────────────────────────────────────────────────────────
 # Core provides only a bare, functional default — no opinionated prompt-

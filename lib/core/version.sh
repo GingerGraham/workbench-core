@@ -116,9 +116,22 @@ workbench_release_version() {
 # register N+1 times — silently violating the "no duplicate/colliding
 # entries after a full bin/wb source pass" guarantee tests/check-wb-
 # version.sh checks for.
+#
+# The `${_WB_SCRIPT_VERSIONS[@]+"${_WB_SCRIPT_VERSIONS[@]}"}` expansion
+# below (both loops) is deliberate, not decorative: on bash < 4.4 —
+# includes bash 3.2, a platform this codebase explicitly commits to —
+# expanding an EMPTY array as plain `"${arr[@]}"` under `set -u` (`bin/wb`
+# runs `set -uo pipefail`) raises "unbound variable" and aborts the shell.
+# The very first call to this function (from this file's own bottom-line
+# self-registration, before any entry exists yet) hits exactly that empty-
+# array case, so a plain `"${arr[@]}"` here would break every `wb` command
+# at startup on bash 3.2. `${arr[@]+word}` only substitutes `word` when the
+# array has at least one element, so an empty array correctly expands to
+# nothing instead of triggering nounset. CI runs bash 4+ and would not have
+# caught this.
 workbench_register_script_version() {
     local path="$1" version="$2" entry
-    for entry in "${_WB_SCRIPT_VERSIONS[@]}"; do
+    for entry in "${_WB_SCRIPT_VERSIONS[@]+"${_WB_SCRIPT_VERSIONS[@]}"}"; do
         [[ "${entry%%|*}" == "${path}" ]] && return 0
     done
     _WB_SCRIPT_VERSIONS+=("${path}|${version}")
@@ -126,10 +139,13 @@ workbench_register_script_version() {
 
 # workbench_print_script_versions
 # One "  <path>  v<version>" line per registered entry, in registration
-# (i.e. bin/wb's own source-order) order.
+# (i.e. bin/wb's own source-order) order. Same bash-3.2-safe empty-array
+# expansion as workbench_register_script_version above — not a live
+# failure today (only ever called with a populated array), but the same
+# latent hazard if that ever changes.
 workbench_print_script_versions() {
     local entry
-    for entry in "${_WB_SCRIPT_VERSIONS[@]}"; do
+    for entry in "${_WB_SCRIPT_VERSIONS[@]+"${_WB_SCRIPT_VERSIONS[@]}"}"; do
         printf '  %s\n' "${entry/|/  v}"
     done
 }
