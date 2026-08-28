@@ -31,14 +31,15 @@ ships.
 ## Quick start
 
 ```sh
-git clone https://github.com/GingerGraham/workbench-core.git
-cd workbench-core
-./bin/wb install
+curl -fsSL https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh | bash
 ```
 
-See `docs/getting-started.md` for the full walkthrough, and
-`docs/module-authoring.md` if you're building a module or independent
-tracked tool that hooks into the sync engine.
+No `git` required — this resolves the latest release, fetches it as a
+tarball, and hands off to `wb install`. See `docs/getting-started.md` for
+the full walkthrough (including the developer setup path, if you're working
+on `workbench-core` itself) and `docs/module-authoring.md` if you're
+building a module or independent tracked tool that hooks into the sync
+engine.
 
 ## Repository layout
 

@@ -17,3 +17,5 @@ register:
   shell:
     - src: lib/core/functions.sh
       tier: core
+    - src: lib/core/version.sh
+      tier: core

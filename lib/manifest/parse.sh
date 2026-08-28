@@ -18,6 +18,7 @@
 # it ever reaches this code path.
 
 _wb_manifest_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/manifest/parse.sh" "0.1.0" || true
 
 # workbench_manifest_scalar <key> <file>
 # Reads a bare top-level scalar (version, branch, core_api). Strips

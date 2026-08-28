@@ -9,6 +9,8 @@
 # construction, because it invokes the identical engine rather than a
 # second implementation of "fetch and register a module."
 
+command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/modules/add.sh" "0.1.0" || true
+
 # workbench_cmd_add <name> [url] [--private] [--allow-hooks]
 workbench_cmd_add() {
     local name="" url="" private="false" allow_hooks="false"

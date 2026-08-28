@@ -19,6 +19,8 @@ _wb_ssh_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # shellcheck source=lib/sync/state.sh
 [[ -f "${_wb_ssh_lib_dir}/../sync/state.sh" ]] && source "${_wb_ssh_lib_dir}/../sync/state.sh"
 
+command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/ssh/bootstrap.sh" "0.1.0" || true
+
 WORKBENCH_SSH_CONFIG_D_FILE="${HOME:-}/.ssh/config.d/10-workbench.conf"
 
 # workbench_ssh_extract_host <url>

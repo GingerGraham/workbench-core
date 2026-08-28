@@ -263,6 +263,39 @@ WORKBENCH_CORE_SEMVER=0.1.0
 These are independent on purpose — a new Core API function doesn't require a
 manifest or state change, and vice versa.
 
+### 6.1 Three version concepts (bootstrap-fix brief §5)
+
+The contract versions above are one of **three** independent, deliberately
+decoupled version concepts in this codebase — a later reader who sees a bare
+"version" mentioned somewhere should be able to tell which of the three it
+means:
+
+| Concept | Shape | Where it lives | Purpose |
+|---|---|---|---|
+| **Contract versions** (`CORE_API_VERSION`/`MANIFEST_SCHEMA_VERSION`/`STATE_SCHEMA_VERSION`) | small integers | `~/.config/workbench/core/version` | compatibility gating between core and modules — §6 above |
+| **Release/tag version** | `vX.Y.Z`, matches the git tag | `VERSION` file, repo root | "which release of `workbench-core` is this checkout" |
+| **Script-local version** | `X.Y.Z`, one per file | inline constant, registered via `workbench_register_script_version()` (`lib/core/version.sh`) | "which version of *this specific file* produced this output" — independent of the release tag, bumped by that file's own author on its own schedule |
+
+The release version is read by `workbench_release_version()`, which reads
+the repo-root `VERSION` file relative to wherever `lib/core/version.sh` is
+actually running from — this works identically for a developer's git clone
+or a fetched snapshot, since both are the full repo tree with `VERSION` at
+the root, no special-casing needed. `VERSION` is bumped as the last commit
+before cutting a tag (or the same commit), so the file and the tag never
+drift apart.
+
+The script-local registry is a plain indexed array
+(`_WB_SCRIPT_VERSIONS`, `path|version` entries), not a same-named variable
+repeated per file — `bin/wb` sources on the order of twenty files into one
+shell process, and a repeated variable name would get clobbered file-to-file
+(or throw outright if `readonly`). This is the same pattern already
+established for `_WB_SHELL_PREREQS_REQUIRED` in `lib/core/prereqs.sh`, not a
+new convention. `wb version` surfaces both the release version and the full
+registered-script-version list; `wb install`/`wb apply` print the release
+version once at the start; hot-path operations (`wb update`,
+`sync run-if-due`, the loader on every shell start) log it only at
+`log_debug`, gated by `WORKBENCH_DEBUG`.
+
 ---
 
 ## 7. Addressing missing components
@@ -370,6 +403,51 @@ working copy — with one deliberate, opt-in exception (dev tracking, below).
   pruned beyond a small retention window — the same pattern `dotfiles`'
   existing self-sync release mode already uses, generalised to every
   module.
+
+### 9.1a Bootstrap: the initial fetch (bootstrap-fix brief)
+
+§9.1 above specifies the *ongoing* sync mechanism — it deliberately doesn't
+say how `workbench-core` gets onto a machine that has nothing installed yet,
+before any of that engine code exists locally to run at all. That gap is
+closed here: **`bootstrap.sh`** (repo root) is the canonical, documented
+production entry point —
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh | bash
+```
+
+— curl + tar, no `git`, resolving the latest release tag the same way §9.1's
+public-repo path does, fetching straight into the real
+`snapshots/<ref-slug>-<shortsha>/` path (never a scratch/temp directory —
+a tmp-cleaner sweep or reboot could silently delete `current`'s target
+otherwise, breaking the loader with no obvious cause days later), writing
+core's own `sync.conf`, and handing off to `bin/wb install`. A developer
+working on `workbench-core` itself uses a real `git clone` +
+`./bin/wb install` instead (§9.6's dev-tracking pathway, for core rather
+than an ecosystem module) — that path is correct as-is and isn't going
+away, it's just no longer what the docs lead with.
+
+`bootstrap.sh` cannot depend on anything under `lib/` — none of that code
+exists locally until bootstrap fetches it — so its ref-resolution and
+tarball-fetch logic is a small, deliberate, accepted duplication of
+`lib/distribution/resolve.sh`/`fetch-tarball.sh` and
+`lib/distribution/snapshot.sh`'s slugify routine, the same narrow-exception
+precedent as the private-repo git-as-transport case in §9.1/D5. It stays
+deliberately tiny (get *just enough* on disk to hand off to
+`bin/wb install`, nothing more) and cross-references the files it
+duplicates from, and vice versa.
+
+`bootstrap.sh` also falls back to `main` when no `vX.Y.Z` tag exists yet —
+not just a bring-up convenience: without it, bootstrap is unconditionally
+broken until the first tag is cut. This fallback is permanent, not removed
+once a release exists.
+
+**Deliberate asymmetry:** unlike every module `workbench-core` fetches,
+`bootstrap.sh` itself is hosted unversioned, at `main` — it has no
+persistent state of its own to drift, since it either succeeds once (then
+hands off to the real, tag-tracked engine) or doesn't run again. Tag-pinning
+it the way modules are tag-pinned would just mean an old bootstrap fetching
+a new engine, buying nothing.
 
 ### 9.2 Tracking model
 
@@ -583,3 +661,5 @@ interest when Wave D arrives.
 | D14 | Snapshot atomic-swap primitive | `ln -sfn` (GNU) with a fallback to `ln -sfh` (BSD/macOS, since GNU coreutils 9.4 as tested does not recognise `-h`, and BSD `ln` does not recognise `-n`) directly against the final `current` path — not a temp-symlink-then-`mv`. `mv src dest` treats an existing symlink-to-directory `dest` as a directory to move *into* rather than replacing it, which would silently nest the new snapshot inside the old one; this was caught by `tests/check-snapshot-atomicity.sh` during the build (the temp+`mv` form initially implemented left `current` stuck on the very first snapshot forever) and fixed to match the direct-`ln` primitive `workbench-precursor`'s own release-mode swap already used successfully. See `lib/distribution/snapshot.sh`. |
 | D15 | `deploy.list`/`register.list`/`hooks.list` as static rendered artifacts | Only `register.list` is materialised on disk (written by the sync engine after every successful fetch, from the module's manifest in `current`) — `deploy.list` and `hooks.list` are NOT pre-rendered separate files; `lib/sync/engine.sh` reads deploy and hook entries live from the manifest via `lib/manifest/parse.sh` (already pure bash/awk, already hot-path-safe) at the moment they're needed. This simplifies the brief's original three-file-per-module shape to one, without reintroducing a `yq`/`python3` dependency or a second source of truth to keep in sync with the manifest — `ansible/roles/module_sync` accordingly does not render these files itself; it only invokes `wb add`, which triggers the same live read. |
 | D16 | `register.shell[]` destination shape (supersedes §5.2's `modules.d/` sketch) | `register.list` entries point directly at `<module>/current/<src>` — the file exactly where it already lives inside that module's own fetched snapshot — rather than a separate `${WORKBENCH_HOME}/modules.d/<module-name>/<basename>` symlink tree. Since every registered file is read straight out of `current` at source time (`lib/loader.sh`), an extra symlink layer would only reproduce the same path with more moving parts; the "engine-computed, not author-supplied, and structurally confined to the module's own namespace" property §5.1/§5.2 cares about holds identically either way. Caught during PR review (a doc/implementation mismatch flagged against `contracts/manifest-spec.md`) rather than found during the build itself — logged here so the two don't drift again. |
+| D17 | Bootstrap fetch mechanism | `bootstrap.sh` (repo root) is the canonical, documented production install path — curl + tar, no `git`, resolving the latest release tag and fetching straight into the real `snapshots/<ref-slug>-<shortsha>/` path (never a scratch/temp directory), then handing off to `bin/wb install`. It duplicates a small, deliberate slice of `lib/distribution/resolve.sh`/`fetch-tarball.sh`/`snapshot.sh`'s slugify — structurally unavoidable, since bootstrap can't depend on code it hasn't fetched yet — the same narrow-exception precedent as the private-repo git-as-transport case (§9.1/D5). Falls back to `main` when no `vX.Y.Z` tag exists yet, permanently (not just for bring-up). Hosted unversioned at `main`, unlike every tag-tracked module — it has no persistent state of its own to drift. The developer `git clone` + `./bin/wb install` path is unchanged and still correct (§9.6); it's relabelled "Developer setup" in the docs rather than removed. See §9.1a. |
+| D18 | Script versioning | Three independent, decoupled version concepts: contract versions (§6, unchanged), a new release/tag version (`VERSION` file at the repo root, `vX.Y.Z`, read via `workbench_release_version()`), and a new script-local version (one `X.Y.Z` per operational file — `bin/wb`, `bootstrap.sh`, `lib/loader.sh`, every file under `lib/`; not `tests/` or the Ansible playbooks/roles). Script-local versions are tracked via a plain indexed array (`_WB_SCRIPT_VERSIONS`, `workbench_register_script_version()`/`workbench_print_script_versions()` in `lib/core/version.sh`), not a repeated same-named variable — the latter would get clobbered file-to-file across `bin/wb`'s ~20-file single-process source pass (or throw, if `readonly`); the array pattern mirrors `_WB_SHELL_PREREQS_REQUIRED`'s existing convention. `wb version` is a new subcommand surfacing both the release version and the full script-version list. See §6.1. |

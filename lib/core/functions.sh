@@ -18,6 +18,8 @@ _wb_functions_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 [[ -f "${_wb_functions_dir}/log.sh" ]] && source "${_wb_functions_dir}/log.sh"
 unset _wb_functions_dir
 
+command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/core/functions.sh" "0.1.0" || true
+
 # ── OS / WSL / Distro / Shell / Arch detection (run once per session) ───────
 # Reconciles loader.sh's inline detection block and functions.sh's separate
 # detect-distro() into one routine, per the build brief's §4 callout.

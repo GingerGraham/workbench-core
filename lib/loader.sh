@@ -45,6 +45,18 @@ _wb_loader_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # shellcheck source=lib/sync/state.sh
 [[ -f "${_wb_loader_lib_dir}/sync/state.sh" ]] && source "${_wb_loader_lib_dir}/sync/state.sh"
 
+# No explicit source of core/version.sh here on purpose — that would be
+# exactly the kind of hardcoded "core" special-case this file must never
+# have (principle 4, tests/check-loader-multi-root.sh's own check for it).
+# lib/core/version.sh is registered like any other core-tier content
+# (.dotfiles-sync.yml) and reaches this process the same generic way
+# functions.sh already does, via the tier-sourcing loop below — so the
+# registration/debug-log lines wait until after that loop, where
+# workbench_register_script_version is available if core's own tier loaded
+# at all (silently absent otherwise, e.g. a synthetic test with no core
+# module registered — no different from any other module's content).
+command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/loader.sh" "0.1.0" || true
+
 # ── OS / WSL / Distro / Shell / Arch detection ────────────────────────────────
 # Duplicated minimally here (rather than sourced from core's own
 # functions.sh) because core's functions.sh is itself only reachable via
@@ -225,6 +237,15 @@ if command -v workbench_list_loadable_modules &>/dev/null; then
 else
     log_warn "loader: lib/sync/state.sh not found — no modules were loaded (core itself may not be registered yet; run 'wb install')"
 fi
+
+# Hot-path version logging (bootstrap-fix brief §5.3), debug-gated by the
+# same WORKBENCH_DEBUG flag log_debug already uses above. Placed after the
+# tier loop, not before: lib/core/version.sh reaches this shell the same
+# generic way any other core-tier content does (register.list), so
+# workbench_release_version is only available once that content has
+# actually been sourced.
+command -v workbench_release_version &>/dev/null && \
+    log_debug "loader: workbench-core release $(workbench_release_version), lib/loader.sh v0.1.0"
 
 # ── Prompt fallback ────────────────────────────────────────────────────────
 # Core provides only a bare, functional default — no opinionated prompt-

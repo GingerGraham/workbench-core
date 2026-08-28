@@ -21,6 +21,7 @@
 # task doesn't need yet.
 
 _wb_catalog_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/modules/catalog.sh" "0.1.0" || true
 
 _wb_catalog_modules_file() {
     local override="${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/catalog/modules.list"
