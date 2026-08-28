@@ -65,7 +65,7 @@ if [[ -z "${MISSING}" ]]; then
     ok "wb version lists every file bin/wb's own dispatch pass sources — no forgotten registration line"
 else
     fail "wb version is missing entries for:"
-    printf "${MISSING}" >&2
+    printf '%b' "${MISSING}" >&2
 fi
 
 # ── 2b. Every file in the full §5.2 scope — bin/wb, lib/loader.sh, and

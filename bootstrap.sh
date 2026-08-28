@@ -55,10 +55,18 @@ if [[ -e "${MODULE_DIR}/current" ]]; then
 fi
 
 # ── 2. Bare-minimum prereq check ─────────────────────────────────────────────
-# curl and tar only. Full prereq coverage (awk/sed/tr/grep/column/git/
-# ssh-keyscan/ssh-keygen) is `bin/wb install`'s job (lib/core/prereqs.sh) —
-# that code doesn't exist locally yet at this point.
-for _wb_bin in curl tar; do
+# curl, tar, and the specific handful of standard text-processing tools this
+# file's own ref-resolution/tag-parsing logic below actually calls (awk,
+# sed, tr, grep) — checked explicitly because this same codebase already
+# has a confirmed case of one of them (awk) being absent from a real
+# minimal image (Fedora WSL, lib/core/prereqs.sh's own header note), so
+# assuming they're always there would be exactly the kind of thing that
+# looks fine in a quick manual test and fails confusingly on a real
+# minimal machine. Full prereq coverage otherwise (column/git/ssh-keyscan/
+# ssh-keygen) is `bin/wb install`'s job (lib/core/prereqs.sh) — that code
+# doesn't exist locally yet at this point, and none of it is a hard
+# dependency of this file itself the way awk/sed/tr/grep are.
+for _wb_bin in curl tar awk sed tr grep; do
     command -v "${_wb_bin}" >/dev/null 2>&1 || { log "ERROR: '${_wb_bin}' is required but not found"; exit 1; }
 done
 unset _wb_bin
