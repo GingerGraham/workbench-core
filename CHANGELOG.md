@@ -53,3 +53,10 @@ All notable changes to `workbench-core` are documented here.
   and the `wb` CLI's convergence/idempotency guarantees.
 - `contracts/{core-api,manifest-spec,tracking-spec,state-schema}.md` and
   `docs/{getting-started,module-authoring,troubleshooting}.md`.
+
+### Fixed
+
+- Fixed: `wb` was never exposed on `PATH` after install — `wb install`/
+  `wb apply` now symlink it into `~/.local/bin`, and `lib/loader.sh`
+  defensively ensures `~/.local/bin` is on `PATH` on every shell start.
+  See `ARCHITECTURE.md` §12 D19.
