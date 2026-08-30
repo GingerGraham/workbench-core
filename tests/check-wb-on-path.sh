@@ -79,7 +79,21 @@ fi
 echo "${OUT}" | grep -q "leaving it alone" && ok "a warning was logged for the foreign file" \
     || fail "no warning logged for the foreign file"
 
-# ── 4. lib/loader.sh defensively ensures ~/.local/bin is on PATH ───────────
+# ── 4. A failed `ln` is reported as an error, not logged as a false success ─
+rm -f "${LINK}"
+rm -rf "${HOME}/.local"
+: > "${HOME}/.local"    # a plain file where a directory is expected -> mkdir -p and ln both fail
+OUT_FAIL="$(run_link 2>&1 1>/dev/null)"
+RC=$?
+rm -f "${HOME}/.local"
+mkdir -p "${HOME}/.local/bin"
+if [[ "${RC}" -ne 0 ]] && echo "${OUT_FAIL}" | grep -qi "failed to link"; then
+    ok "a failed ln is reported as an error, not logged as a false success"
+else
+    fail "ln failure was not detected/reported: rc=${RC} out=${OUT_FAIL}"
+fi
+
+# ── 5. lib/loader.sh defensively ensures ~/.local/bin is on PATH ───────────
 LOADER="${REPO_ROOT}/lib/loader.sh"
 OUT_PATH="$(PATH="/usr/bin:/bin" HOME="${HOME}" bash -c "source '${LOADER}' >/dev/null 2>&1; printf '%s' \"\${PATH}\"")"
 case ":${OUT_PATH}:" in
@@ -95,6 +109,17 @@ OUT_PATH2="$(PATH="${HOME}/.local/bin:/usr/bin:/bin" HOME="${HOME}" bash -c "sou
 occurrences2="$(printf '%s' ":${OUT_PATH2}:" | grep -o ":${HOME}/.local/bin:" | wc -l | tr -d ' ')"
 [[ "${occurrences2}" -eq 1 ]] && ok "sourcing lib/loader.sh again does not duplicate an already-present ~/.local/bin" \
     || fail "~/.local/bin was duplicated on re-source (${occurrences2} occurrences)"
+
+# ── 6. An empty/unset PATH doesn't leave a trailing colon (cwd) element ────
+# Uses bash's own absolute path since PATH="" below means the outer shell
+# can no longer resolve a bare `bash` to exec the nested shell.
+BASH_BIN="$(command -v bash)"
+OUT_EMPTY="$(PATH="" HOME="${HOME}" "${BASH_BIN}" -c "source '${LOADER}' >/dev/null 2>&1; printf '%s' \"\${PATH}\"")"
+if [[ "${OUT_EMPTY}" == "${HOME}/.local/bin" ]]; then
+    ok "an empty PATH becomes exactly ~/.local/bin, with no trailing colon"
+else
+    fail "empty PATH produced an unexpected value (possible cwd-in-PATH): '${OUT_EMPTY}'"
+fi
 
 echo
 if [[ "${FAILED}" -eq 0 ]]; then

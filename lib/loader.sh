@@ -32,7 +32,16 @@ fi
 # instead, every shell start, independent of core even being registered.
 case ":${PATH}:" in
     *":${HOME}/.local/bin:"*) ;;
-    *) PATH="${HOME}/.local/bin:${PATH}" ;;
+    *)
+        # A plain "${HOME}/.local/bin:${PATH}" would leave a trailing colon
+        # when PATH is empty/unset — an empty PATH element that many shells
+        # treat as the current directory (flagged in PR review).
+        if [[ -z "${PATH:-}" ]]; then
+            PATH="${HOME}/.local/bin"
+        else
+            PATH="${HOME}/.local/bin:${PATH}"
+        fi
+        ;;
 esac
 export PATH
 

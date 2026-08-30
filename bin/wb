@@ -130,8 +130,12 @@ _wb_link_cli_bin() {
         esac
     fi
 
-    ln -sfn "${target}" "${link}"
-    log_info "wb install: linked ${link} -> ${target}"
+    if ln -sfn "${target}" "${link}"; then
+        log_info "wb install: linked ${link} -> ${target}"
+    else
+        log_error "wb install: failed to link ${link} -> ${target}"
+        return 1
+    fi
 }
 
 _wb_write_rc_stub() {
