@@ -101,12 +101,18 @@ case ":${OUT_PATH}:" in
     *) fail "lib/loader.sh did not add ~/.local/bin to PATH: ${OUT_PATH}" ;;
 esac
 
-occurrences="$(printf '%s' ":${OUT_PATH}:" | grep -o ":${HOME}/.local/bin:" | wc -l | tr -d ' ')"
+# Split on ':' and match whole segments — `grep -o ":X:"` would consume the
+# shared colon between adjacent duplicates (…:X:X:…) and undercount them,
+# masking exactly the regression this check exists to catch (flagged in PR
+# review).
+count_path_entries() { printf '%s' "$1" | tr ':' '\n' | grep -Fx "$2" | wc -l | tr -d ' '; }
+
+occurrences="$(count_path_entries "${OUT_PATH}" "${HOME}/.local/bin")"
 [[ "${occurrences}" -eq 1 ]] && ok "~/.local/bin appears exactly once on PATH" \
     || fail "~/.local/bin appears ${occurrences} times on PATH, expected 1"
 
 OUT_PATH2="$(PATH="${HOME}/.local/bin:/usr/bin:/bin" HOME="${HOME}" bash -c "source '${LOADER}' >/dev/null 2>&1; printf '%s' \"\${PATH}\"")"
-occurrences2="$(printf '%s' ":${OUT_PATH2}:" | grep -o ":${HOME}/.local/bin:" | wc -l | tr -d ' ')"
+occurrences2="$(count_path_entries "${OUT_PATH2}" "${HOME}/.local/bin")"
 [[ "${occurrences2}" -eq 1 ]] && ok "sourcing lib/loader.sh again does not duplicate an already-present ~/.local/bin" \
     || fail "~/.local/bin was duplicated on re-source (${occurrences2} occurrences)"
 
