@@ -93,7 +93,29 @@ else
     fail "ln failure was not detected/reported: rc=${RC} out=${OUT_FAIL}"
 fi
 
-# ── 5. lib/loader.sh defensively ensures ~/.local/bin is on PATH ───────────
+# ── 5. Executing the real bin/wb through the ~/.local/bin symlink resolves
+#    its own lib/ correctly. bin/wb derives WB_ROOT from its own path; a
+#    plain, symlink-naive `dirname "${BASH_SOURCE[0]}"` resolves against the
+#    symlink's own location (~/.local/bin), not its target, and would look
+#    for lib/ in entirely the wrong tree. The trivial stub used in checks
+#    1-4 above has no path-resolution logic of its own to break, so it can't
+#    catch this — this check runs the actual bin/wb + lib/ (flagged in PR
+#    review). ───────────────────────────────────────────────────────────
+REAL_CORE="${WORK}/real-core-current"
+mkdir -p "${REAL_CORE}/bin"
+cp -r "${REPO_ROOT}/lib" "${REAL_CORE}/lib"
+cp "${REPO_ROOT}/bin/wb" "${REAL_CORE}/bin/wb"
+chmod +x "${REAL_CORE}/bin/wb"
+rm -f "${LINK}"
+ln -s "${REAL_CORE}/bin/wb" "${LINK}"
+OUT_REAL="$("${LINK}" version 2>&1)"
+if echo "${OUT_REAL}" | grep -q "loaded script versions"; then
+    ok "invoking wb through the ~/.local/bin symlink resolves its own lib/ correctly"
+else
+    fail "invoking wb through the ~/.local/bin symlink failed to resolve lib/: ${OUT_REAL}"
+fi
+
+# ── 6. lib/loader.sh defensively ensures ~/.local/bin is on PATH ───────────
 LOADER="${REPO_ROOT}/lib/loader.sh"
 OUT_PATH="$(PATH="/usr/bin:/bin" HOME="${HOME}" bash -c "source '${LOADER}' >/dev/null 2>&1; printf '%s' \"\${PATH}\"")"
 case ":${OUT_PATH}:" in
@@ -116,7 +138,7 @@ occurrences2="$(count_path_entries "${OUT_PATH2}" "${HOME}/.local/bin")"
 [[ "${occurrences2}" -eq 1 ]] && ok "sourcing lib/loader.sh again does not duplicate an already-present ~/.local/bin" \
     || fail "~/.local/bin was duplicated on re-source (${occurrences2} occurrences)"
 
-# ── 6. An empty/unset PATH doesn't leave a trailing colon (cwd) element ────
+# ── 7. An empty/unset PATH doesn't leave a trailing colon (cwd) element ────
 # Uses bash's own absolute path since PATH="" below means the outer shell
 # can no longer resolve a bare `bash` to exec the nested shell.
 BASH_BIN="$(command -v bash)"

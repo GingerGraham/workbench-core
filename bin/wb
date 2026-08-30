@@ -8,7 +8,28 @@
 # timer).
 set -uo pipefail
 
-WB_BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# `bin/wb` is now reached via `~/.local/bin/wb`, a symlink to this file
+# inside `core/current/bin/` (bin/wb's own _wb_link_cli_bin, called from `wb
+# install`/`wb apply` — ARCHITECTURE.md §12 D19). `dirname "${BASH_SOURCE[0]}"`
+# alone resolves relative to the symlink's own location (~/.local/bin), not
+# its target, which would point WB_ROOT/LIB at the wrong tree entirely
+# (flagged in PR review). Follow the symlink chain manually first — plain
+# `readlink` (no `-f`, a GNU-only extension BSD/macOS readlink lacks) is the
+# same portable primitive already used for this in
+# lib/distribution/snapshot.sh.
+_wb_self="${BASH_SOURCE[0]}"
+while [[ -L "${_wb_self}" ]]; do
+    _wb_self_dir="$(cd "$(dirname "${_wb_self}")" && pwd)"
+    _wb_self="$(readlink "${_wb_self}")"
+    case "${_wb_self}" in
+        /*) ;;
+        *) _wb_self="${_wb_self_dir}/${_wb_self}" ;;
+    esac
+done
+unset _wb_self_dir
+
+WB_BIN_DIR="$(cd "$(dirname "${_wb_self}")" && pwd)"
+unset _wb_self
 WB_ROOT="$(cd "${WB_BIN_DIR}/.." && pwd)"
 LIB="${WB_ROOT}/lib"
 export WORKBENCH_CORE_INSTALL_DIR="${WB_ROOT}"
