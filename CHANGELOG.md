@@ -6,6 +6,30 @@ All notable changes to `workbench-core` are documented here.
 
 ### Added
 
+- **Core self-convergence on update**: `wb update`/`wb track`/`wb dev`
+  targeting `core`, and the background timer's `wb sync run-if-due`, now
+  detect when `core`'s resolved commit actually changed and automatically
+  re-run `wb apply` afterward, so a `core` update always leaves the host
+  fully converged (PATH symlink, rc stub, prereqs, SSH bootstrap, Ansible)
+  without a separate manual step. Only fires on an actual commit change,
+  never on a no-op cycle; a convergence failure is logged as a warning and
+  never fails the triggering command. The Ansible pass is skipped when
+  triggered from the unattended timer path via a new `--skip-ansible` flag
+  on `wb install`/`wb apply` (also usable directly, e.g. `wb apply
+  --skip-ansible`, for a faster convergence run without Ansible). Scoped to
+  `core` only. See `ARCHITECTURE.md` §12 D20.
+- **`wb help` rewrite**: the top-level `wb`/`wb help`/`wb -h`/`wb --help`
+  block is now grouped by purpose (daily use / setup & host-level
+  convergence / managing modules / advanced-internal) and explicitly
+  disambiguates `update` vs `apply`, `track` vs `dev`, and `sync
+  enable|disable` vs `track` — the confusion that motivated the core
+  self-convergence work above. Every command also now has detailed,
+  per-command help, reachable via both `wb help <command>` and `wb
+  <command> --help`/`-h`, including explicit cross-references for the
+  commands people confuse with each other. An unrecognised command name
+  degrades gracefully (top-level block + a one-line note) instead of
+  erroring.
+- `tests/check-core-auto-apply.sh` and `tests/check-wb-help.sh`.
 - **`bootstrap.sh`** (repo root): the canonical, documented production
   install path — `curl -fsSL .../bootstrap.sh | bash`. No `git` anywhere;
   resolves the latest `vX.Y.Z` release tag (falling back to `main`,
