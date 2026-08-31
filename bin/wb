@@ -59,22 +59,44 @@ _wb_usage() {
     cat <<'EOF'
 Usage: wb <command> [args]
 
-  install [--bundle <name>]   First-run convergence: prereqs, core bootstrap,
-                               host-state generation, Ansible apply.
-  apply                       Re-run convergence without interactive prompts.
+Run 'wb help <command>' or 'wb <command> --help' for full details on any
+command below.
+
+DAILY USE
+  status                      What's installed, tracked, and in sync.
+  update [<name>]             Fetch + deploy the latest content now, for one
+                               module or all of them (code-level only — see
+                               'wb apply' for host-level setup). Updating
+                               'core' also auto-triggers 'wb apply' when
+                               core's commit actually changed.
+  functions                   List registered shell functions/getters.
+
+SETUP & HOST-LEVEL CONVERGENCE
+  install [--bundle <name>] [--skip-ansible]
+                               First-run setup: prereqs, core bootstrap, PATH
+                               symlink, shell rc stub, SSH deploy keys,
+                               Ansible.
+  apply [--skip-ansible]      Re-run the same setup as 'install', non-
+                               interactively. 'wb update core' already
+                               triggers this automatically when core
+                               changes — run by hand for anything else.
+
+MANAGING MODULES
   add <name> [url] [--private] [--allow-hooks]
-                               Hot-path module registration.
-  remove <name>               Idempotent, non-destructive deregistration.
+                               Register + immediately sync a new module.
+  remove <name>                Deregister (content on disk is left alone).
   track <name> --latest | --branch <b> | --tag <t> | --commit <sha>
-                               Set a module's tracking mode/ref.
-  dev [<name>]                Guided wrapper over `track`.
+                               Pin what a module tracks, then sync it once.
+  dev [<name>]                 Guided, interactive prompt wrapping 'track'.
   sync enable|disable [<name>]
-                               Toggle a module's sync.enabled (no name = core).
-  sync run-if-due              Internal: invoked by the timer; a no-op unless
-                               the current cadence interval has elapsed.
-  update [<name>]              On-demand sync-and-deploy, bypassing cadence.
-  status                       Per-module drift / tracking state / cadence.
-  functions                    Generalised get-functions.
+                               Turn a module's background auto-sync on/off —
+                               independent of WHAT it tracks (that's
+                               'track'/'dev'). No name = core.
+
+ADVANCED / INTERNAL
+  sync run-if-due              Used by the background timer; a no-op unless
+                               the current cadence interval has elapsed. Not
+                               normally run by hand.
   version                      Release version and every loaded file's own
                                script-local version.
 EOF
@@ -173,10 +195,17 @@ _wb_write_rc_stub() {
 }
 
 _wb_cmd_install() {
-    local bundle=""
+    local bundle="" skip_ansible="false"
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --bundle) bundle="$2"; shift ;;
+            --bundle)
+                if [[ -z "${2:-}" ]]; then
+                    log_error "wb install: --bundle requires a value"
+                    return 2
+                fi
+                bundle="$2"; shift
+                ;;
+            --skip-ansible) skip_ansible="true" ;;
             *) log_error "wb install: unknown argument '$1'"; return 2 ;;
         esac
         shift
@@ -213,7 +242,9 @@ _wb_cmd_install() {
 
     workbench_ssh_bootstrap_all
 
-    if command -v ansible-playbook &>/dev/null; then
+    if [[ "${skip_ansible}" == "true" ]]; then
+        log_warn "wb install: --skip-ansible given — skipping the Ansible convergence step (host_vars templating etc.), regardless of whether ansible-playbook is available. The shell itself is already fully bootstrapped."
+    elif command -v ansible-playbook &>/dev/null; then
         log_info "wb install: running Ansible convergence..."
         (
             cd "${WB_ROOT}/ansible" && \
@@ -233,6 +264,48 @@ _wb_cmd_apply() {
     _wb_cmd_install "$@"
 }
 
+# ── core self-convergence on update (ARCHITECTURE.md §12 D20) ──────────────
+# _wb_maybe_reconverge_core <before-sha> <unattended:true|false>
+#
+# `core` is module zero — it IS workbench-core itself, so a code change to
+# it (the D19 PATH-symlink fix is the motivating example) can change
+# host-level state that only `wb apply` knows how to (re-)converge. Every
+# other module has no install/apply concept, so this is deliberately scoped
+# to `core` only and lives here at the CLI layer, never inside
+# lib/sync/engine.sh (principle 4 — no core-specific branch in the generalised
+# engine).
+#
+# Fires only when core's resolved commit actually changed (never on a bare
+# "a sync cycle ran"), and never propagates a convergence failure as the
+# calling command's own exit status — a hiccup here is logged as a warning,
+# not a failure of the sync that triggered it.
+_wb_maybe_reconverge_core() {
+    local before_sha="$1" unattended="$2"
+
+    workbench_is_registered core || return 0
+
+    local after_sha
+    after_sha="$(workbench_module_conf_get core RESOLVED_SHA "")"
+    [[ "${after_sha}" == "${before_sha}" ]] && return 0
+
+    log_info "wb: core's resolved commit changed (${before_sha:-none} -> ${after_sha:0:7}) — re-running convergence (wb apply) so the host stays fully converged"
+
+    # Two explicit calls rather than building a possibly-empty args array and
+    # expanding "${apply_args[@]}" — bash before 4.4 (still bash 3.2, macOS's
+    # default /bin/bash, per ARCHITECTURE.md's compatibility target) raises
+    # "unbound variable" expanding an empty array under `set -u`, which this
+    # file runs under.
+    if [[ "${unattended}" == "true" ]]; then
+        _wb_cmd_apply --skip-ansible
+    else
+        _wb_cmd_apply
+    fi
+    if [[ $? -ne 0 ]]; then
+        log_warn "wb: core convergence pass failed after update — the host may not be fully converged (PATH symlink/rc stub/prereqs); run 'wb apply' by hand to retry"
+    fi
+    return 0
+}
+
 # ── sync ───────────────────────────────────────────────────────────────────
 _wb_cmd_sync() {
     local sub="${1:-}"; shift || true
@@ -241,7 +314,10 @@ _wb_cmd_sync() {
         run-if-due)
             log_debug "wb sync run-if-due: workbench-core release $(workbench_release_version), bin/wb v0.1.0"
             if workbench_sync_due; then
+                local core_sha_before
+                core_sha_before="$(workbench_module_conf_get core RESOLVED_SHA "")"
                 workbench_sync_all "scheduled"
+                _wb_maybe_reconverge_core "${core_sha_before}" true
             else
                 log_debug "wb sync run-if-due: not due yet"
             fi
@@ -257,11 +333,14 @@ _wb_cmd_sync() {
 _wb_cmd_update() {
     local name="${1:-}"
     log_debug "wb update: workbench-core release $(workbench_release_version), bin/wb v0.1.0"
+    local core_sha_before
+    core_sha_before="$(workbench_module_conf_get core RESOLVED_SHA "")"
     if [[ -n "${name}" ]]; then
         workbench_sync_module "${name}" "manual"
     else
         workbench_sync_all "manual"
     fi
+    _wb_maybe_reconverge_core "${core_sha_before}" false
 }
 
 # ── version ────────────────────────────────────────────────────────────────
@@ -326,9 +405,256 @@ _wb_cmd_functions() {
     echo
 }
 
+# ── help / per-command detail ───────────────────────────────────────────────
+# Each function below is one command's detail page: syntax line, one
+# paragraph of description, flags/args, and — for the commands people
+# confuse with each other — an explicit cross-reference explaining the
+# difference. Inline heredocs, same pattern as _wb_usage itself, so this
+# works identically from a fetched snapshot with no docs/ tree present.
+
+_wb_help_status() {
+    cat <<'EOF'
+Usage: wb status
+
+Prints one line per registered module: its TRACK_MODE, tracked ref,
+resolved commit SHA, whether that module's own sync is enabled, and
+whether it's registered at all. Also reports whether the fast (5-minute)
+cadence is currently active (true whenever any module, core included, is
+on branch: tracking).
+
+Read-only — never fetches or changes anything. To act on drift shown here,
+use 'wb update' (sync now) or 'wb track'/'wb dev' (change what a module
+tracks).
+EOF
+}
+
+_wb_help_update() {
+    cat <<'EOF'
+Usage: wb update [<name>]
+
+Fetches and deploys the latest content for one module (if <name> is
+given) or every registered, sync-enabled module (if omitted) — right now,
+regardless of the cadence timer. This is code-level only: it fetches,
+atomically swaps in the new snapshot, and runs the module's post-deploy
+hook.
+
+Updating 'core' specifically also detects whether core's resolved commit
+actually changed and, if so, automatically re-runs the same host-level
+convergence 'wb apply' performs (PATH symlink, shell rc stub, prereqs,
+Ansible) — so a core update always leaves the host fully converged
+without a separate manual step. A convergence failure here is logged as a
+warning and never fails the update itself.
+
+Confused with 'wb apply'? 'wb update' fetches new CODE for a module; 'wb
+apply' re-runs HOST-level setup. 'wb update core' now triggers 'wb apply'
+for you automatically when needed — nothing else does.
+EOF
+}
+
+_wb_help_install() {
+    cat <<'EOF'
+Usage: wb install [--bundle <name>] [--skip-ansible]
+
+First-run convergence for this host: checks/installs shell prerequisites,
+bootstraps the core module itself, symlinks 'wb' onto PATH, writes the
+shell rc loader stub, provisions SSH deploy keys for any private modules,
+and (unless --skip-ansible is given, or ansible-playbook isn't found)
+runs the Ansible convergence pass.
+
+  --bundle <name>   Also register every module in the named bundle (the
+                      known-modules catalog) before converging — equivalent
+                      to one 'wb add' call per bundle member.
+  --skip-ansible    Skip the Ansible convergence step even if
+                      ansible-playbook is available.
+
+Confused with 'wb apply'? Same convergence — 'wb install' is the first-run
+entry point (and accepts --bundle); 'wb apply' is a literal alias for
+re-running it later.
+EOF
+}
+
+_wb_help_apply() {
+    cat <<'EOF'
+Usage: wb apply [--skip-ansible]
+
+Re-runs the exact same convergence as 'wb install' (it is a literal
+alias), minus --bundle — use this to re-converge a host after a manual
+change, after installing Ansible, or any time you want the PATH
+symlink/rc stub/prereqs/Ansible state re-checked.
+
+  --skip-ansible    Skip the Ansible convergence step even if
+                      ansible-playbook is available.
+
+'wb update core' already calls this automatically — with --skip-ansible
+when the background timer detected the change, without it when a human
+ran 'wb update core'/'wb track core'/'wb dev core' directly — so you
+normally don't need to run 'wb apply' by hand for core. Run it yourself
+for anything 'wb update' doesn't cover.
+EOF
+}
+
+_wb_help_add() {
+    cat <<'EOF'
+Usage: wb add <name> [url] [--private] [--allow-hooks]
+
+Registers a new module and immediately syncs it once. <url> is optional
+if <name> resolves against the known-modules catalog. New modules default
+to TRACK_MODE=latest.
+
+  --private       The module's repo is private (provisions an SSH deploy
+                    key on first sync if one doesn't already exist).
+  --allow-hooks   Permit this module's manifest-declared post_deploy hook
+                    to actually run (hooks are opt-in per module).
+
+To change what an already-added module tracks, use 'wb track', not 'wb
+add' again.
+EOF
+}
+
+_wb_help_remove() {
+    cat <<'EOF'
+Usage: wb remove <name>
+
+Deregisters a module so the loader and sync engine stop touching it.
+Idempotent and non-destructive — content already deployed to disk is left
+exactly as it is; nothing is deleted.
+EOF
+}
+
+_wb_help_track() {
+    cat <<'EOF'
+Usage: wb track <name> --latest | --branch <b> | --tag <t> | --commit <sha>
+
+Sets what a registered module tracks, then syncs it once immediately.
+Exactly one of the four flags is required:
+
+  --latest          Newest vX.Y.Z tag (the default, production mode).
+  --branch <b>      A branch's moving tip, re-checked every cycle. Also
+                       drops the whole-host sync cadence to 5 minutes for
+                       as long as anything is on branch: tracking.
+  --tag <t>         An exact tag, static until changed again.
+  --commit <sha>    An exact commit, static until changed again.
+
+Returning a module to production is 'wb track <name> --latest', not a
+separate command.
+
+Confused with 'wb dev'? 'wb dev' is a guided, interactive prompt that
+ends up calling this same command for you — use 'wb track' directly when
+you already know exactly what to set.
+
+Confused with 'wb sync enable|disable'? That toggles WHETHER a module
+auto-syncs at all; this sets WHAT it tracks when sync is enabled. They're
+independent, with one exception: switching into --branch tracking here
+also force-enables sync, since dev tracking with sync off defeats the
+purpose.
+EOF
+}
+
+_wb_help_dev() {
+    cat <<'EOF'
+Usage: wb dev [<name>]
+
+Guided, interactive wrapper over 'wb track' — not a separate mechanism.
+With no argument, walks through every currently-registered module (core
+included), prompting keep-or-switch to branch/tag/commit/latest for each.
+With <name>, jumps straight to that one module.
+
+Confused with 'wb track'? Same end result — 'wb dev' is the prompted,
+one-module-at-a-time version; 'wb track' is the direct, scriptable
+version for when you already know the exact flags to pass.
+EOF
+}
+
+_wb_help_sync() {
+    cat <<'EOF'
+Usage: wb sync enable|disable [<name>]  |  wb sync run-if-due
+
+  enable|disable [<name>]   Turns a module's background auto-sync on or
+                              off, independent of what it tracks. No name
+                              means core's own toggle.
+  run-if-due                 Invoked by the background timer; a no-op
+                              unless the current cadence interval has
+                              elapsed. Not normally run by hand.
+
+Confused with 'wb track'? 'wb sync enable|disable' controls WHETHER a
+module is auto-synced at all; 'wb track' controls WHAT it tracks. A
+module can be registered with sync disabled entirely (frozen at its last
+snapshot) regardless of what TRACK_MODE it's set to.
+EOF
+}
+
+_wb_help_functions() {
+    cat <<'EOF'
+Usage: wb functions
+
+Lists every registered shell function/getter/installer, grouped by the
+module that declared it (via that module's manifest register: block).
+Read-only.
+EOF
+}
+
+_wb_help_version() {
+    cat <<'EOF'
+Usage: wb version
+
+Prints the workbench-core release version (from the repo-root VERSION
+file) and the script-local version registered by every file loaded into
+this process.
+EOF
+}
+
+_wb_help_help() {
+    cat <<'EOF'
+Usage: wb help [<command>]  |  wb <command> --help  |  wb <command> -h
+
+With no argument, prints the same top-level command summary as plain
+'wb'. With a command name, prints that command's detailed usage —
+identical to running 'wb <command> --help'.
+EOF
+}
+
+# _wb_cmd_help [<command>]
+# With no argument, behaves exactly like the bare top-level usage block.
+# With an unrecognised command name, doesn't error — prints the top-level
+# block plus a one-line note, matching the unknown-command fallback below.
+_wb_cmd_help() {
+    local cmd="${1:-}"
+    [[ -z "${cmd}" ]] && { _wb_usage; return 0; }
+
+    case "${cmd}" in
+        status)    _wb_help_status ;;
+        update)    _wb_help_update ;;
+        functions) _wb_help_functions ;;
+        install)   _wb_help_install ;;
+        apply)     _wb_help_apply ;;
+        add)       _wb_help_add ;;
+        remove)    _wb_help_remove ;;
+        track)     _wb_help_track ;;
+        dev)       _wb_help_dev ;;
+        sync)      _wb_help_sync ;;
+        version)   _wb_help_version ;;
+        help)      _wb_help_help ;;
+        *)
+            echo "wb help: unknown command '${cmd}'"
+            echo
+            _wb_usage
+            ;;
+    esac
+}
+
 # ── dispatch ───────────────────────────────────────────────────────────────
 _wb_cmd="${1:-}"
 [[ $# -gt 0 ]] && shift
+
+# Central "is this a help request" interception, for every command, rather
+# than a -h/--help check duplicated inside each subcommand handler: if the
+# first remaining argument after the command name is -h/--help, show that
+# command's detail instead of dispatching to its real handler.
+if [[ -n "${_wb_cmd}" && "${_wb_cmd}" != "help" && "${_wb_cmd}" != "-h" && "${_wb_cmd}" != "--help" ]]; then
+    case "${1:-}" in
+        -h|--help) _wb_cmd_help "${_wb_cmd}"; exit 0 ;;
+    esac
+fi
 
 case "${_wb_cmd}" in
     install)   _wb_cmd_install "$@" ;;
@@ -342,7 +668,8 @@ case "${_wb_cmd}" in
     status)    _wb_cmd_status "$@" ;;
     functions) _wb_cmd_functions "$@" ;;
     version)   _wb_cmd_version "$@" ;;
-    -h|--help|help|"") _wb_usage ;;
+    help)      _wb_cmd_help "$@" ;;
+    -h|--help|"") _wb_usage ;;
     *)
         echo "wb: unknown command '${_wb_cmd}'" >&2
         _wb_usage >&2
