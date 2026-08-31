@@ -198,7 +198,13 @@ _wb_cmd_install() {
     local bundle="" skip_ansible="false"
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --bundle) bundle="$2"; shift ;;
+            --bundle)
+                if [[ -z "${2:-}" ]]; then
+                    log_error "wb install: --bundle requires a value"
+                    return 2
+                fi
+                bundle="$2"; shift
+                ;;
             --skip-ansible) skip_ansible="true" ;;
             *) log_error "wb install: unknown argument '$1'"; return 2 ;;
         esac
@@ -284,10 +290,17 @@ _wb_maybe_reconverge_core() {
 
     log_info "wb: core's resolved commit changed (${before_sha:-none} -> ${after_sha:0:7}) — re-running convergence (wb apply) so the host stays fully converged"
 
-    local -a apply_args=()
-    [[ "${unattended}" == "true" ]] && apply_args=(--skip-ansible)
-
-    if ! _wb_cmd_apply "${apply_args[@]}"; then
+    # Two explicit calls rather than building a possibly-empty args array and
+    # expanding "${apply_args[@]}" — bash before 4.4 (still bash 3.2, macOS's
+    # default /bin/bash, per ARCHITECTURE.md's compatibility target) raises
+    # "unbound variable" expanding an empty array under `set -u`, which this
+    # file runs under.
+    if [[ "${unattended}" == "true" ]]; then
+        _wb_cmd_apply --skip-ansible
+    else
+        _wb_cmd_apply
+    fi
+    if [[ $? -ne 0 ]]; then
         log_warn "wb: core convergence pass failed after update — the host may not be fully converged (PATH symlink/rc stub/prereqs); run 'wb apply' by hand to retry"
     fi
     return 0
