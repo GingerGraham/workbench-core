@@ -23,7 +23,7 @@ WORKBENCH_CORE_SEMVER=0.1.0
 See `contracts/core-api.md` for what each integer gates.
 `STATE_SCHEMA_VERSION` bumped `1` → `2` when `installers.list` (below) was
 added — purely additive, so an existing `1` value on disk is migrated to
-`2` in place by `wb install`/`wb apply` (`workbench_migrate_state_schema`),
+`2` in place by `wb install`/`wb apply` (`_workbench_migrate_state_schema`),
 never left stale.
 
 ## Module state root

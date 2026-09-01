@@ -14,7 +14,7 @@
 # not on any general JSON-parsing guarantee.
 
 _wb_resolve_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/distribution/resolve.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/distribution/resolve.sh" "0.1.0" || true
 
 # workbench_parse_github_url <url>
 # Prints "<owner> <repo>" for an https or ssh GitHub remote URL. Empty

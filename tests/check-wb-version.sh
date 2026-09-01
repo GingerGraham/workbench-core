@@ -4,7 +4,7 @@
 # Covers the script-versioning half of the brief (§5): `wb version` lists
 # every file registered in §5.2's scope with no gaps (catches a forgotten
 # registration line) and no duplicate/colliding entries after a full bin/wb
-# source pass, and workbench_release_version reads the repo-root VERSION
+# source pass, and _workbench_release_version reads the repo-root VERSION
 # file correctly from both a dev checkout and a fetched snapshot (a plain
 # copy of the tree elsewhere — no distribution engine involved, since the
 # only thing under test is the "wherever this lib is running from" relative
@@ -74,7 +74,7 @@ fi
 : > "${WORK}/missing-registration-line.txt"
 check_has_line() {
     local abspath="$1" relpath="$2"
-    grep -q "workbench_register_script_version \"${relpath}\"" "${abspath}" \
+    grep -q "_workbench_register_script_version \"${relpath}\"" "${abspath}" \
         || echo "${relpath}" >> "${WORK}/missing-registration-line.txt"
 }
 check_has_line "${REPO_ROOT}/bin/wb" "bin/wb"
@@ -87,7 +87,7 @@ done < <(find "${REPO_ROOT}/lib" -type f -name '*.sh')
 if [[ ! -s "${WORK}/missing-registration-line.txt" ]]; then
     ok "every file in §5.2's full scope (bin/wb, lib/loader.sh, all of lib/*.sh) has its own registration line"
 else
-    fail "missing a workbench_register_script_version line for:"
+    fail "missing a _workbench_register_script_version line for:"
     cat "${WORK}/missing-registration-line.txt" >&2
 fi
 
@@ -104,20 +104,20 @@ else
     printf '%s\n' "${LISTED_PATHS}" | sort | uniq -c | sort -rn | head -5
 fi
 
-# ── 4. workbench_release_version reads VERSION from a dev checkout ─────────
+# ── 4. _workbench_release_version reads VERSION from a dev checkout ─────────
 rc=0
 (
     source "${REPO_ROOT}/lib/core/log.sh"
     source "${REPO_ROOT}/lib/core/version.sh"
-    [[ "$(workbench_release_version)" == "$(head -n1 "${REPO_ROOT}/VERSION")" ]] || exit 1
+    [[ "$(_workbench_release_version)" == "$(head -n1 "${REPO_ROOT}/VERSION")" ]] || exit 1
 ) || rc=$?
 if [[ "${rc}" -eq 0 ]]; then
-    ok "workbench_release_version reads VERSION correctly from a dev checkout"
+    ok "_workbench_release_version reads VERSION correctly from a dev checkout"
 else
-    fail "workbench_release_version did not read the dev checkout's VERSION correctly"
+    fail "_workbench_release_version did not read the dev checkout's VERSION correctly"
 fi
 
-# ── 5. workbench_release_version reads VERSION from a fetched snapshot ─────
+# ── 5. _workbench_release_version reads VERSION from a fetched snapshot ─────
 # A "fetched snapshot" is just the repo tree living at some other path on
 # disk (that's the whole point of the relative-path design — see
 # lib/core/version.sh's own comment) — a plain copy stands in for one here
@@ -133,12 +133,12 @@ rc=0
 (
     source "${SNAP}/lib/core/log.sh"
     source "${SNAP}/lib/core/version.sh"
-    [[ "$(workbench_release_version)" == "v7.7.7-snapshot-test" ]] || exit 1
+    [[ "$(_workbench_release_version)" == "v7.7.7-snapshot-test" ]] || exit 1
 ) || rc=$?
 if [[ "${rc}" -eq 0 ]]; then
-    ok "workbench_release_version reads VERSION correctly from a fetched-snapshot-shaped tree"
+    ok "_workbench_release_version reads VERSION correctly from a fetched-snapshot-shaped tree"
 else
-    fail "workbench_release_version did not read the snapshot tree's VERSION correctly"
+    fail "_workbench_release_version did not read the snapshot tree's VERSION correctly"
 fi
 
 echo

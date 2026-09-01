@@ -28,7 +28,7 @@ for _wb_engine_dep in \
 done
 unset _wb_engine_dep
 
-command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/sync/engine.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/sync/engine.sh" "0.1.0" || true
 
 # ── Cadence (ARCHITECTURE.md §9.4/D8) ─────────────────────────────────────────
 : "${WORKBENCH_CADENCE_DEFAULT_SECONDS:=604800}"   # weekly
@@ -242,9 +242,9 @@ workbench_render_register_list() {
     core_api="$(workbench_manifest_scalar core_api "${manifest}")"
     [[ -z "${core_api}" ]] && return 0
 
-    if command -v workbench_core_api_version &>/dev/null; then
+    if command -v _workbench_core_api_version &>/dev/null; then
         local running
-        running="$(workbench_core_api_version)"
+        running="$(_workbench_core_api_version)"
         if [[ -n "${running}" ]] && ! _wb_version_satisfies "${running}" "${core_api}"; then
             log_error "workbench_render_register_list: ${name}: declares core_api '${core_api}', running Core API is ${running} — refusing to register its shell content"
             return 1
@@ -286,9 +286,9 @@ workbench_render_installers_list() {
     core_api="$(workbench_manifest_scalar core_api "${manifest}")"
     [[ -z "${core_api}" ]] && return 0
 
-    if command -v workbench_core_api_version &>/dev/null; then
+    if command -v _workbench_core_api_version &>/dev/null; then
         local running
-        running="$(workbench_core_api_version)"
+        running="$(_workbench_core_api_version)"
         if [[ -n "${running}" ]] && ! _wb_version_satisfies "${running}" "${core_api}"; then
             log_error "workbench_render_installers_list: ${name}: declares core_api '${core_api}', running Core API is ${running} — refusing to register its installers"
             return 1

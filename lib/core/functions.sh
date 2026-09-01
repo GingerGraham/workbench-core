@@ -18,12 +18,12 @@ _wb_functions_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 [[ -f "${_wb_functions_dir}/log.sh" ]] && source "${_wb_functions_dir}/log.sh"
 unset _wb_functions_dir
 
-command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/core/functions.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/functions.sh" "0.1.0" || true
 
 # ── OS / WSL / Distro / Shell / Arch detection (run once per session) ───────
 # Reconciles loader.sh's inline detection block and functions.sh's separate
 # detect-distro() into one routine, per the build brief's §4 callout.
-workbench_detect_platform() {
+_workbench_detect_platform() {
     [[ "${WORKBENCH_PLATFORM_DETECTED:-false}" == "true" ]] && return 0
 
     local _raw_os
@@ -85,7 +85,7 @@ workbench_detect_platform() {
 
     WORKBENCH_PLATFORM_DETECTED="true"
 }
-workbench_detect_platform
+_workbench_detect_platform
 
 # ── Prompt helpers ────────────────────────────────────────────────────────
 # Ported verbatim from workbench-precursor's shell/config/tools/git.sh —

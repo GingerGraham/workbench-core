@@ -28,7 +28,7 @@ err()  { echo "[ERROR] $*" >&2; ERRORS=$((ERRORS + 1)); }
 warn() { echo "[WARN]  $*" >&2; WARNINGS=$((WARNINGS + 1)); }
 info() { echo "[INFO]  $*"; }
 
-command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/manifest/validate.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/manifest/validate.sh" "0.1.0" || true
 
 usage() {
     cat << EOF

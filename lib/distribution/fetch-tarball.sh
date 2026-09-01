@@ -7,7 +7,7 @@
 # tests/check-distribution-no-git.sh asserts this file never invokes `git`
 # by scrubbing it from PATH and confirming a fetch still succeeds.
 
-command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/distribution/fetch-tarball.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/distribution/fetch-tarball.sh" "0.1.0" || true
 
 # workbench_fetch_tarball_public <owner> <repo> <ref-form> <ref-value> <dest_dir>
 # <ref-form> is one of: branch | tag | commit — selects the codeload path
