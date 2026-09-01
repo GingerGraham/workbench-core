@@ -10,7 +10,7 @@ module and the mismatch), never silently skipped.
 ## Platform facts
 
 Exported once per shell session (`lib/loader.sh`, re-affirmed idempotently
-by `workbench_detect_platform()` in `lib/core/functions.sh` if core's own
+by `_workbench_detect_platform()` in `lib/core/functions.sh` if core's own
 tier is sourced later):
 
 | Variable | Values | Notes |

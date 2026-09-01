@@ -19,7 +19,7 @@
 # best-effort deeper fetch (below) rather than assuming shallow-by-sha works
 # everywhere.
 
-command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/distribution/fetch-git-snapshot.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/distribution/fetch-git-snapshot.sh" "0.1.0" || true
 
 # workbench_fetch_git_snapshot <git_url> <ref-form> <ref-value> <dest_dir>
 # <ref-form> is one of: branch | tag | commit.

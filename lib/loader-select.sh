@@ -8,7 +8,7 @@
 # (which never sources module content itself, only asks "would it be
 # sourced").
 
-command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/loader-select.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/loader-select.sh" "0.1.0" || true
 
 # _wb_loader_should_source_by_name <tier> <basename-without-.sh>
 # Filename-as-selector convention for the platform/distro tiers only (every

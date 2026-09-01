@@ -49,12 +49,12 @@ for _wb_f in \
 done
 unset _wb_f
 # core/version.sh loads second (right after core/log.sh, which every
-# workbench_register_script_version call site below needs for nothing but
+# _workbench_register_script_version call site below needs for nothing but
 # every registration call itself needs core/version.sh already sourced) so
 # every other file's own registration line — guarded with
-# `command -v workbench_register_script_version &>/dev/null &&` for when
+# `command -v _workbench_register_script_version &>/dev/null &&` for when
 # it's sourced standalone elsewhere — actually fires during this pass.
-command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "bin/wb" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "bin/wb" "0.1.0" || true
 
 _wb_usage() {
     cat <<'EOF'
@@ -228,7 +228,7 @@ _wb_scaffold_local_overrides() {
     # Nothing renders ${XDG_CONFIG_HOME:-~/.config}/workbench/local/ on its
     # own — fix-brief §2. Creates the directory if absent and writes a
     # default settings.sh if absent, never overwriting an existing one
-    # (same non-clobbering discipline workbench_ensure_version_file already
+    # (same non-clobbering discipline _workbench_ensure_version_file already
     # follows for the version file), so a new user has commented examples
     # of the documented switches to look at rather than an empty file and a
     # doc page.
@@ -288,15 +288,15 @@ _wb_cmd_install() {
         shift
     done
 
-    log_info "wb install: workbench-core release: $(workbench_release_version)"
+    log_info "wb install: workbench-core release: $(_workbench_release_version)"
     log_info "wb install: checking prerequisites..."
     workbench_check_shell_prereqs >/dev/null
     if [[ "$(workbench_missing_shell_prereqs | wc -l | tr -d ' ')" -gt 0 ]]; then
         workbench_install_shell_prereqs || log_warn "wb install: could not install all missing prerequisites automatically — install them manually and re-run"
     fi
 
-    workbench_ensure_version_file
-    workbench_migrate_state_schema
+    _workbench_ensure_version_file
+    _workbench_migrate_state_schema
 
     mkdir -p "${XDG_CONFIG_HOME:-${HOME}/.config}/workbench" \
              "${XDG_DATA_HOME:-${HOME}/.local/share}/workbench" \
@@ -392,7 +392,7 @@ _wb_cmd_sync() {
     case "${sub}" in
         enable|disable) workbench_cmd_sync_toggle "${sub}" "$@" ;;
         run-if-due)
-            log_debug "wb sync run-if-due: workbench-core release $(workbench_release_version), bin/wb v0.1.0"
+            log_debug "wb sync run-if-due: workbench-core release $(_workbench_release_version), bin/wb v0.1.0"
             if workbench_sync_due; then
                 local core_sha_before
                 core_sha_before="$(workbench_module_conf_get core RESOLVED_SHA "")"
@@ -412,7 +412,7 @@ _wb_cmd_sync() {
 # ── update ─────────────────────────────────────────────────────────────────
 _wb_cmd_update() {
     local name="${1:-}"
-    log_debug "wb update: workbench-core release $(workbench_release_version), bin/wb v0.1.0"
+    log_debug "wb update: workbench-core release $(_workbench_release_version), bin/wb v0.1.0"
     local core_sha_before
     core_sha_before="$(workbench_module_conf_get core RESOLVED_SHA "")"
     if [[ -n "${name}" ]]; then
@@ -425,9 +425,9 @@ _wb_cmd_update() {
 
 # ── version ────────────────────────────────────────────────────────────────
 _wb_cmd_version() {
-    log_info "workbench-core release: $(workbench_release_version)"
+    log_info "workbench-core release: $(_workbench_release_version)"
     log_info "loaded script versions:"
-    workbench_print_script_versions
+    _workbench_print_script_versions
 }
 
 # ── status ─────────────────────────────────────────────────────────────────

@@ -14,7 +14,7 @@
 # _read_prompt's provisioning-script use case where stdin may already be
 # consumed by something else in the pipeline.
 
-command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/modules/dev.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/dev.sh" "0.1.0" || true
 
 _wb_dev_prompt_one() {
     local name="$1" current answer

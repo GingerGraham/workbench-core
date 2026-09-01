@@ -16,7 +16,7 @@
 # (principle 4: core provides the mechanism, modules provide the content).
 
 _wb_tools_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-command -v workbench_register_script_version &>/dev/null && workbench_register_script_version "lib/core/tools.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/tools.sh" "0.1.0" || true
 
 # workbench_tools_collect
 # Emits one line per discovered installer, across every loadable
