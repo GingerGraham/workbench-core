@@ -122,7 +122,7 @@ ${XDG_CONFIG_HOME:-~/.config}/workbench/user/*.sh
 ```
 
 `workbench/local/` replaces the old single-file `90-local.sh`
-(ARCHITECTURE.md §12 D21). `settings.sh` is the one reserved filename in
+(ARCHITECTURE.md §12 D22). `settings.sh` is the one reserved filename in
 that directory, keeping exactly `90-local.sh`'s old two-pass semantics:
 sourced first (so flags it sets gate later tiers) and again at the very end
 (so it wins over anything a tier also touched) — this is where the

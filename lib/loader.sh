@@ -143,7 +143,7 @@ export WORKBENCH_ARCH
 WORKBENCH_PLATFORM_DETECTED="true"
 export WORKBENCH_PLATFORM_DETECTED
 
-# ── Local overrides directory (ARCHITECTURE.md §12 D21) ───────────────────────
+# ── Local overrides directory (ARCHITECTURE.md §12 D22) ───────────────────────
 # Machine-local, outside every module's own tree.
 # ${XDG_CONFIG_HOME:-~/.config}/workbench/local/ holds `settings.sh` — the
 # reserved-name direct successor to the old single-file `90-local.sh`,
@@ -386,7 +386,7 @@ fi
 # aliases, whatever — sourced once, together, filename-sorted, immediately
 # after settings.sh's final pass. Deliberately flat, not trying to
 # reproduce the six loader tiers for local content (ARCHITECTURE.md §12
-# D21): this is the right level of complexity for something the loader
+# D22): this is the right level of complexity for something the loader
 # can't validate the shape of the way it can a module's manifest.
 _wb_loader_source_sh_files_once \
     "${WORKBENCH_LOCAL_DIR}" \
