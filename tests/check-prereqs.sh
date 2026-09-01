@@ -136,7 +136,7 @@ else
     ok "curl is not in the optional prereq list"
 fi
 
-# 5a. unzip and zip are optional prereqs (future Wave C module need),
+# 5a. unzip and zip are optional prereqs (future Wave C module needs),
 #     not required — mirrors gpg's existing treatment.
 for bin in unzip zip; do
     if printf '%s\n' "${_WB_SHELL_PREREQS_OPTIONAL[@]}" | grep -qx "${bin}"; then

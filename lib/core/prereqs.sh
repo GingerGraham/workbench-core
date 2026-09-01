@@ -30,10 +30,13 @@ command -v _workbench_register_script_version &>/dev/null && _workbench_register
 # workbench-gpg module) — checked and reported, never blocks install.
 # unzip/zip are optional for the same reason gpg is: nothing in
 # workbench-core itself needs them, but Wave C modules distributing
-# .zip-packaged tools will. Checked and installable now so a module
-# author's install-<name> function can just assume they're there rather
-# than re-implementing this check. No install-mapping needed — the binary
-# and package names match on every package manager checked
+# .zip-packaged tools will. Checked and reported now (same as gpg) so a
+# module author knows before shipping whether they can rely on it being
+# present — like every other optional prereq, wb install/wb apply only
+# install missing REQUIRED prereqs (workbench_install_shell_prereqs
+# below); optional ones are checked/reported only, never installed
+# automatically. No install-mapping needed either way — the binary and
+# package names match on every package manager checked
 # (apt/dnf/yum/zypper/pacman/brew).
 # ssh-keygen is required alongside ssh-keyscan (Phase 6's deploy-key
 # generation, lib/ssh/bootstrap.sh) — not called out as a separate line item
