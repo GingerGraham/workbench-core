@@ -234,10 +234,6 @@ _get_aliases_in() {
     elif [[ -n "${_pattern}" ]]; then
         _names="$(printf '%s\n' "${_names}" | grep -E "${_pattern}")"
     fi
-    _names="$(printf '%s\n' "${_names}" | while IFS= read -r _an; do
-        [[ -z "${_an}" ]] && continue
-        alias "${_an}" &>/dev/null && echo "${_an}"
-    done)"
     if [[ -z "${_names}" ]]; then
         echo "  (none)"
     else

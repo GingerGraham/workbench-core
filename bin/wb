@@ -35,7 +35,7 @@ LIB="${WB_ROOT}/lib"
 export WORKBENCH_CORE_INSTALL_DIR="${WB_ROOT}"
 
 for _wb_f in \
-    core/log.sh core/version.sh core/functions.sh core/semver.sh core/prereqs.sh \
+    core/log.sh core/version.sh core/functions.sh loader-select.sh core/semver.sh core/prereqs.sh \
     manifest/parse.sh \
     sync/state.sh \
     distribution/resolve.sh distribution/fetch-tarball.sh distribution/fetch-git-snapshot.sh distribution/snapshot.sh \
@@ -483,18 +483,25 @@ _wb_cmd_status() {
 }
 
 # ── functions ──────────────────────────────────────────────────────────────
-# ── functions ──────────────────────────────────────────────────────────────
 _wb_cmd_functions() {
     # Generalised get-functions (ARCHITECTURE.md §3/§4): walks every
     # registered module's declared files and extracts what's actually
     # defined in them, the same two-primitive introspection
     # (_extract_function_names/_extract_alias_names, lib/core/functions.sh)
     # the donor dotfiles' single-root get-functions used — never a second
-    # parser. lazy-tier files are deliberately excluded from the eager
-    # list: that tier exists precisely for getter-gated content a user
-    # pulls in on demand via its own get-<domain>-functions, so listing it
-    # here too would show functions that aren't actually loaded yet.
-    local name reglist filepath tier
+    # parser. Two exclusions keep this an accurate "what's actually
+    # loaded" list, not just "what's registered":
+    #   - lazy-tier files: that tier exists precisely for getter-gated
+    #     content a user pulls in on demand via its own
+    #     get-<domain>-functions, so it's never eagerly loaded.
+    #   - platform/distro-tier files whose basename doesn't match this
+    #     host: lib/loader.sh only sources the matching one (e.g. a
+    #     registered macos.sh is never sourced on Linux). Applying
+    #     _wb_loader_should_source_by_name (lib/loader-select.sh — the
+    #     exact function the real loader uses, not a second copy) keeps
+    #     this listing honest on hosts with mixed-platform modules
+    #     registered.
+    local name reglist filepath tier base
     local -a eager_files=()
 
     while IFS= read -r name; do
@@ -504,6 +511,10 @@ _wb_cmd_functions() {
         while IFS='|' read -r filepath tier; do
             [[ -z "${filepath}" ]] && continue
             [[ "${tier}" == "lazy" ]] && continue
+            if [[ "${tier}" == "platform" || "${tier}" == "distro" ]]; then
+                base="$(basename "${filepath}" .sh)"
+                _wb_loader_should_source_by_name "${tier}" "${base}" || continue
+            fi
             eager_files+=("${filepath}")
         done < "${reglist}"
     done < <(workbench_list_loadable_modules)

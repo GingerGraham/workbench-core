@@ -236,41 +236,10 @@ _wb_loader_source_sh_files_once() {
 _WB_LOADER_TIERS="env core tools platform distro lazy"
 
 # _wb_loader_should_source_by_name <tier> <basename-without-.sh>
-# Filename-as-selector convention for the platform/distro tiers only (every
-# other tier sources everything registered for it unconditionally): a
-# distro-tier file only loads on a matching WORKBENCH_DISTRO; a
-# platform-tier file loads on a matching WORKBENCH_OS (lowercased: Mac ->
-# macos) or the literal "wsl" additionally when WORKBENCH_WSL=true.
-# Documented in contracts/core-api.md and docs/module-authoring.md — this is
-# the one piece of conditional-loading behaviour register.shell[] gets
-# without a dedicated manifest field, deliberately kept to a naming
-# convention rather than a new schema key.
-_wb_loader_should_source_by_name() {
-    local tier="$1" base="$2"
-    case "${tier}" in
-        distro)
-            [[ "${base}" == "${WORKBENCH_DISTRO}" ]]
-            ;;
-        platform)
-            local os_name
-            case "${WORKBENCH_OS}" in
-                Linux) os_name="linux" ;;
-                Mac)   os_name="macos" ;;
-                *)     os_name="${WORKBENCH_OS}" ;;
-            esac
-            if [[ "${base}" == "${os_name}" ]]; then
-                return 0
-            fi
-            if [[ "${base}" == "wsl" && "${WORKBENCH_WSL}" == "true" ]]; then
-                return 0
-            fi
-            return 1
-            ;;
-        *)
-            return 0
-            ;;
-    esac
-}
+# Shared with bin/wb's `wb functions` (lib/loader-select.sh) so both
+# ask the identical question the identical way — no second, drifting copy.
+# shellcheck source=lib/loader-select.sh
+source "${_wb_loader_lib_dir}/loader-select.sh"
 
 # _wb_loader_source_tier <tier>
 # Sources every registered file declared for <tier>, across every loadable
