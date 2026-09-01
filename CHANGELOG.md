@@ -6,6 +6,11 @@ All notable changes to `workbench-core` are documented here.
 
 ### Added
 
+- `unzip`/`zip` added to the optional prerequisite list
+  (`_WB_SHELL_PREREQS_OPTIONAL`), ahead of Wave C modules that will
+  need to unpack `.zip`-distributed tools. Same optional treatment as
+  `gpg` — nothing in core itself depends on either. See
+  `ARCHITECTURE.md` §12 D25.
 - **`wb tools`: the tool-updating framework.** `register.installers[].src`
   was declared/parsed/validated since Wave B but nothing ever consumed it
   at runtime — closed by a new, generalised registry: each declared file

@@ -136,6 +136,21 @@ else
     ok "curl is not in the optional prereq list"
 fi
 
+# 5a. unzip and zip are optional prereqs (future Wave C module needs),
+#     not required — mirrors gpg's existing treatment.
+for bin in unzip zip; do
+    if printf '%s\n' "${_WB_SHELL_PREREQS_OPTIONAL[@]}" | grep -qx "${bin}"; then
+        ok "${bin} is in the optional prereq list"
+    else
+        fail "${bin} is missing from the optional prereq list"
+    fi
+    if printf '%s\n' "${_WB_SHELL_PREREQS_REQUIRED[@]}" | grep -qx "${bin}"; then
+        fail "${bin} must not be in the required prereq list"
+    else
+        ok "${bin} is not in the required prereq list"
+    fi
+done
+
 # 6. workbench_missing_shell_prereqs only reports genuinely-absent binaries
 missing="$(workbench_missing_shell_prereqs)"
 for bin in ${missing}; do

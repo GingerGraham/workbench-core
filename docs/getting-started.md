@@ -110,6 +110,8 @@ wb dev awsconfd                    # guided switch to your own dev branch
 wb sync disable awsconfd           # pause auto-sync without deregistering
 wb remove awsconfd                 # deregister (deployed content stays)
 wb functions                       # what shell functions/getters are live
+wb tools list                      # what install-* functions are available
+wb version                         # release version + every loaded file's version
 ```
 
 ## Personal shell overrides
