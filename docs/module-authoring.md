@@ -104,6 +104,12 @@ thinks nothing changed. Write `install-<name>` the way you'd write any
 script meant to be run repeatedly and safely: check what's already
 installed, and no-op (or upgrade) accordingly.
 
+If your `install-<name>` function needs to unpack a `.zip`-distributed
+release, you don't need to check for or install `unzip` yourself — `wb
+install`/`wb apply` already offer to install it as an optional
+prerequisite (same treatment as `gpg`). `zip` is available on the same
+basis if you need to create an archive rather than extract one.
+
 `wb tools` is manual-only — it never runs on the background sync timer, and
 is a distinct concept from `wb update`: `wb update` keeps your *module*
 current (config text, shell registrations); `wb tools` keeps whatever

@@ -28,6 +28,13 @@ command -v _workbench_register_script_version &>/dev/null && _workbench_register
 # Binary -> minimum-viable description, in check order. gpg is optional
 # (only needed if GPG-related functionality is used later, e.g. by a future
 # workbench-gpg module) — checked and reported, never blocks install.
+# unzip/zip are optional for the same reason gpg is: nothing in
+# workbench-core itself needs them, but Wave C modules distributing
+# .zip-packaged tools will. Checked and installable now so a module
+# author's install-<name> function can just assume they're there rather
+# than re-implementing this check. No install-mapping needed — the binary
+# and package names match on every package manager checked
+# (apt/dnf/yum/zypper/pacman/brew).
 # ssh-keygen is required alongside ssh-keyscan (Phase 6's deploy-key
 # generation, lib/ssh/bootstrap.sh) — not called out as a separate line item
 # in the original gap list, but bundled in the same openssh-client(s)
@@ -35,7 +42,7 @@ command -v _workbench_register_script_version &>/dev/null && _workbench_register
 # beyond what ssh-keyscan already requires (see
 # workbench_install_shell_prereqs' package-name mapping below).
 _WB_SHELL_PREREQS_REQUIRED=(awk sed tr grep column git curl ssh-keyscan ssh-keygen)
-_WB_SHELL_PREREQS_OPTIONAL=(gpg)
+_WB_SHELL_PREREQS_OPTIONAL=(gpg unzip zip)
 
 # workbench_check_shell_prereqs
 # Prints one INFO/WARN line per binary and returns the count of missing
