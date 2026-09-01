@@ -40,6 +40,7 @@ for _wb_f in \
     sync/state.sh \
     distribution/resolve.sh distribution/fetch-tarball.sh distribution/fetch-git-snapshot.sh distribution/snapshot.sh \
     sync/engine.sh \
+    core/tools.sh \
     ssh/bootstrap.sh \
     modules/catalog.sh modules/add.sh modules/remove.sh modules/track.sh modules/dev.sh modules/sync-toggle.sh \
     ; do
@@ -70,6 +71,13 @@ DAILY USE
                                'core' also auto-triggers 'wb apply' when
                                core's commit actually changed.
   functions                   List registered shell functions/getters.
+  tools [list|update [<name>]]
+                               List/run the install-* functions modules
+                               declared via register.installers[] — manual
+                               only, never on the sync timer. Confused with
+                               'wb update'? 'wb update' keeps your MODULES
+                               current; 'wb tools' keeps the software those
+                               modules told you how to install current.
 
 SETUP & HOST-LEVEL CONVERGENCE
   install [--bundle <name>] [--skip-ansible]
@@ -148,6 +156,28 @@ _wb_bootstrap_core_module() {
     log_info "wb install: core bootstrapped from ${WB_ROOT} (tracking ${track_mode})"
 }
 
+_wb_converge_module_registrations() {
+    # Unconditional, idempotent convergence step (fix-brief §1): every
+    # loadable module's register.list (and installers.list — §3) is
+    # (re-)rendered on every `wb install`/`wb apply` run, regardless of
+    # whether anything actually changed. Before this existed,
+    # register.list was only ever written as an incidental side effect of
+    # _wb_bootstrap_core_module's non-early-return body (never reached on a
+    # bootstrap.sh-driven install, since core is already registered by the
+    # time this process starts) or a sync cycle that detected a real
+    # upstream commit change — leaving core's own register.list silently
+    # absent, and its shell content (get-functions, sudo-test, etc.) never
+    # reaching a real interactive shell, for anyone following the
+    # documented bootstrap.sh install path. One general fix for every
+    # module, not a core-specific patch (principle 4).
+    local name
+    while IFS= read -r name; do
+        [[ -z "${name}" ]] && continue
+        workbench_render_register_list "${name}"
+        workbench_render_installers_list "${name}"
+    done < <(workbench_list_loadable_modules)
+}
+
 _wb_link_cli_bin() {
     local bin_dir="${HOME}/.local/bin"
     local target link
@@ -194,6 +224,53 @@ _wb_write_rc_stub() {
     log_info "wb install: added loader stub to ${rc_file}"
 }
 
+_wb_scaffold_local_overrides() {
+    # Nothing renders ${XDG_CONFIG_HOME:-~/.config}/workbench/local/ on its
+    # own — fix-brief §2. Creates the directory if absent and writes a
+    # default settings.sh if absent, never overwriting an existing one
+    # (same non-clobbering discipline workbench_ensure_version_file already
+    # follows for the version file), so a new user has commented examples
+    # of the documented switches to look at rather than an empty file and a
+    # doc page.
+    local dir="${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/local"
+    local settings="${dir}/settings.sh"
+
+    mkdir -p "${dir}"
+    [[ -f "${settings}" ]] && return 0
+
+    cat > "${settings}" <<'EOF'
+#!/usr/bin/env bash
+# ~/.config/workbench/local/settings.sh — machine-local overrides.
+#
+# Sourced twice by lib/loader.sh: once early (before the loader tiers, so
+# flags set here gate their behaviour) and again at the very end (so it
+# wins over anything a tier also touched). Uncomment any of the switches
+# below to change this shell's behaviour.
+#
+# Any OTHER *.sh file dropped into this same directory (workbench/local/)
+# is sourced once, together, filename-sorted, right after this file's
+# final pass — put your own functions/aliases there instead of piling them
+# up in this file. See docs/getting-started.md.
+
+# Plain, unopinionated shell: disables the colourised prompt fallback and
+# forces WORKBENCH_SHOW_FUNCTIONS off, regardless of its own setting below.
+# WORKBENCH_PLAIN_SHELL=true
+
+# Print every registered function/getter/installer at the start of each
+# new interactive shell (same output as running `wb functions` by hand).
+# WORKBENCH_SHOW_FUNCTIONS=true
+
+# Verbose loader/sync debug logging (release version, script versions,
+# cadence decisions, etc.) — noisy, off by default.
+# WORKBENCH_DEBUG=true
+
+# Disable ~/.config/workbench/user/*.sh entirely (hand-authored "pseudo-
+# module" extensions) — on by default.
+# WORKBENCH_USER_EXT_ENABLED=false
+EOF
+    log_info "wb install: wrote default local-overrides file to ${settings}"
+}
+
 _wb_cmd_install() {
     local bundle="" skip_ansible="false"
     while [[ $# -gt 0 ]]; do
@@ -219,12 +296,15 @@ _wb_cmd_install() {
     fi
 
     workbench_ensure_version_file
+    workbench_migrate_state_schema
 
     mkdir -p "${XDG_CONFIG_HOME:-${HOME}/.config}/workbench" \
              "${XDG_DATA_HOME:-${HOME}/.local/share}/workbench" \
              "${XDG_CACHE_HOME:-${HOME}/.cache}/workbench"
 
+    _wb_scaffold_local_overrides
     _wb_bootstrap_core_module
+    _wb_converge_module_registrations
     _wb_link_cli_bin
 
     _wb_write_rc_stub "${HOME}/.bashrc"
@@ -351,6 +431,36 @@ _wb_cmd_version() {
 }
 
 # ── status ─────────────────────────────────────────────────────────────────
+# _wb_status_check_register_lists
+# Loud, explicit check (fix-brief §1): a registered, sync-enabled module
+# whose manifest declares register.shell[]/register.installers[] entries
+# but whose register.list is missing or empty means that module's shell
+# content is silently never reaching a real shell — this was invisible
+# everywhere before this brief (wb install reported success, wb status/wb
+# functions showed nothing wrong) and must not be able to be again.
+_wb_status_check_register_lists() {
+    local name current_dir manifest core_api reglist shell_count installer_count
+
+    while IFS= read -r name; do
+        [[ -z "${name}" ]] && continue
+        current_dir="$(workbench_module_current_dir "${name}")"
+        manifest="${current_dir}/.dotfiles-sync.yml"
+        [[ -f "${manifest}" ]] || continue
+
+        core_api="$(workbench_manifest_scalar core_api "${manifest}")"
+        [[ -z "${core_api}" ]] && continue
+
+        shell_count="$(workbench_manifest_register_shell_entries "${manifest}" | wc -l | tr -d ' ')"
+        installer_count="$(workbench_manifest_register_installer_entries "${manifest}" | wc -l | tr -d ' ')"
+        [[ "${shell_count}" -eq 0 && "${installer_count}" -eq 0 ]] && continue
+
+        reglist="$(workbench_module_dir "${name}")/register.list"
+        if [[ ! -s "${reglist}" ]]; then
+            log_warn "wb status: '${name}' declares register.shell[]/register.installers[] entries but register.list is missing or empty — its shell content is NOT reaching new shells. Run 'wb apply' to re-render it."
+        fi
+    done < <(workbench_list_loadable_modules)
+}
+
 _wb_cmd_status() {
     local name mode ref sha enabled registered fast="no"
     [[ "$(workbench_cadence_seconds)" -eq "${WORKBENCH_CADENCE_FAST_SECONDS}" ]] && fast="yes"
@@ -368,6 +478,8 @@ _wb_cmd_status() {
 
     echo
     echo "Fast (5-minute) cadence active: ${fast}"
+
+    _wb_status_check_register_lists
 }
 
 # ── functions ──────────────────────────────────────────────────────────────
@@ -403,6 +515,92 @@ _wb_cmd_functions() {
         done < <(workbench_manifest_register_getter_entries "${manifest}")
     done < <(workbench_list_loadable_modules)
     echo
+}
+
+# ── tools ──────────────────────────────────────────────────────────────────
+# The tool-updating framework's CLI surface (ARCHITECTURE.md §12 D23,
+# baseline-completion brief §Phase 3). Discovery (workbench_tools_collect/
+# workbench_tools_lookup, lib/core/tools.sh) is entirely generic — core has
+# no idea how any individual tool is installed, checked, or updated. Manual
+# only: never invoked from 'wb sync run-if-due'/the background timer.
+_wb_cmd_tools_list() {
+    local name abs_path func friendly current_module="" any="false"
+    echo
+    echo "[INFO] Discovered install-* tools, by module:"
+    while IFS='|' read -r name abs_path func friendly; do
+        [[ -z "${friendly}" ]] && continue
+        any="true"
+        if [[ "${name}" != "${current_module}" ]]; then
+            echo
+            echo "  ${name}:"
+            current_module="${name}"
+        fi
+        printf '    %-24s %s\n' "${friendly}" "${func}"
+    done < <(workbench_tools_collect)
+    [[ "${any}" == "false" ]] && echo "  (none discovered)"
+    echo
+}
+
+# _wb_tools_invoke <module> <abs-path> <function> <friendly-name>
+# Sources <abs-path> only if <function> isn't already defined in this
+# shell, then calls it exactly once. Idempotency/version-checking is
+# entirely the function's own responsibility (docs/module-authoring.md) —
+# core calls it and reports what it does, nothing more; there is no
+# aggregate "all up to date" summary, since core has no way to know that.
+_wb_tools_invoke() {
+    local name="$1" abs_path="$2" func="$3" friendly="$4"
+
+    if ! command -v "${func}" &>/dev/null; then
+        if [[ ! -f "${abs_path}" ]]; then
+            log_error "wb tools update: ${friendly} (${name}): installer file not found: ${abs_path}"
+            return 1
+        fi
+        # shellcheck disable=SC1090
+        source "${abs_path}"
+    fi
+
+    if ! command -v "${func}" &>/dev/null; then
+        log_error "wb tools update: ${friendly} (${name}): '${func}' is not a function after sourcing ${abs_path}"
+        return 1
+    fi
+
+    log_info "wb tools update: ${friendly} (${name}): running ${func}..."
+    "${func}"
+}
+
+_wb_cmd_tools_update() {
+    local target="${1:-}"
+
+    if [[ -n "${target}" ]]; then
+        local hit name abs_path func
+        hit="$(workbench_tools_lookup "${target}")" || {
+            log_error "wb tools update: no discovered installer named '${target}' — see 'wb tools list'"
+            return 1
+        }
+        IFS='|' read -r name abs_path func <<< "${hit}"
+        _wb_tools_invoke "${name}" "${abs_path}" "${func}" "${target}"
+        return $?
+    fi
+
+    local name abs_path func friendly failures=0
+    while IFS='|' read -r name abs_path func friendly; do
+        [[ -z "${friendly}" ]] && continue
+        _wb_tools_invoke "${name}" "${abs_path}" "${func}" "${friendly}" || failures=$((failures + 1))
+    done < <(workbench_tools_collect)
+    return "${failures}"
+}
+
+_wb_cmd_tools() {
+    local sub="${1:-list}"
+    [[ $# -gt 0 ]] && shift
+    case "${sub}" in
+        list)   _wb_cmd_tools_list ;;
+        update) _wb_cmd_tools_update "$@" ;;
+        *)
+            log_error "wb tools: usage: wb tools [list] | wb tools update [<name>]"
+            return 2
+            ;;
+    esac
 }
 
 # ── help / per-command detail ───────────────────────────────────────────────
@@ -448,6 +646,12 @@ warning and never fails the update itself.
 Confused with 'wb apply'? 'wb update' fetches new CODE for a module; 'wb
 apply' re-runs HOST-level setup. 'wb update core' now triggers 'wb apply'
 for you automatically when needed — nothing else does.
+
+Confused with 'wb tools update'? 'wb update' keeps registered MODULES
+current (config text, shell registrations, core's own convergence). 'wb
+tools update' operates one level down — it keeps the TOOLS a module's
+install-* function happens to install current. Neither one implies the
+other.
 EOF
 }
 
@@ -590,6 +794,43 @@ Usage: wb functions
 Lists every registered shell function/getter/installer, grouped by the
 module that declared it (via that module's manifest register: block).
 Read-only.
+
+Confused with 'wb tools'? This lists the raw register.installers[] src
+paths a manifest declares; 'wb tools' lists (and can invoke) the actual
+install-<name> functions discovered inside those files.
+EOF
+}
+
+_wb_help_tools() {
+    cat <<'EOF'
+Usage: wb tools [list]  |  wb tools update [<name>]
+
+The tool-updating framework: discovers and invokes install-<name>
+functions any registered, sync-enabled module declared via its manifest's
+register.installers[] entries. Core only knows the function exists and
+its friendly name (install-<name> with the prefix stripped) — it has no
+idea how any tool is installed, checked, or updated; that's entirely the
+module author's responsibility (docs/module-authoring.md).
+
+  list               Print every discovered installer, grouped by owning
+                       module. Default when no subcommand is given.
+  update [<name>]    With <name>: sources that installer's file (if not
+                       already loaded) and calls install-<name> once.
+                       Without <name>: does this for every discovered
+                       installer, in sequence, reporting per-tool as it
+                       goes — there is no aggregate "all up to date"
+                       summary, since core has no way to know that.
+
+Two modules declaring the same friendly name is a collision, resolved by
+first-by-module-name-order-wins and warned about once — 'wb tools list'
+always reflects the winner.
+
+Manual only — never invoked by the background timer/'wb sync run-if-due'.
+
+Confused with 'wb update'? 'wb update' keeps registered MODULES current
+(config text, shell registrations, core's own convergence). 'wb tools'
+operates one level down — tools that happen to get installed by functions
+a module ships. Neither implies the other.
 EOF
 }
 
@@ -625,6 +866,7 @@ _wb_cmd_help() {
         status)    _wb_help_status ;;
         update)    _wb_help_update ;;
         functions) _wb_help_functions ;;
+        tools)     _wb_help_tools ;;
         install)   _wb_help_install ;;
         apply)     _wb_help_apply ;;
         add)       _wb_help_add ;;
@@ -667,6 +909,7 @@ case "${_wb_cmd}" in
     update)    _wb_cmd_update "$@" ;;
     status)    _wb_cmd_status "$@" ;;
     functions) _wb_cmd_functions "$@" ;;
+    tools)     _wb_cmd_tools "$@" ;;
     version)   _wb_cmd_version "$@" ;;
     help)      _wb_cmd_help "$@" ;;
     -h|--help|"") _wb_usage ;;

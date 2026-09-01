@@ -155,9 +155,12 @@ register:
     - src: shell/installers.sh
 ```
 
-Files scanned for `install-*` functions, folded into the generalised tool
-registry `wb functions`/`get-installers` walks. Same `src` validation as
-`register.shell[]`.
+Files scanned for `install-<name>`-shaped functions, folded into the
+generalised tool-updating registry `wb tools` walks (ARCHITECTURE.md §12
+D23). Same `src` validation as `register.shell[]`. See
+`docs/module-authoring.md#declaring-installers-wb-tools` for the naming
+convention (a hard requirement, not a suggestion) and the collision rule
+when two modules declare the same friendly name.
 
 ### `register.getters[]`
 

@@ -66,6 +66,60 @@ else
     fail "workbench_ensure_version_file overwrote an existing version file"
 fi
 
+# 3a. workbench_migrate_state_schema bumps an existing STATE_SCHEMA_VERSION=1
+#     up to the current value in place.
+rc=0
+(
+    export XDG_CONFIG_HOME="${TMP_XDG}/migrate1"
+    source "${REPO_ROOT}/lib/core/version.sh"
+    workbench_ensure_version_file
+    workbench_version_set_var STATE_SCHEMA_VERSION 1
+    workbench_migrate_state_schema
+    [[ "$(workbench_state_schema_version)" == "2" ]] || exit 1
+) || rc=$?
+if [[ "${rc}" -eq 0 ]]; then
+    ok "workbench_migrate_state_schema bumps an existing STATE_SCHEMA_VERSION=1 to the current version"
+else
+    fail "workbench_migrate_state_schema did not bump an existing STATE_SCHEMA_VERSION as expected"
+fi
+
+# 3b. workbench_version_set_var appends a key that's missing entirely
+#     (rather than silently no-op'ing) — otherwise workbench_migrate_state_schema
+#     could never actually converge a version file with a dropped/corrupted
+#     STATE_SCHEMA_VERSION line, re-"migrating" forever without it taking.
+rc=0
+(
+    export XDG_CONFIG_HOME="${TMP_XDG}/migrate2"
+    source "${REPO_ROOT}/lib/core/version.sh"
+    workbench_ensure_version_file
+    VFILE="$(workbench_version_file_path)"
+    grep -v '^STATE_SCHEMA_VERSION=' "${VFILE}" > "${VFILE}.tmp" && mv "${VFILE}.tmp" "${VFILE}"
+    [[ -z "$(workbench_state_schema_version)" ]] || exit 1
+    workbench_migrate_state_schema
+    [[ "$(workbench_state_schema_version)" == "2" ]] || exit 1
+) || rc=$?
+if [[ "${rc}" -eq 0 ]]; then
+    ok "workbench_migrate_state_schema adds STATE_SCHEMA_VERSION when the key is missing entirely from the version file"
+else
+    fail "workbench_migrate_state_schema failed to add a missing STATE_SCHEMA_VERSION key"
+fi
+
+# 3c. Running the migration again once already current is a no-op (no
+#     duplicate STATE_SCHEMA_VERSION lines).
+rc=0
+(
+    export XDG_CONFIG_HOME="${TMP_XDG}/migrate1"
+    source "${REPO_ROOT}/lib/core/version.sh"
+    workbench_migrate_state_schema
+    VFILE="$(workbench_version_file_path)"
+    [[ "$(grep -c '^STATE_SCHEMA_VERSION=' "${VFILE}")" -eq 1 ]] || exit 1
+) || rc=$?
+if [[ "${rc}" -eq 0 ]]; then
+    ok "re-running workbench_migrate_state_schema once already current does not duplicate the version line"
+else
+    fail "re-running workbench_migrate_state_schema produced a duplicate STATE_SCHEMA_VERSION line"
+fi
+
 # 4. prereq checker enumerates the full required list from ARCHITECTURE.md §7
 for bin in awk sed tr grep column git curl ssh-keyscan; do
     if printf '%s\n' "${_WB_SHELL_PREREQS_REQUIRED[@]}" | grep -qx "${bin}"; then
