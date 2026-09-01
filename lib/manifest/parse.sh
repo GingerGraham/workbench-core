@@ -186,8 +186,8 @@ workbench_manifest_register_getter_entries() {
             return s
         }
         function flush() {
-            if (have_item) print name "|" func "|" label
-            have_item = 0; name = ""; func = ""; label = ""
+            if (have_item) print name "|" fn "|" label
+            have_item = 0; name = ""; fn = ""; label = ""
         }
         /^register:[[:space:]]*$/ { in_register = 1; next }
         in_register && /^[A-Za-z]/ { flush(); in_register = 0; in_getters = 0 }
@@ -202,7 +202,7 @@ workbench_manifest_register_getter_entries() {
             next
         }
         in_register && in_getters && have_item && /^[[:space:]]+function:/ {
-            line = $0; sub(/^[[:space:]]+function:[[:space:]]*/, "", line); func = clean(line); next
+            line = $0; sub(/^[[:space:]]+function:[[:space:]]*/, "", line); fn = clean(line); next
         }
         in_register && in_getters && have_item && /^[[:space:]]+label:/ {
             line = $0; sub(/^[[:space:]]+label:[[:space:]]*/, "", line); label = clean(line); next
