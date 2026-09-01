@@ -483,37 +483,56 @@ _wb_cmd_status() {
 }
 
 # ── functions ──────────────────────────────────────────────────────────────
+# ── functions ──────────────────────────────────────────────────────────────
 _wb_cmd_functions() {
+    # Generalised get-functions (ARCHITECTURE.md §3/§4): walks every
+    # registered module's declared files and extracts what's actually
+    # defined in them, the same two-primitive introspection
+    # (_extract_function_names/_extract_alias_names, lib/core/functions.sh)
+    # the donor dotfiles' single-root get-functions used — never a second
+    # parser. lazy-tier files are deliberately excluded from the eager
+    # list: that tier exists precisely for getter-gated content a user
+    # pulls in on demand via its own get-<domain>-functions, so listing it
+    # here too would show functions that aren't actually loaded yet.
     local name reglist filepath tier
-    echo
-    echo "[INFO] Registered shell functions/getters, by module:"
+    local -a eager_files=()
+
     while IFS= read -r name; do
         [[ -z "${name}" ]] && continue
         reglist="$(workbench_module_dir "${name}")/register.list"
         [[ -f "${reglist}" ]] || continue
-        echo
-        echo "  ${name}:"
         while IFS='|' read -r filepath tier; do
             [[ -z "${filepath}" ]] && continue
-            printf '    %-10s %s\n' "[${tier}]" "${filepath}"
+            [[ "${tier}" == "lazy" ]] && continue
+            eager_files+=("${filepath}")
         done < "${reglist}"
+    done < <(workbench_list_loadable_modules)
 
+    if [[ ${#eager_files[@]} -eq 0 ]]; then
+        echo
+        echo "[INFO] Loaded functions:"
+        echo "  (none — no module has rendered register.list yet; run 'wb apply')"
+    else
+        _get_functions_in "Loaded functions" "" "${eager_files[@]}"
+        _get_aliases_in "Loaded aliases" "" "${eager_files[@]}"
+    fi
+
+    local any_getters="false"
+    echo
+    echo "[INFO] Getters — run any of these for full detail on that area:"
+    while IFS= read -r name; do
+        [[ -z "${name}" ]] && continue
         local manifest
         manifest="$(workbench_module_current_dir "${name}")/.dotfiles-sync.yml"
         [[ -f "${manifest}" ]] || continue
-
-        local installer_src
-        while IFS= read -r installer_src; do
-            [[ -z "${installer_src}" ]] && continue
-            printf '    %-10s %s\n' "[installers]" "${installer_src}"
-        done < <(workbench_manifest_register_installer_entries "${manifest}")
-
         local getter_name getter_fn getter_label
         while IFS='|' read -r getter_name getter_fn getter_label; do
             [[ -z "${getter_name}" ]] && continue
-            printf '    %-10s %-24s %s\n' "[getter]" "${getter_fn}" "${getter_label}"
+            any_getters="true"
+            printf '  %-22s %s\n' "${getter_fn}" "${getter_label}"
         done < <(workbench_manifest_register_getter_entries "${manifest}")
     done < <(workbench_list_loadable_modules)
+    [[ "${any_getters}" == "false" ]] && echo "  (none registered yet)"
     echo
 }
 
