@@ -112,6 +112,27 @@ wb remove awsconfd                 # deregister (deployed content stays)
 wb functions                       # what shell functions/getters are live
 ```
 
+## Personal shell overrides
+
+`wb install`/`wb apply` create `~/.config/workbench/local/settings.sh` for
+you (with commented examples) — this one reserved filename is where the
+documented switches live (`WORKBENCH_PLAIN_SHELL`, `WORKBENCH_SHOW_FUNCTIONS`,
+etc.), and it's sourced twice: once early, so a flag you set there gates
+everything else that loads afterward, and again at the very end, so it
+wins over anything a module also touched.
+
+Want your own functions or aliases, entirely separate from that switches
+file? Drop any number of other `*.sh` files into the same
+`~/.config/workbench/local/` directory — they're sourced once, together,
+in filename order, right after `settings.sh`'s final pass, and are live in
+your very next new shell. No naming convention required beyond `.sh`, and
+nothing here is validated the way a module's manifest is — keep it simple
+and flat.
+
+(This is separate from `~/.config/workbench/user/*.sh`, which is for
+hand-authored "pseudo-module" extensions rather than personal overrides —
+see `contracts/state-schema.md` if you need the distinction.)
+
 ## Uninstalling a module cleanly
 
 `wb remove <name>` deregisters without touching anything it deployed —

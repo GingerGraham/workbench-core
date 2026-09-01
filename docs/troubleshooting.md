@@ -17,6 +17,13 @@ Install it yourself with your distro's package manager, then re-run
    `wb status` — if `core`'s row is missing entirely, re-run `wb install`.
 4. Run the loader directly to see any error output:
    `bash -x ~/.local/share/workbench/modules/core/current/lib/loader.sh`
+5. Installed via `bootstrap.sh` before this was fixed? A confirmed
+   regression left `register.list` unrendered on that install path
+   specifically (ARCHITECTURE.md §12 D21) — just re-run `wb apply` once;
+   it now unconditionally re-renders `register.list`/`installers.list` for
+   every loadable module on every run. `wb status` also now warns loudly
+   if a registered module's declared shell/installer content never made
+   it into its `register.list`.
 
 ## A module's functions aren't loading even though `wb status` shows it registered
 

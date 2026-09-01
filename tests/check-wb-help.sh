@@ -33,7 +33,7 @@ mkdir -p "${HOME}"
 #    command name to look up (there is no argument-form equivalent of "help
 #    about the help command" the way there is for every real command), so
 #    it's checked separately below instead. ─────────────────────────────────
-COMMANDS=(install apply add remove track dev sync update status functions version)
+COMMANDS=(install apply add remove track dev sync update status functions tools version)
 
 for cmd in "${COMMANDS[@]}"; do
     via_help="$(bash "${WB}" help "${cmd}" 2>&1)"

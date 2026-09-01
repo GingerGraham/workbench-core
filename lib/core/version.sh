@@ -32,7 +32,7 @@ workbench_ensure_version_file() {
         cat > "${file}" <<'EOF'
 CORE_API_VERSION=1
 MANIFEST_SCHEMA_VERSION=1
-STATE_SCHEMA_VERSION=1
+STATE_SCHEMA_VERSION=2
 WORKBENCH_CORE_SEMVER=0.1.0
 EOF
     fi
@@ -54,6 +54,54 @@ workbench_core_api_version()      { workbench_read_version_var CORE_API_VERSION;
 workbench_manifest_schema_version() { workbench_read_version_var MANIFEST_SCHEMA_VERSION; }
 workbench_state_schema_version()  { workbench_read_version_var STATE_SCHEMA_VERSION; }
 workbench_core_semver()           { workbench_read_version_var WORKBENCH_CORE_SEMVER; }
+
+# workbench_version_set_var <NAME> <value>
+# Idempotent single-key update of the version file, same discipline as
+# workbench_module_conf_set (lib/sync/state.sh) for sync.conf — rewrites
+# NAME=value in place, leaving every other assignment untouched.
+workbench_version_set_var() {
+    local name="$1" value="$2" file tmp
+    file="$(workbench_version_file_path)"
+    [[ -f "${file}" ]] || return 1
+
+    tmp="$(mktemp "${file}.XXXXXX")"
+    awk -v var="${name}" -v val="${value}" '
+        BEGIN { key = var "=" }
+        index($0, key) == 1 { print var "=" val; next }
+        { print }
+    ' "${file}" > "${tmp}"
+    mv "${tmp}" "${file}"
+}
+
+# ── STATE_SCHEMA_VERSION migration ───────────────────────────────────────────
+# The current on-disk state shape's version — bump this alongside a new
+# migration step below whenever contracts/state-schema.md's shape changes,
+# per §6's "bump when this shape changes in a way that needs migration."
+_WB_STATE_SCHEMA_VERSION_CURRENT=2
+
+# workbench_migrate_state_schema
+# Brings an existing version file's STATE_SCHEMA_VERSION up to
+# _WB_STATE_SCHEMA_VERSION_CURRENT in place. Called from `wb install`/`wb
+# apply`, after workbench_ensure_version_file (which only ever writes the
+# file if one doesn't exist yet — this is what advances an existing one).
+# No-op if the file doesn't exist yet (workbench_ensure_version_file's job)
+# or is already current. Migration steps are purely additive so far (new
+# state files, never a changed/removed shape) — nothing here rewrites or
+# deletes any existing per-module state.
+workbench_migrate_state_schema() {
+    local file current
+    file="$(workbench_version_file_path)"
+    [[ -f "${file}" ]] || return 0
+
+    current="$(workbench_state_schema_version)"
+    [[ -z "${current}" ]] && current=1
+    [[ "${current}" -ge "${_WB_STATE_SCHEMA_VERSION_CURRENT}" ]] && return 0
+
+    if [[ "${current}" -lt 2 ]]; then
+        log_info "workbench: migrating STATE_SCHEMA_VERSION 1 -> 2 (installers.list added — additive, no existing state touched)"
+    fi
+    workbench_version_set_var STATE_SCHEMA_VERSION "${_WB_STATE_SCHEMA_VERSION_CURRENT}"
+}
 
 # ── Release/tag version (bootstrap-fix brief §5.1) ───────────────────────────
 # Distinct from the contract-version functions above: this answers "which

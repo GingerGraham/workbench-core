@@ -143,6 +143,34 @@ export WORKBENCH_ARCH
 WORKBENCH_PLATFORM_DETECTED="true"
 export WORKBENCH_PLATFORM_DETECTED
 
+# ── Local overrides directory (ARCHITECTURE.md §12 D21) ───────────────────────
+# Machine-local, outside every module's own tree.
+# ${XDG_CONFIG_HOME:-~/.config}/workbench/local/ holds `settings.sh` — the
+# reserved-name direct successor to the old single-file `90-local.sh`,
+# keeping exactly its two-pass semantics: sourced first (so flags it sets
+# gate later tiers) and again at the very end (so it wins over anything a
+# later tier also touches) — plus any number of other user-authored `*.sh`
+# files, sourced once, together, filename-sorted, immediately after
+# settings.sh's final pass (see below). `_wb_loader_source_sh_files_once`
+# (defined just below) is the shared safety discipline both that "other
+# files" pass and WORKBENCH_USER_EXT_DIR use: bash -n syntax smoke-test,
+# skip-and-warn on failure, stamp-cache to avoid re-checking unchanged files
+# on every shell start.
+#
+# Sourced BEFORE the "Behaviour flags" block just below, deliberately — a
+# flag like WORKBENCH_PLAIN_SHELL set only in settings.sh (never exported as
+# a real environment variable ahead of time) must already be a real shell
+# variable by the time that block's own `${WORKBENCH_PLAIN_SHELL:-false}`
+# default-and-forcing logic runs, or "settings.sh's early pass gates later
+# tiers" — the documented contract this file has always claimed — would be
+# true for tiers/the prompt fallback but silently false for
+# WORKBENCH_SHOW_FUNCTIONS specifically (caught by
+# tests/check-local-overrides.sh).
+WORKBENCH_LOCAL_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/local"
+WORKBENCH_LOCAL_ENV="${WORKBENCH_LOCAL_DIR}/settings.sh"
+# shellcheck disable=SC1090
+[[ -f "${WORKBENCH_LOCAL_ENV}" ]] && source "${WORKBENCH_LOCAL_ENV}"
+
 # ── Behaviour flags ───────────────────────────────────────────────────────────
 WORKBENCH_SHOW_FUNCTIONS="${WORKBENCH_SHOW_FUNCTIONS:-false}"
 WORKBENCH_USER_EXT_DIR="${WORKBENCH_USER_EXT_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/user}"
@@ -154,13 +182,52 @@ if [[ "${WORKBENCH_PLAIN_SHELL}" == "true" ]]; then
     WORKBENCH_SHOW_FUNCTIONS=false
 fi
 
-# ── Local overrides (90-local.sh) ─────────────────────────────────────────────
-# Machine-local, outside every module's own tree — sourced first (so flags
-# it sets gate later tiers) and again at the very end (so it wins over
-# anything a later tier also touches).
-WORKBENCH_LOCAL_ENV="${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/local/90-local.sh"
-# shellcheck disable=SC1090
-[[ -f "${WORKBENCH_LOCAL_ENV}" ]] && source "${WORKBENCH_LOCAL_ENV}"
+# _wb_loader_source_sh_files_once <dir> <stamp-file> [exclude-basename]
+# Sources every *.sh file directly in <dir> (nullglob-safe, no matches is a
+# silent no-op), skipping [exclude-basename] if given. Each file gets a
+# `bash -n` syntax smoke-test only on first sight or after it changes
+# (tracked via <stamp-file>, `-nt` being a builtin test in both bash and
+# zsh) — a failing file is skipped and warned about, and the stamp is
+# withheld so it's re-checked (and re-warned) every start until fixed.
+_wb_loader_source_sh_files_once() {
+    local dir="$1" stamp="$2" exclude="${3:-}"
+    local cache_dir dirty=false f base
+
+    [[ -d "${dir}" ]] || return 0
+    cache_dir="$(dirname "${stamp}")"
+
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+        setopt nullglob
+    else
+        shopt -s nullglob
+    fi
+    local files=("${dir}"/*.sh)
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+        unsetopt nullglob
+    else
+        shopt -u nullglob
+    fi
+
+    for f in "${files[@]}"; do
+        [[ -f "${f}" ]] || continue
+        base="$(basename "${f}")"
+        [[ -n "${exclude}" && "${base}" == "${exclude}" ]] && continue
+        if [[ ! -f "${stamp}" ]] || [[ "${f}" -nt "${stamp}" ]]; then
+            if ! bash -n "${f}" 2>/dev/null; then
+                log_warn "loader: ${f} failed syntax check (bash -n) — skipping"
+                dirty=true
+                continue
+            fi
+        fi
+        # shellcheck disable=SC1090
+        source "${f}"
+    done
+
+    if [[ "${dirty}" == "false" ]]; then
+        [[ -d "${cache_dir}" ]] || mkdir -p "${cache_dir}" 2>/dev/null
+        : > "${stamp}"
+    fi
+}
 
 # ── register.list tier resolution ─────────────────────────────────────────────
 # Six tiers, sourced in this fixed order for every loadable module — the
@@ -314,48 +381,29 @@ fi
 # shellcheck disable=SC1090
 [[ -f "${WORKBENCH_LOCAL_ENV}" ]] && source "${WORKBENCH_LOCAL_ENV}"
 
+# ── Other local/*.sh files (genuinely open, user-owned content) ───────────────
+# Everything in WORKBENCH_LOCAL_DIR except settings.sh itself — functions,
+# aliases, whatever — sourced once, together, filename-sorted, immediately
+# after settings.sh's final pass. Deliberately flat, not trying to
+# reproduce the six loader tiers for local content (ARCHITECTURE.md §12
+# D21): this is the right level of complexity for something the loader
+# can't validate the shape of the way it can a module's manifest.
+_wb_loader_source_sh_files_once \
+    "${WORKBENCH_LOCAL_DIR}" \
+    "${XDG_CACHE_HOME:-${HOME}/.cache}/workbench/local-other.stamp" \
+    "$(basename "${WORKBENCH_LOCAL_ENV}")"
+
 # ── User extensions (always last of the content tiers) ────────────────────────
 # Same shadowing/syntax-smoke-test semantics as workbench-precursor's
-# DOTFILES_USER_EXT_DIR: a per-file bash-3.2/zsh-portable stamp check (`-nt`
-# is a builtin test in both shells), `bash -n` as a syntax smoke test only
-# (not a compatibility gate), a failing file skipped and the stamp withheld
-# so it's re-checked (and re-warned) every start until fixed.
-if [[ "${WORKBENCH_USER_EXT_ENABLED}" == "true" && -d "${WORKBENCH_USER_EXT_DIR}" ]]; then
-    _wb_user_ext_cache_dir="${XDG_CACHE_HOME:-${HOME}/.cache}/workbench"
-    _wb_user_ext_stamp="${_wb_user_ext_cache_dir}/user-ext.stamp"
-    _wb_user_ext_dirty=false
-
-    if [[ -n "${ZSH_VERSION:-}" ]]; then
-        setopt nullglob
-    else
-        shopt -s nullglob
-    fi
-    _wb_user_ext_files=("${WORKBENCH_USER_EXT_DIR}"/*.sh)
-    if [[ -n "${ZSH_VERSION:-}" ]]; then
-        unsetopt nullglob
-    else
-        shopt -u nullglob
-    fi
-
-    for _wb_uef in "${_wb_user_ext_files[@]}"; do
-        [[ -f "${_wb_uef}" ]] || continue
-        if [[ ! -f "${_wb_user_ext_stamp}" ]] || [[ "${_wb_uef}" -nt "${_wb_user_ext_stamp}" ]]; then
-            if ! bash -n "${_wb_uef}" 2>/dev/null; then
-                log_warn "loader: user extension ${_wb_uef} failed syntax check (bash -n) — skipping"
-                _wb_user_ext_dirty=true
-                continue
-            fi
-        fi
-        # shellcheck disable=SC1090
-        source "${_wb_uef}"
-    done
-
-    if [[ "${_wb_user_ext_dirty}" == "false" ]]; then
-        [[ -d "${_wb_user_ext_cache_dir}" ]] || mkdir -p "${_wb_user_ext_cache_dir}" 2>/dev/null
-        : > "${_wb_user_ext_stamp}"
-    fi
-
-    unset _wb_user_ext_cache_dir _wb_user_ext_stamp _wb_user_ext_dirty _wb_user_ext_files _wb_uef
+# DOTFILES_USER_EXT_DIR, via the shared helper above. Stays conceptually
+# distinct from the local-overrides directory (hand-authored "pseudo-
+# module" extensions vs. personal overrides) and sourced after it, so
+# WORKBENCH_USER_EXT_DIR remains the true last word of every content tier —
+# unchanged from before this directory existed.
+if [[ "${WORKBENCH_USER_EXT_ENABLED}" == "true" ]]; then
+    _wb_loader_source_sh_files_once \
+        "${WORKBENCH_USER_EXT_DIR}" \
+        "${XDG_CACHE_HOME:-${HOME}/.cache}/workbench/user-ext.stamp"
 fi
 
 # ── PATH deduplication ────────────────────────────────────────────────────────

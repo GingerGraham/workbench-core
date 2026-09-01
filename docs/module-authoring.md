@@ -10,6 +10,7 @@ and shell loader.
 - [The manifest](#the-manifest)
 - [The tag format contract](#the-tag-format-contract)
 - [Registering shell content](#registering-shell-content)
+- [Declaring installers (`wb tools`)](#declaring-installers-wb-tools)
 - [The arch-normalization snippet](#the-arch-normalization-snippet)
 - [Hooks](#hooks)
 - [Dev-mode disk duplication (read this before filing a "bug")](#dev-mode-disk-duplication)
@@ -69,6 +70,50 @@ supported field, and the validator rejects it. The engine computes where
 your registered files land; this is deliberate (see ARCHITECTURE.md
 principle 1) and is exactly what makes `register:` safe without a `dest`
 denylist of its own.
+
+## Declaring installers (`wb tools`)
+
+`register.installers[].src` is a path relative to your repo root, same
+validation as `register.shell[].src`. Every top-level function in that file
+named `install-<name>` (a **hard requirement**, not just a suggestion — it's
+the only thing that makes your function discoverable at all) is picked up
+by `wb tools list`/`wb tools update` under the friendly name `<name>` (the
+`install-` prefix stripped):
+
+```yaml
+register:
+  installers:
+    - src: shell/installers.sh
+```
+
+```sh
+# shell/installers.sh
+install-terraform() {
+    # ... your own idempotency/version-checking logic here ...
+}
+```
+
+Core's job stops at discovering `install-<name>` functions and invoking the
+one you asked for (or all of them, for a bare `wb tools update`) — it does
+not know or guess how your tool is installed, checked, or updated, and it
+never will. **Idempotency and version-checking are entirely your
+responsibility as the module author.** `wb tools update` calls your
+function and reports whatever it prints/returns; it does not track
+installed versions, diff state, or skip calling your function because it
+thinks nothing changed. Write `install-<name>` the way you'd write any
+script meant to be run repeatedly and safely: check what's already
+installed, and no-op (or upgrade) accordingly.
+
+`wb tools` is manual-only — it never runs on the background sync timer, and
+is a distinct concept from `wb update`: `wb update` keeps your *module*
+current (config text, shell registrations); `wb tools` keeps whatever
+software your `install-*` functions happen to install current.
+
+Two modules declaring the same friendly name (e.g. both defining
+`install-terraform`) is a real constraint, not a silent surprise: `wb
+tools` warns once and picks a winner by first-by-module-name-order —
+choose a more specific friendly name if you don't want to depend on
+alphabetical luck.
 
 ## The arch-normalization snippet
 
