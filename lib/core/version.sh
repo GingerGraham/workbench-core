@@ -58,19 +58,29 @@ workbench_core_semver()           { workbench_read_version_var WORKBENCH_CORE_SE
 # workbench_version_set_var <NAME> <value>
 # Idempotent single-key update of the version file, same discipline as
 # workbench_module_conf_set (lib/sync/state.sh) for sync.conf — rewrites
-# NAME=value in place, leaving every other assignment untouched.
+# NAME=value in place, leaving every other assignment untouched, and
+# appends it if the key is missing entirely (e.g. a hand-edited or
+# otherwise corrupted version file that dropped a line) rather than
+# silently leaving it unset — the same fallback
+# workbench_module_conf_set already has, without which a caller like
+# workbench_migrate_state_schema could re-attempt the same "migration"
+# forever without it ever actually taking.
 workbench_version_set_var() {
     local name="$1" value="$2" file tmp
     file="$(workbench_version_file_path)"
     [[ -f "${file}" ]] || return 1
 
-    tmp="$(mktemp "${file}.XXXXXX")"
-    awk -v var="${name}" -v val="${value}" '
-        BEGIN { key = var "=" }
-        index($0, key) == 1 { print var "=" val; next }
-        { print }
-    ' "${file}" > "${tmp}"
-    mv "${tmp}" "${file}"
+    if grep -q "^${name}=" "${file}" 2>/dev/null; then
+        tmp="$(mktemp "${file}.XXXXXX")"
+        awk -v var="${name}" -v val="${value}" '
+            BEGIN { key = var "=" }
+            index($0, key) == 1 { print var "=" val; next }
+            { print }
+        ' "${file}" > "${tmp}"
+        mv "${tmp}" "${file}"
+    else
+        printf '%s=%s\n' "${name}" "${value}" >> "${file}"
+    fi
 }
 
 # ── STATE_SCHEMA_VERSION migration ───────────────────────────────────────────
