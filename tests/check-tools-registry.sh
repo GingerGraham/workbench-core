@@ -43,7 +43,7 @@ mkdir -p "${SRC_A}"
 git init -q --bare "${BARE_A}"
 git clone -q "${BARE_A}" "${SRC_A}" 2>/dev/null
 (
-    cd "${SRC_A}"
+    cd "${SRC_A}" || exit 1
     git config user.email t@t.com
     git config user.name Test
     mkdir -p shell
@@ -143,7 +143,7 @@ mkdir -p "${SRC_B}"
 git init -q --bare "${BARE_B}"
 git clone -q "${BARE_B}" "${SRC_B}" 2>/dev/null
 (
-    cd "${SRC_B}"
+    cd "${SRC_B}" || exit 1
     git config user.email t@t.com
     git config user.name Test
     mkdir -p shell

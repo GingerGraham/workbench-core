@@ -117,6 +117,7 @@ cat > "${USER_EXT_DIR}/zz-ext.sh" <<'EOF'
 WB_TEST_LOG="${WB_TEST_LOG}ext "
 EOF
 
+# shellcheck disable=SC2016
 OUT="$(
     env -i \
         HOME="${WORK}/home" \

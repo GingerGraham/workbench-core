@@ -133,8 +133,10 @@ else
 fi
 
 if grep -qF "Include ~/.ssh/config.d/*.conf" "${HOME}/.ssh/config" 2>/dev/null; then
+    # shellcheck disable=SC2088
     ok "~/.ssh/config includes the config.d directory"
 else
+    # shellcheck disable=SC2088
     fail "~/.ssh/config does not include config.d"
 fi
 

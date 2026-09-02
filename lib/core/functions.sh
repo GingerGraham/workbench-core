@@ -18,6 +18,7 @@ _wb_functions_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 [[ -f "${_wb_functions_dir}/log.sh" ]] && source "${_wb_functions_dir}/log.sh"
 unset _wb_functions_dir
 
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/functions.sh" "0.1.0" || true
 
 # ── OS / WSL / Distro / Shell / Arch detection (run once per session) ───────
@@ -177,6 +178,7 @@ elevate-cmd() {
     fi
 
     log_debug "Executing with ${elevation_cmd}: ${cmd_to_run}"
+    # shellcheck disable=SC2086
     ${elevation_cmd} ${cmd_to_run}
 }
 

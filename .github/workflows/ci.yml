@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+  workflow_call: {}
+
+jobs:
+  lint:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run shellcheck
+        run: |
+          shellcheck bin/wb bootstrap.sh lib/**/*.sh tests/*.sh .github/scripts/**/*.sh
+
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve ref under test
+        id: ref
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            echo "branch=${HEAD_REF}" >> "$GITHUB_OUTPUT"
+          else
+            echo "branch=${REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run test suite
+        env:
+          WORKBENCH_TEST_GH_BRANCH: ${{ steps.ref.outputs.branch }}
+        run: .github/scripts/ci/run-tests.sh | tee test-output.log
+        shell: bash
+
+      - name: Upload test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output-${{ matrix.os }}
+          path: test-output.log
+          if-no-files-found: warn

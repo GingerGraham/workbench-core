@@ -23,6 +23,7 @@ _wb_prereqs_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # shellcheck source=lib/core/semver.sh
 [[ -f "${_wb_prereqs_lib_dir}/semver.sh" ]] && source "${_wb_prereqs_lib_dir}/semver.sh"
 
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/prereqs.sh" "0.1.0" || true
 
 # Binary -> minimum-viable description, in check order. gpg is optional

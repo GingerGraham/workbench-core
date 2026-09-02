@@ -9,6 +9,7 @@
 # construction, because it invokes the identical engine rather than a
 # second implementation of "fetch and register a module."
 
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/add.sh" "0.1.0" || true
 
 # workbench_cmd_add <name> [url] [--private] [--allow-hooks]

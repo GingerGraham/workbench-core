@@ -5,6 +5,7 @@
 # `wb update` touches it. No argument means core's own toggle (module zero,
 # no special-casing beyond "core" being the default name).
 
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/sync-toggle.sh" "0.1.0" || true
 
 # workbench_cmd_sync_toggle <enable|disable> [<name>]

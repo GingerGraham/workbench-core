@@ -66,7 +66,7 @@ make_src_repo() {
     git init -q --bare "${bare}"
     git clone -q "${bare}" "${src}"
     (
-        cd "${src}"
+        cd "${src}" || exit 1
         git config user.email t@t.com
         git config user.name Test
         echo "${content}" > file.sh
@@ -88,7 +88,7 @@ EOF
 push_new_tag() {
     local src="$1" tag="$2" content="$3"
     (
-        cd "${src}"
+        cd "${src}" || exit 1
         echo "${content}" >> file.sh
         git add -A && git commit -q -m "${tag}"
         git tag "${tag}" && git push -q origin main "${tag}"
@@ -129,22 +129,26 @@ workbench_sync_module widgetco "setup" >/tmp/wb-core-auto-apply-setup2.log 2>&1
 #    sites. ──────────────────────────────────────────────────────────────────
 reset_apply_calls
 _wb_cmd_update core >/tmp/wb-caa-1a.log 2>&1
+# shellcheck disable=SC2015
 [[ "${#APPLY_CALLS[@]}" -eq 0 ]] && ok "'wb update core' with no SHA change does not trigger convergence" \
     || fail "'wb update core' with no SHA change triggered convergence anyway: ${APPLY_CALLS[*]}"
 
 reset_apply_calls
 _wb_cmd_update "" >/tmp/wb-caa-1b.log 2>&1
+# shellcheck disable=SC2015
 [[ "${#APPLY_CALLS[@]}" -eq 0 ]] && ok "bare 'wb update' with no SHA change does not trigger convergence" \
     || fail "bare 'wb update' with no SHA change triggered convergence anyway: ${APPLY_CALLS[*]}"
 
 reset_apply_calls
 _wb_cmd_sync run-if-due >/tmp/wb-caa-1c.log 2>&1
+# shellcheck disable=SC2015
 [[ "${#APPLY_CALLS[@]}" -eq 0 ]] && ok "'wb sync run-if-due' with no SHA change does not trigger convergence" \
     || fail "'wb sync run-if-due' with no SHA change triggered convergence anyway: ${APPLY_CALLS[*]}"
 
 reset_apply_calls
 core_sha="$(workbench_module_conf_get core RESOLVED_SHA "")"
 workbench_cmd_track core --commit "${core_sha}" >/tmp/wb-caa-1d.log 2>&1
+# shellcheck disable=SC2015
 [[ "${#APPLY_CALLS[@]}" -eq 0 ]] && ok "'wb track core --commit <already-resolved-sha>' does not trigger convergence" \
     || fail "'wb track core' with an unchanged resolved SHA triggered convergence anyway: ${APPLY_CALLS[*]}"
 # Restore core to latest for the remaining checks.
@@ -220,12 +224,13 @@ out_noskip="$(_wb_cmd_apply 2>&1)"
 if [[ -f "${ANSIBLE_MARKER}" ]]; then
     ok "'wb apply' (no flag) with ansible-playbook present on PATH does invoke it — proves §4's skip above was flag-driven"
 else
-    fail "'wb apply' without --skip-ansible unexpectedly did not invoke ansible-playbook"
+    fail "'wb apply' without --skip-ansible unexpectedly did not invoke ansible-playbook: ${out_noskip}"
 fi
 
 export PATH="${PATH#"${FAKE_BIN}:"}"
 
 # Re-install the recording stub for the remaining checks.
+# shellcheck disable=SC2317
 _wb_cmd_apply() {
     APPLY_CALLS+=("$*")
     return "${APPLY_EXIT}"
@@ -234,7 +239,7 @@ _wb_cmd_apply() {
 # ── 5. SHA change via 'wb track core --branch <b>' → full convergence,
 #    attended (no --skip-ansible). ──────────────────────────────────────────
 (
-    cd "${CORE_SRC}"
+    cd "${CORE_SRC}" || exit 1
     git checkout -q -b my-feature
     echo "core feature wip" >> file.sh
     git add -A && git commit -q -m "feature wip"
@@ -256,12 +261,14 @@ workbench_sync_module core "restore" >/tmp/wb-caa-5-restore.log 2>&1
 push_new_tag "${WIDGET_SRC}" v1.1.0 "widget v1.1"
 reset_apply_calls
 _wb_cmd_update widgetco >/tmp/wb-caa-6a.log 2>&1
+# shellcheck disable=SC2015
 [[ "${#APPLY_CALLS[@]}" -eq 0 ]] && ok "'wb update widgetco' (non-core) never triggers core convergence" \
     || fail "'wb update widgetco' unexpectedly triggered convergence: ${APPLY_CALLS[*]}"
 
 push_new_tag "${WIDGET_SRC}" v1.2.0 "widget v1.2"
 reset_apply_calls
 _wb_cmd_update "" >/tmp/wb-caa-6b.log 2>&1
+# shellcheck disable=SC2015
 [[ "${#APPLY_CALLS[@]}" -eq 0 ]] && ok "bare 'wb update' with only a non-core module changing does not trigger convergence" \
     || fail "bare 'wb update' with only widgetco changing unexpectedly triggered convergence: ${APPLY_CALLS[*]}"
 

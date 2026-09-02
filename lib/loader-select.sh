@@ -8,6 +8,7 @@
 # (which never sources module content itself, only asks "would it be
 # sourced").
 
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/loader-select.sh" "0.1.0" || true
 
 # _wb_loader_should_source_by_name <tier> <basename-without-.sh>

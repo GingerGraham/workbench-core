@@ -94,7 +94,9 @@ if "${VALIDATE}" "${WORK}/bad/.dotfiles-sync.yml" >/tmp/wb-validate-bad.log 2>&1
 else
     ok "an unsafe src (../escape.sh), dest (/etc/passwd), and mode (bogus) are all rejected"
 fi
+# shellcheck disable=SC2015
 grep -q "must be a path relative to the repo root" /tmp/wb-validate-bad.log && ok "rejects unsafe src with the expected message" || fail "unsafe src rejection message missing"
+# shellcheck disable=SC2015
 grep -q "must start with ~/" /tmp/wb-validate-bad.log && ok "rejects unsafe dest with the expected message" || fail "unsafe dest rejection message missing"
 
 # ── Fixture 4: register.shell[] with a dest field — must FAIL ───────────────

@@ -115,7 +115,9 @@ fi
 export WORKBENCH_SHELL
 
 if [[ "${WORKBENCH_OS}" == "Linux" && -f /etc/os-release ]]; then
+    # shellcheck disable=SC1091
     _distro_id="$(. /etc/os-release 2>/dev/null && echo "${ID:-unknown}")"
+    # shellcheck disable=SC1091
     _distro_id_like="$(. /etc/os-release 2>/dev/null && echo "${ID_LIKE:-}")"
     case "${_distro_id}" in
         fedora|rhel|centos|rocky|almalinux) WORKBENCH_DISTRO="rhel" ;;
@@ -249,7 +251,7 @@ source "${_wb_loader_lib_dir}/loader-select.sh"
 # env/ tier did within its single root).
 _wb_loader_source_tier() {
     local tier="$1"
-    local name reglist line filepath filetier base
+    local name reglist filepath filetier base
 
     while IFS= read -r name; do
         [[ -z "${name}" ]] && continue
@@ -305,6 +307,7 @@ fi
 # this shell the same generic way any other core-tier content does
 # (lib/core/version.sh via register.list), so neither is available until
 # that content has actually been sourced.
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/loader.sh" "0.1.0" || true
 # Gated on WORKBENCH_DEBUG explicitly, before ever calling
 # _workbench_release_version — not just left to log_debug's own internal

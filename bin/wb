@@ -54,6 +54,7 @@ unset _wb_f
 # every other file's own registration line — guarded with
 # `command -v _workbench_register_script_version &>/dev/null &&` for when
 # it's sourced standalone elsewhere — actually fires during this pass.
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "bin/wb" "0.1.0" || true
 
 _wb_usage() {
@@ -375,12 +376,13 @@ _wb_maybe_reconverge_core() {
     # default /bin/bash, per ARCHITECTURE.md's compatibility target) raises
     # "unbound variable" expanding an empty array under `set -u`, which this
     # file runs under.
+    local apply_rc=0
     if [[ "${unattended}" == "true" ]]; then
-        _wb_cmd_apply --skip-ansible
+        _wb_cmd_apply --skip-ansible || apply_rc=$?
     else
-        _wb_cmd_apply
+        _wb_cmd_apply || apply_rc=$?
     fi
-    if [[ $? -ne 0 ]]; then
+    if [[ "${apply_rc}" -ne 0 ]]; then
         log_warn "wb: core convergence pass failed after update — the host may not be fully converged (PATH symlink/rc stub/prereqs); run 'wb apply' by hand to retry"
     fi
     return 0
