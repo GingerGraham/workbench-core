@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# Serialize releases: two merges landing close together must not run two
+# `propose` jobs at once and race on pushing a release branch. Never cancel
+# a release mid-flight — queue the next one behind it instead.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# Never let the release PR's own squash-merge commit re-trigger this
+# workflow's bump computation — it would otherwise try to compute a bump
+# against its own release commit. This is a message-prefix guard, not an
+# actor check: the merge is completed by GitHub itself once the release
+# PR's checks pass, not by a push this workflow can attribute to a known
+# bot identity.
+jobs:
+  ci:
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    uses: ./.github/workflows/ci.yml
+
+  propose:
+    name: propose release
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint release App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Compute bump plan
+        id: compute
+        run: |
+          .github/scripts/release/compute-bumps.sh | tee bump-plan.txt
+          overall_line="$(grep -m 1 '^OVERALL|' bump-plan.txt)"
+          IFS='|' read -r _ _ new_version severity _ <<< "${overall_line}"
+          echo "severity=${severity}" >> "$GITHUB_OUTPUT"
+          echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Apply bumps
+        if: steps.compute.outputs.severity != 'none'
+        run: .github/scripts/release/apply-bumps.sh bump-plan.txt
+
+      - name: Build release notes
+        if: steps.compute.outputs.severity != 'none'
+        env:
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+        run: |
+          {
+            echo "## Version bumps"
+            echo
+            echo "| File | Old | New | Severity |"
+            echo "|---|---|---|---|"
+            grep -v '^OVERALL|' bump-plan.txt | while IFS='|' read -r path old new severity; do
+              echo "| \`${path}\` | ${old} | ${new} | ${severity} |"
+            done
+            echo
+            overall_line="$(grep -m 1 '^OVERALL|' bump-plan.txt)"
+            IFS='|' read -r _ overall_old overall_new overall_sev overall_reason <<< "${overall_line}"
+            echo "**Overall:** ${overall_old} → ${overall_new} (${overall_sev} — ${overall_reason})"
+            echo
+            echo "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md) for the human-readable detail — this PR's diff includes the heading rename."
+          } > release-notes.md
+
+      - name: Commit and push release branch
+        if: steps.compute.outputs.severity != 'none'
+        env:
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+        run: |
+          git checkout -b "release/v${NEW_VERSION}"
+          git add -u
+          git commit -m "chore(release): v${NEW_VERSION}"
+          git push origin "release/v${NEW_VERSION}"
+
+      - name: Open release PR and enable auto-merge
+        if: steps.compute.outputs.severity != 'none'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+        run: |
+          PR_URL="$(gh pr create \
+            --base main \
+            --head "release/v${NEW_VERSION}" \
+            --title "chore(release): v${NEW_VERSION}" \
+            --body-file release-notes.md)"
+          gh pr merge --auto --squash "${PR_URL}"

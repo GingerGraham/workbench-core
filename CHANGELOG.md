@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-02
+
 ### Added
 
 - `unzip`/`zip` added to the optional prerequisite list

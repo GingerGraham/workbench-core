@@ -132,6 +132,7 @@ and the rationale behind it.
 | [`docs/getting-started.md`](docs/getting-started.md) | Installing, adding modules, everyday commands, personal overrides. |
 | [`docs/module-authoring.md`](docs/module-authoring.md) | Writing a `.dotfiles-sync.yml` for a new module or tracked tool. |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | Diagnosing prereq, loader, sync, and SSH issues. |
+| [`docs/release-process.md`](docs/release-process.md) | How merges to `main` become version bumps, tags, and GitHub Releases — Conventional Commit scoping, the `core` scope, and the CHANGELOG discipline. |
 | [`contracts/manifest-spec.md`](contracts/manifest-spec.md) | The authoritative `.dotfiles-sync.yml` field reference. |
 | [`contracts/core-api.md`](contracts/core-api.md) | The shell functions/variables every module can rely on, and the loader-tier order. |
 | [`contracts/tracking-spec.md`](contracts/tracking-spec.md) | How a module's tracked ref is resolved, fetched, and re-checked. |
