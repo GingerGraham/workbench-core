@@ -24,7 +24,34 @@ fi
 
 echo "compute-bumps: diffing (${PREV_TAG}, HEAD] against registered files" >&2
 
-declare -A FILE_SEV
+# Per-file severity, tracked as "path|severity" entries in a plain indexed
+# array — not `declare -A` (bash 4+ only). This script is also exercised by
+# tests/check-release-bump.sh, which the CI matrix runs on macos-latest too,
+# where the default `env bash` is still 3.2 — same constraint lib/ commits
+# to, and the same "path|value" indexed-array convention
+# lib/core/version.sh's own _WB_SCRIPT_VERSIONS already uses.
+FILE_SEV_ENTRIES=()
+
+_file_sev_get() {
+    local path="$1" entry i
+    for ((i = 0; i < ${#FILE_SEV_ENTRIES[@]}; i++)); do
+        entry="${FILE_SEV_ENTRIES[i]}"
+        [[ "${entry%%|*}" == "${path}" ]] && { echo "${entry#*|}"; return 0; }
+    done
+    echo "none"
+}
+
+_file_sev_set() {
+    local path="$1" sev="$2" i
+    for ((i = 0; i < ${#FILE_SEV_ENTRIES[@]}; i++)); do
+        if [[ "${FILE_SEV_ENTRIES[i]%%|*}" == "${path}" ]]; then
+            FILE_SEV_ENTRIES[i]="${path}|${sev}"
+            return 0
+        fi
+    done
+    FILE_SEV_ENTRIES+=("${path}|${sev}")
+}
+
 CORE_SEV="none"
 
 while IFS= read -r sha; do
@@ -55,7 +82,7 @@ while IFS= read -r sha; do
         CORE_SEV="$(_rel_max_sev "${CORE_SEV}" "${severity}")"
     elif [[ -n "${scope}" ]]; then
         if _rel_is_registered "${scope}"; then
-            FILE_SEV["${scope}"]="$(_rel_max_sev "${FILE_SEV["${scope}"]:-none}" "${severity}")"
+            _file_sev_set "${scope}" "$(_rel_max_sev "$(_file_sev_get "${scope}")" "${severity}")"
         else
             echo "WARNING: commit ${sha} ('${header}') names scope '${scope}', which is not a registered file or 'core' — ignored." >&2
         fi
@@ -63,15 +90,17 @@ while IFS= read -r sha; do
         while IFS= read -r f; do
             [[ -z "${f}" ]] && continue
             _rel_is_registered "${f}" || continue
-            FILE_SEV["${f}"]="$(_rel_max_sev "${FILE_SEV["${f}"]:-none}" "${severity}")"
+            _file_sev_set "${f}" "$(_rel_max_sev "$(_file_sev_get "${f}")" "${severity}")"
         done <<< "${files_touched}"
     fi
 done < <(git log --format=%H "${PREV_TAG}..HEAD")
 
 ROLLUP_SEV="none"
 BUMP_PLAN=()
-for path in "${!FILE_SEV[@]}"; do
-    sev="${FILE_SEV[${path}]}"
+for ((_i = 0; _i < ${#FILE_SEV_ENTRIES[@]}; _i++)); do
+    entry="${FILE_SEV_ENTRIES[_i]}"
+    path="${entry%%|*}"
+    sev="${entry#*|}"
     [[ "${sev}" == "none" ]] && continue
     ROLLUP_SEV="$(_rel_max_sev "${ROLLUP_SEV}" "${sev}")"
     old="$(_rel_current_version "${path}")"
