@@ -7,12 +7,17 @@
 # of this. Everything here is string/array manipulation and integer
 # arithmetic only.
 #
-# Two independent uses:
+# Three independent uses:
 #   1. Tag format filtering/comparison for TRACK_MODE=latest resolution
 #      (ARCHITECTURE.md §9.2) — only clean vX.Y.Z tags participate.
 #   2. core_api range satisfaction for manifest gating (ARCHITECTURE.md §6) —
 #      e.g. does CORE_API_VERSION=1 satisfy a module's declared
 #      core_api: ">=1.0 <2.0"?
+#   3. The release pipeline's own sanity check (ARCHITECTURE.md §12 D27) —
+#      .github/scripts/release/lib.sh sources this file read-only, reusing
+#      _wb_semver_cmp to assert a computed bump actually compares greater
+#      than the version it's replacing, rather than duplicating comparison
+#      logic in dev tooling.
 #
 # No [[ =~ ]] regex matching is used — zsh's extended-regex support for =~
 # is not guaranteed to be loaded by default, unlike bash's. Tag-shape

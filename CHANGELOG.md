@@ -4,6 +4,14 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `lib/core/semver.sh`'s header comment was stale — it documented two
+  consumers of `_wb_semver_cmp` but the release pipeline (`ARCHITECTURE.md`
+  §12 D27) added a third (its own sanity assertion that a computed bump
+  actually compares greater than the version it replaces). Updated to
+  list all three.
+
 ## [1.0.0] - 2026-09-02
 
 ### Added
