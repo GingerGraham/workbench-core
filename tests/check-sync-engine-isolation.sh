@@ -102,6 +102,7 @@ else
 fi
 
 resolved="$(workbench_module_conf_get core RESOLVED_SHA "")"
+# shellcheck disable=SC2015
 [[ -n "${resolved}" ]] && ok "core: RESOLVED_SHA persisted after first sync" || fail "core: RESOLVED_SHA not persisted"
 
 if [[ -f "$(workbench_module_dir core)/register.list" ]] && grep -q "widget.sh|tools" "$(workbench_module_dir core)/register.list"; then
@@ -119,6 +120,7 @@ if [[ "${before_count}" -eq "${after_count}" ]]; then
 else
     fail "core: re-sync with no change created a new snapshot anyway (${before_count} -> ${after_count})"
 fi
+# shellcheck disable=SC2015
 grep -q "up to date" /tmp/wb-sync-core2.log && ok "core: re-sync logged 'up to date'" || fail "core: re-sync did not report up to date"
 
 # ── 3. A new tag lands upstream (v1.2.0): re-sync picks it up. ─────────────

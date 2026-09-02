@@ -20,4 +20,5 @@ if ! command -v log_debug &>/dev/null; then
     }
 fi
 
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/log.sh" "0.1.0" || true

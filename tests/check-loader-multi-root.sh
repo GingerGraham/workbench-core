@@ -41,15 +41,23 @@ EOF
 #    identical path. ──────────────────────────────────────────────────────
 WIDGET_SRC="${WORK}/widget-src"
 mkdir -p "${WIDGET_SRC}"
+# shellcheck disable=SC2016
 echo 'WB_TEST_LOG="${WB_TEST_LOG}env10 "' > "${WIDGET_SRC}/10-env.sh"
+# shellcheck disable=SC2016
 echo 'WB_TEST_LOG="${WB_TEST_LOG}env20 "' > "${WIDGET_SRC}/20-env.sh"
+# shellcheck disable=SC2016
 echo 'WB_TEST_LOG="${WB_TEST_LOG}tools "' > "${WIDGET_SRC}/tools.sh"
+# shellcheck disable=SC2016
 echo 'WB_TEST_LOG="${WB_TEST_LOG}lazy "'  > "${WIDGET_SRC}/lazy.sh"
 # platform/distro filename-selector convention: only the file matching the
 # live WORKBENCH_OS/WORKBENCH_DISTRO should load.
+# shellcheck disable=SC2016
 echo 'WB_TEST_LOG="${WB_TEST_LOG}platform-linux "' > "${WIDGET_SRC}/linux.sh"
+# shellcheck disable=SC2016
 echo 'WB_TEST_LOG="${WB_TEST_LOG}platform-macos "' > "${WIDGET_SRC}/macos.sh"
+# shellcheck disable=SC2016
 echo 'WB_TEST_LOG="${WB_TEST_LOG}distro-debian "'  > "${WIDGET_SRC}/debian.sh"
+# shellcheck disable=SC2016
 echo 'WB_TEST_LOG="${WB_TEST_LOG}distro-rhel "'    > "${WIDGET_SRC}/rhel.sh"
 
 mkdir -p "${MODULES_DIR}/acme-widget"
@@ -77,6 +85,7 @@ cat > "${MODULES_DIR}/disabled-widget/sync.conf" <<EOF
 REGISTERED=true
 SYNC_ENABLED=false
 EOF
+# shellcheck disable=SC2016
 echo 'WB_TEST_LOG="${WB_TEST_LOG}SHOULD-NOT-LOAD "' > "${WORK}/disabled.sh"
 cat > "${MODULES_DIR}/disabled-widget/register.list" <<EOF
 ${WORK}/disabled.sh|tools
@@ -88,12 +97,14 @@ cat > "${MODULES_DIR}/removed-widget/sync.conf" <<EOF
 REGISTERED=false
 SYNC_ENABLED=true
 EOF
+# shellcheck disable=SC2016
 echo 'WB_TEST_LOG="${WB_TEST_LOG}SHOULD-NOT-LOAD-EITHER "' > "${WORK}/removed.sh"
 cat > "${MODULES_DIR}/removed-widget/register.list" <<EOF
 ${WORK}/removed.sh|tools
 EOF
 
 # ── Run the loader in a clean subshell, isolated from the real machine ────
+# shellcheck disable=SC2016
 OUT="$(
     env -i \
         HOME="${WORK}/home" \
@@ -155,7 +166,9 @@ fi
 #    machine's actual WORKBENCH_OS/WORKBENCH_DISTRO fired.
 live_os="$(uname -s)"
 if [[ "${live_os}" == "Linux" ]]; then
+    # shellcheck disable=SC2015
     printf '%s\n' "${test_log}" | grep -q 'platform-linux' && ok "platform tier: linux.sh fired on Linux" || fail "platform tier: linux.sh did not fire on Linux"
+    # shellcheck disable=SC2015
     printf '%s\n' "${test_log}" | grep -q 'platform-macos' && fail "platform tier: macos.sh incorrectly fired on Linux" || ok "platform tier: macos.sh correctly did not fire on Linux"
 fi
 

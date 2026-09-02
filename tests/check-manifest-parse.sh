@@ -56,15 +56,19 @@ hooks:
     timeout: 60
 EOF
 
+# shellcheck disable=SC2015
 [[ "$(workbench_manifest_scalar version "${MANIFEST}")" == "1" ]] \
     && ok "version scalar extracted" || fail "version scalar extraction failed"
 
+# shellcheck disable=SC2015
 [[ "$(workbench_manifest_scalar branch "${MANIFEST}")" == "main" ]] \
     && ok "branch scalar extracted" || fail "branch scalar extraction failed"
 
+# shellcheck disable=SC2015
 [[ "$(workbench_manifest_scalar core_api "${MANIFEST}")" == ">=1.0 <2.0" ]] \
     && ok "core_api scalar extracted with embedded spaces intact" || fail "core_api scalar extraction failed"
 
+# shellcheck disable=SC2015
 [[ "$(workbench_manifest_sync_enabled "${MANIFEST}")" == "false" ]] \
     && ok "sync.enabled: false read correctly" || fail "sync.enabled extraction failed"
 
@@ -83,19 +87,24 @@ else
 fi
 
 shell_out="$(workbench_manifest_register_shell_entries "${MANIFEST}")"
+# shellcheck disable=SC2015
 [[ "$(sed -n '1p' <<< "${shell_out}")" == "shell/aws.sh|tools" ]] \
     && ok "register.shell[0] parsed with explicit tier" || fail "register.shell[0] mismatch: $(sed -n '1p' <<< "${shell_out}")"
+# shellcheck disable=SC2015
 [[ "$(sed -n '2p' <<< "${shell_out}")" == "shell/aws-lazy.sh|tools" ]] \
     && ok "register.shell[1] parsed with default tier (tools)" || fail "register.shell[1] mismatch: $(sed -n '2p' <<< "${shell_out}")"
 
+# shellcheck disable=SC2015
 [[ "$(workbench_manifest_register_installer_entries "${MANIFEST}")" == "shell/installers.sh" ]] \
     && ok "register.installers[0] parsed" || fail "register.installers[0] mismatch"
 
 getters_out="$(workbench_manifest_register_getter_entries "${MANIFEST}")"
+# shellcheck disable=SC2015
 [[ "${getters_out}" == "aws|get-aws-functions|AWS config helpers" ]] \
     && ok "register.getters[0] parsed (name|function|label)" || fail "register.getters[0] mismatch: ${getters_out}"
 
 hook_out="$(workbench_manifest_hook_post_deploy "${MANIFEST}")"
+# shellcheck disable=SC2015
 [[ "${hook_out}" == "changed|60|hooks/post-deploy.sh|arg1" ]] \
     && ok "hooks.post_deploy parsed (run_on|timeout|argv...)" || fail "hooks.post_deploy mismatch: ${hook_out}"
 
@@ -109,12 +118,16 @@ deploy:
     dest: ~/.config/shell/
 EOF
 
+# shellcheck disable=SC2015
 [[ -z "$(workbench_manifest_scalar core_api "${LEGACY}")" ]] \
     && ok "legacy manifest: core_api empty, not an error" || fail "legacy manifest: core_api should be empty"
+# shellcheck disable=SC2015
 [[ "$(workbench_manifest_sync_enabled "${LEGACY}")" == "true" ]] \
     && ok "legacy manifest: sync.enabled defaults to true" || fail "legacy manifest: sync.enabled default wrong"
+# shellcheck disable=SC2015
 [[ -z "$(workbench_manifest_register_shell_entries "${LEGACY}")" ]] \
     && ok "legacy manifest: no register.shell entries, not an error" || fail "legacy manifest: unexpected register.shell entries"
+# shellcheck disable=SC2015
 [[ -z "$(workbench_manifest_hook_post_deploy "${LEGACY}")" ]] \
     && ok "legacy manifest: no hook, not an error" || fail "legacy manifest: unexpected hook output"
 

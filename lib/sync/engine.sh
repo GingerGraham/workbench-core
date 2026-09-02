@@ -28,6 +28,7 @@ for _wb_engine_dep in \
 done
 unset _wb_engine_dep
 
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/sync/engine.sh" "0.1.0" || true
 
 # ── Cadence (ARCHITECTURE.md §9.4/D8) ─────────────────────────────────────────
@@ -181,7 +182,7 @@ workbench_deploy_link_file() {
 
 workbench_deploy_module() {
     local name="$1"
-    local current_dir deploy_list src dest dest_macos mode force platforms
+    local current_dir src dest dest_macos mode force platforms
     current_dir="$(workbench_module_current_dir "${name}")"
     [[ -d "${current_dir}" ]] || { log_warn "workbench_deploy_module: ${name}: no current snapshot yet"; return 1; }
 

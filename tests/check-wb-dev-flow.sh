@@ -57,11 +57,15 @@ mode_core="$(workbench_module_conf_get core TRACK_MODE latest)"
 mode_a="$(workbench_module_conf_get widget-a TRACK_MODE latest)"
 mode_b="$(workbench_module_conf_get widget-b TRACK_MODE latest)"
 
+# shellcheck disable=SC2015
 [[ "${mode_core}" == "latest" ]] && ok "core: left unchanged (answered keep)" || fail "core: unexpectedly changed to ${mode_core}"
+# shellcheck disable=SC2015
 [[ "${mode_a}" == "branch:my-feature" ]] && ok "widget-a: switched to branch:my-feature as selected" || fail "widget-a: expected branch:my-feature, got ${mode_a}"
+# shellcheck disable=SC2015
 [[ "${mode_b}" == "tag:v1.0.0" ]] && ok "widget-b: left unchanged (answered keep)" || fail "widget-b: unexpectedly changed to ${mode_b}"
 
 sync_enabled_a="$(workbench_module_conf_get widget-a SYNC_ENABLED true)"
+# shellcheck disable=SC2015
 [[ "${sync_enabled_a}" == "true" ]] && ok "widget-a: sync.enabled ensured true after switching into branch: tracking" || fail "widget-a: sync.enabled not ensured true"
 
 # ── 2. `wb dev <name>` targets exactly one module, others untouched even
@@ -69,9 +73,11 @@ sync_enabled_a="$(workbench_module_conf_get widget-a SYNC_ENABLED true)"
 setup_module widget-c latest
 printf 't\nv2.0.0\n' | workbench_cmd_dev widget-c >/tmp/wb-dev-2.log 2>&1
 mode_c="$(workbench_module_conf_get widget-c TRACK_MODE latest)"
+# shellcheck disable=SC2015
 [[ "${mode_c}" == "tag:v2.0.0" ]] && ok "wb dev <name>: targeted module switched to tag:v2.0.0" || fail "wb dev <name> did not switch widget-c correctly: ${mode_c}"
 
 mode_a_after="$(workbench_module_conf_get widget-a TRACK_MODE latest)"
+# shellcheck disable=SC2015
 [[ "${mode_a_after}" == "branch:my-feature" ]] && ok "wb dev <name>: an unrelated module (widget-a) was left untouched" || fail "wb dev <name> touched an unrelated module"
 
 echo

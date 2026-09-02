@@ -96,7 +96,7 @@ rc_invalid=$?
 if [[ "${rc_invalid}" -ne 0 ]]; then
     ok "a plain invalid top-level command ('wb totally-bogus') still exits non-zero, unlike 'wb help totally-bogus'"
 else
-    fail "'wb totally-bogus' unexpectedly exited 0"
+    fail "'wb totally-bogus' unexpectedly exited 0: ${out_invalid}"
 fi
 
 # ── 3. Top-level `wb` / `wb help` / `wb -h` / `wb --help` all agree. ────────
@@ -142,26 +142,32 @@ fi
 #    for the underlying confusion, per the brief — the top-level block alone
 #    is not enough). ─────────────────────────────────────────────────────────
 help_update="$(bash "${WB}" help update 2>&1)"
+# shellcheck disable=SC2015
 echo "${help_update}" | grep -qi "confused with 'wb apply'" && ok "'wb help update' cross-references 'wb apply'" \
     || fail "'wb help update' is missing the update/apply cross-reference"
 
 help_apply="$(bash "${WB}" help apply 2>&1)"
+# shellcheck disable=SC2015
 echo "${help_apply}" | grep -qi "update core" && ok "'wb help apply' cross-references 'wb update core'" \
     || fail "'wb help apply' is missing the apply/update cross-reference"
 
 help_track="$(bash "${WB}" help track 2>&1)"
+# shellcheck disable=SC2015
 echo "${help_track}" | grep -qi "confused with 'wb dev'" && ok "'wb help track' cross-references 'wb dev'" \
     || fail "'wb help track' is missing the track/dev cross-reference"
 
 help_dev="$(bash "${WB}" help dev 2>&1)"
+# shellcheck disable=SC2015
 echo "${help_dev}" | grep -qi "confused with 'wb track'" && ok "'wb help dev' cross-references 'wb track'" \
     || fail "'wb help dev' is missing the dev/track cross-reference"
 
 help_sync="$(bash "${WB}" help sync 2>&1)"
+# shellcheck disable=SC2015
 echo "${help_sync}" | grep -qi "confused with 'wb track'" && ok "'wb help sync' cross-references 'wb track'" \
     || fail "'wb help sync' is missing the sync/track cross-reference"
 
 help_install="$(bash "${WB}" help install 2>&1)"
+# shellcheck disable=SC2015
 echo "${help_install}" | grep -qi "confused with 'wb apply'" && ok "'wb help install' cross-references 'wb apply'" \
     || fail "'wb help install' is missing the install/apply cross-reference"
 

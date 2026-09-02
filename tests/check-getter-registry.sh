@@ -45,7 +45,7 @@ mkdir -p "${SRC}"
 git init -q --bare "${BARE}"
 git clone -q "${BARE}" "${SRC}"
 (
-    cd "${SRC}"
+    cd "${SRC}" || exit 1
     git config user.email t@t.com
     git config user.name Test
     mkdir -p shell

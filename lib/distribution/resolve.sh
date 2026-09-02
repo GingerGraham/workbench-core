@@ -14,6 +14,7 @@
 # not on any general JSON-parsing guarantee.
 
 _wb_resolve_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/distribution/resolve.sh" "0.1.0" || true
 
 # workbench_parse_github_url <url>
@@ -178,6 +179,7 @@ workbench_resolve_latest_tag_ls_remote() {
     for ((i = 0; i < ${#lines[@]}; i++)); do
         sha="$(awk '{print $1}' <<< "${lines[$i]}")"
         ref="$(awk '{print $2}' <<< "${lines[$i]}")"
+        # shellcheck disable=SC1001
         case "${ref}" in
             */\^\{\}) continue ;; # handled via the lookahead below
         esac

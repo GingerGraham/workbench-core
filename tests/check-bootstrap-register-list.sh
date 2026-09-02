@@ -86,6 +86,7 @@ else
 fi
 
 # ── 3. Core's shell content is actually callable in a brand-new shell ──────
+# shellcheck disable=SC2016
 FUNCS_OUT="$(env HOME="${HOME}" XDG_DATA_HOME="${XDG_DATA_HOME}" XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" XDG_CACHE_HOME="${XDG_CACHE_HOME}" \
     bash -c '
         source "${XDG_DATA_HOME}/workbench/modules/core/current/lib/loader.sh"
@@ -137,7 +138,7 @@ mkdir -p "${SRC}"
 git init -q --bare "${BARE}"
 git clone -q "${BARE}" "${SRC}" 2>/dev/null
 (
-    cd "${SRC}"
+    cd "${SRC}" || exit 1
     git config user.email t@t.com
     git config user.name Test
     mkdir -p shell

@@ -19,6 +19,7 @@
 # best-effort deeper fetch (below) rather than assuming shallow-by-sha works
 # everywhere.
 
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/distribution/fetch-git-snapshot.sh" "0.1.0" || true
 
 # workbench_fetch_git_snapshot <git_url> <ref-form> <ref-value> <dest_dir>
@@ -69,12 +70,11 @@ workbench_fetch_git_snapshot() {
             commit) git checkout -q "${ref_value}" ;;
             *)      git checkout -q FETCH_HEAD ;;
         esac
-    )
-    if [[ $? -ne 0 ]]; then
+    ) || {
         log_warn "workbench_fetch_git_snapshot: checkout of ${ref_value} failed for ${url}"
         rm -rf "${scratch}"
         return 1
-    fi
+    }
 
     rm -rf "${scratch}/.git"
     mkdir -p "$(dirname "${dest_dir}")"

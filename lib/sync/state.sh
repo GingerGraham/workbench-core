@@ -21,6 +21,7 @@
 # "what does 'registered' mean" is answered in exactly one place.
 
 _wb_state_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/sync/state.sh" "0.1.0" || true
 
 workbench_modules_dir() {

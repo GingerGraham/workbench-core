@@ -18,6 +18,7 @@
 # it ever reaches this code path.
 
 _wb_manifest_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/manifest/parse.sh" "0.1.0" || true
 
 # workbench_manifest_scalar <key> <file>

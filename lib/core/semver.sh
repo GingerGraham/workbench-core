@@ -19,6 +19,7 @@
 # validation instead uses plain glob/case matching plus a per-segment
 # digit-only check, which behaves identically in both shells.
 
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/semver.sh" "0.1.0" || true
 
 # _wb_semver_is_clean_tag <tag>

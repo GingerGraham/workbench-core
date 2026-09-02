@@ -38,6 +38,7 @@ trap 'rm -rf "${TMP_XDG}"' EXIT
 
 rc=0
 (
+    # shellcheck disable=SC2030,SC2031
     export XDG_CONFIG_HOME="${TMP_XDG}"
     source "${REPO_ROOT}/lib/core/version.sh"
     _workbench_ensure_version_file
@@ -54,6 +55,7 @@ fi
 # 3. _workbench_ensure_version_file never overwrites an existing file
 rc=0
 (
+    # shellcheck disable=SC2030,SC2031
     export XDG_CONFIG_HOME="${TMP_XDG}"
     source "${REPO_ROOT}/lib/core/version.sh"
     echo "CORE_API_VERSION=99" > "${TMP_XDG}/workbench/core/version"
@@ -70,6 +72,7 @@ fi
 #     up to the current value in place.
 rc=0
 (
+    # shellcheck disable=SC2030,SC2031
     export XDG_CONFIG_HOME="${TMP_XDG}/migrate1"
     source "${REPO_ROOT}/lib/core/version.sh"
     _workbench_ensure_version_file
@@ -89,6 +92,7 @@ fi
 #     STATE_SCHEMA_VERSION line, re-"migrating" forever without it taking.
 rc=0
 (
+    # shellcheck disable=SC2030,SC2031
     export XDG_CONFIG_HOME="${TMP_XDG}/migrate2"
     source "${REPO_ROOT}/lib/core/version.sh"
     _workbench_ensure_version_file
@@ -108,6 +112,7 @@ fi
 #     duplicate STATE_SCHEMA_VERSION lines).
 rc=0
 (
+    # shellcheck disable=SC2030,SC2031
     export XDG_CONFIG_HOME="${TMP_XDG}/migrate1"
     source "${REPO_ROOT}/lib/core/version.sh"
     _workbench_migrate_state_schema
@@ -152,8 +157,8 @@ for bin in unzip zip; do
 done
 
 # 6. workbench_missing_shell_prereqs only reports genuinely-absent binaries
-missing="$(workbench_missing_shell_prereqs)"
-for bin in ${missing}; do
+missing_prereqs="$(workbench_missing_shell_prereqs)"
+for bin in ${missing_prereqs}; do
     if command -v "${bin}" &>/dev/null; then
         fail "workbench_missing_shell_prereqs reported '${bin}' but it is present"
     fi

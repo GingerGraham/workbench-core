@@ -6,6 +6,7 @@
 # it, but never deletes snapshots/, deployed content, or sync.conf itself
 # (re-adding later, or hand-inspecting what was deployed, both still work).
 
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/remove.sh" "0.1.0" || true
 
 # workbench_cmd_remove <name>

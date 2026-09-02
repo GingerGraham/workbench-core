@@ -36,14 +36,17 @@ REGISTERED=true
 SYNC_ENABLED=true
 EOF
 
+# shellcheck disable=SC1090
 run_link() { ( set --; source "${WB}" >/dev/null 2>&1; _wb_link_cli_bin ) ; }
 
 # ── 1. First run creates the symlink, pointed through `current` ────────────
 run_link
 LINK="${HOME}/.local/bin/wb"
 if [[ -L "${LINK}" ]]; then
+    # shellcheck disable=SC2088
     ok "~/.local/bin/wb was created as a symlink"
 else
+    # shellcheck disable=SC2088
     fail "~/.local/bin/wb was not created (or is not a symlink)"
 fi
 if [[ "$(readlink "${LINK}")" == "${CORE_DIR}/current/bin/wb" ]]; then
@@ -76,6 +79,7 @@ if [[ -f "${LINK}" && ! -L "${LINK}" ]]; then
 else
     fail "a foreign ~/.local/bin/wb was clobbered"
 fi
+# shellcheck disable=SC2015
 echo "${OUT}" | grep -q "leaving it alone" && ok "a warning was logged for the foreign file" \
     || fail "no warning logged for the foreign file"
 
@@ -127,21 +131,33 @@ esac
 # shared colon between adjacent duplicates (…:X:X:…) and undercount them,
 # masking exactly the regression this check exists to catch (flagged in PR
 # review).
-count_path_entries() { printf '%s' "$1" | tr ':' '\n' | grep -Fx "$2" | wc -l | tr -d ' '; }
+count_path_entries() { printf '%s' "$1" | tr ':' '\n' | grep -Fxc "$2"; }
 
 occurrences="$(count_path_entries "${OUT_PATH}" "${HOME}/.local/bin")"
-[[ "${occurrences}" -eq 1 ]] && ok "~/.local/bin appears exactly once on PATH" \
-    || fail "~/.local/bin appears ${occurrences} times on PATH, expected 1"
+if [[ "${occurrences}" -eq 1 ]]; then
+    # shellcheck disable=SC2088
+    ok "~/.local/bin appears exactly once on PATH"
+else
+    # shellcheck disable=SC2088
+    fail "~/.local/bin appears ${occurrences} times on PATH, expected 1"
+fi
 
+# shellcheck disable=SC2097,SC2098
 OUT_PATH2="$(PATH="${HOME}/.local/bin:/usr/bin:/bin" HOME="${HOME}" bash -c "source '${LOADER}' >/dev/null 2>&1; printf '%s' \"\${PATH}\"")"
 occurrences2="$(count_path_entries "${OUT_PATH2}" "${HOME}/.local/bin")"
-[[ "${occurrences2}" -eq 1 ]] && ok "sourcing lib/loader.sh again does not duplicate an already-present ~/.local/bin" \
-    || fail "~/.local/bin was duplicated on re-source (${occurrences2} occurrences)"
+if [[ "${occurrences2}" -eq 1 ]]; then
+    # shellcheck disable=SC2088
+    ok "sourcing lib/loader.sh again does not duplicate an already-present ~/.local/bin"
+else
+    # shellcheck disable=SC2088
+    fail "~/.local/bin was duplicated on re-source (${occurrences2} occurrences)"
+fi
 
 # ── 7. An empty/unset PATH doesn't leave a trailing colon (cwd) element ────
 # Uses bash's own absolute path since PATH="" below means the outer shell
 # can no longer resolve a bare `bash` to exec the nested shell.
 BASH_BIN="$(command -v bash)"
+# shellcheck disable=SC2097,SC2098
 OUT_EMPTY="$(PATH="" HOME="${HOME}" "${BASH_BIN}" -c "source '${LOADER}' >/dev/null 2>&1; printf '%s' \"\${PATH}\"")"
 if [[ "${OUT_EMPTY}" == "${HOME}/.local/bin" ]]; then
     ok "an empty PATH becomes exactly ~/.local/bin, with no trailing colon"
