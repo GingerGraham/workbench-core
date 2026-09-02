@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
 
+# Serialize releases: two merges landing close together must not run two
+# `release` jobs at once and race on pushing/tagging main (non-fast-forward,
+# or "tag already exists"). Never cancel a release mid-flight — queue the
+# next one behind it instead.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 # Never let the release commit's own push re-trigger this workflow — the
 # `ci` job (and everything downstream via `needs:`) only runs when the
 # actor pushing isn't the bot this workflow itself pushes as.

@@ -18,8 +18,14 @@ cd "${REPO_ROOT}" || exit 1
 
 PREV_TAG="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' HEAD^ 2>/dev/null || true)"
 if [[ -z "${PREV_TAG}" ]]; then
-    echo "compute-bumps: no previous vX.Y.Z tag found reachable from HEAD^ — nothing to diff against. Has v1.0.0 been cut yet (§7)?" >&2
-    exit 1
+    # No baseline tag yet — e.g. the very push that merges this pipeline in,
+    # before v1.0.0 (§7) has actually been tagged. A clean no-op plan, not a
+    # hard failure: the alternative is release.yml going red on that first
+    # merge no matter how quickly the manual v1.0.0 tag follows it.
+    echo "compute-bumps: no previous vX.Y.Z tag found reachable from HEAD^ — treating as nothing to release yet (has v1.0.0 been cut? §7)." >&2
+    version="$(head -n 1 "${REPO_ROOT}/VERSION")"
+    echo "OVERALL|${version}|${version}|none|no baseline tag to diff against yet"
+    exit 0
 fi
 
 echo "compute-bumps: diffing (${PREV_TAG}, HEAD] against registered files" >&2

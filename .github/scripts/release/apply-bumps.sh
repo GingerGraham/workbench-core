@@ -19,7 +19,11 @@ source "${SCRIPT_DIR}/lib.sh"
 PLAN_FILE="${1:?usage: apply-bumps.sh <bump-plan-file>}"
 [[ -f "${PLAN_FILE}" ]] || { echo "apply-bumps: no such file: ${PLAN_FILE}" >&2; exit 1; }
 
-OVERALL_LINE="$(grep '^OVERALL|' "${PLAN_FILE}")"
+OVERALL_LINE="$(grep -m 1 '^OVERALL|' "${PLAN_FILE}")"
+if [[ -z "${OVERALL_LINE}" ]]; then
+    echo "apply-bumps: no OVERALL| line found in ${PLAN_FILE} — not a valid bump plan." >&2
+    exit 1
+fi
 IFS='|' read -r _ OVERALL_OLD OVERALL_NEW OVERALL_SEV OVERALL_REASON <<< "${OVERALL_LINE}"
 
 if [[ "${OVERALL_SEV}" == "none" ]]; then

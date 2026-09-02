@@ -73,9 +73,18 @@ _rel_bump_semver() {
 # reading/writing the version differs for bootstrap.sh (_rel_current_version/
 # _rel_set_version below).
 _rel_registered_files() {
+    local candidate relpath
     grep -rlE '_workbench_register_script_version[[:space:]]+"[^"]+"' \
         "${REPO_ROOT}/bin" "${REPO_ROOT}/lib" "${REPO_ROOT}/bootstrap.sh" 2>/dev/null \
-        | sed "s#^${REPO_ROOT}/##" \
+        | while IFS= read -r candidate; do
+            relpath="${candidate#"${REPO_ROOT}"/}"
+            # Only files that register *their own* path — a file merely
+            # mentioning the call (or, by copy-paste accident, someone
+            # else's path) shouldn't be treated as registered under a path
+            # that doesn't actually resolve back to it.
+            grep -qF "_workbench_register_script_version \"${relpath}\"" "${candidate}" \
+                && echo "${relpath}"
+        done \
         | sort
 }
 

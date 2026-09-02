@@ -345,6 +345,38 @@ else
     fail "CHANGELOG gate failure did not prevent a partial file rewrite"
 fi
 
+# 4g. No baseline tag yet at all: a clean no-op plan (exit 0), not a hard
+#     failure — matters most on the very first push that introduces this
+#     pipeline, before v1.0.0 has actually been tagged.
+UNTAGGED="${WORK}/untagged"
+mkdir -p "${UNTAGGED}/lib/other"
+cat > "${UNTAGGED}/lib/other/widget.sh" <<'EOF'
+#!/usr/bin/env bash
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/other/widget.sh" "0.1.0" || true
+EOF
+echo "1.0.0" > "${UNTAGGED}/VERSION"
+printf '# Changelog\n\n## [Unreleased]\n' > "${UNTAGGED}/CHANGELOG.md"
+(
+    cd "${UNTAGGED}" || exit 1
+    git init -q
+    git config user.email "t@t.com"
+    git config user.name "Test"
+    git add -A
+    git commit -q -m "chore: no tags here yet"
+)
+export WORKBENCH_RELEASE_TEST_REPO_ROOT="${UNTAGGED}"
+REPO_ROOT="${UNTAGGED}"
+if PLAN_UNTAGGED="$("${RELEASE_DIR}/compute-bumps.sh" 2>/dev/null)"; then
+    ok "compute-bumps.sh exits 0 when no baseline tag exists yet, not an error"
+else
+    fail "compute-bumps.sh failed outright when no baseline tag exists"
+fi
+if grep -q '^OVERALL|1.0.0|1.0.0|none|' <<< "${PLAN_UNTAGGED}"; then
+    ok "no-baseline-tag case produces a clean none-severity plan"
+else
+    fail "no-baseline-tag case produced an unexpected plan: ${PLAN_UNTAGGED}"
+fi
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."
