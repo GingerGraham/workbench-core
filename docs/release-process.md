@@ -69,7 +69,12 @@ scope instead — `core` is the exception, not the default.
 
 ## What happens on merge
 
-On every push to `main` (i.e. every merge), `release.yml`:
+`main`'s branch ruleset requires a pull request, signed commits, linear
+history, and passing status checks — so the bump can't land as a direct
+push, and D28 splits the mechanism into a propose step and a finalize step
+accordingly.
+
+On every push to `main` (i.e. every feature-PR merge), `release.yml`:
 
 1. Runs `ci.yml` (lint + the full test suite) as a required first job —
    this is the release's safety net; a red `ci` run blocks the release
@@ -77,18 +82,31 @@ On every push to `main` (i.e. every merge), `release.yml`:
 2. Walks every commit since the last `vX.Y.Z` tag, computing the highest
    severity that applies to each registered file and to the `core` scope.
 3. If nothing qualifies (severity `none` everywhere — a docs/chore-only
-   merge, say), the workflow exits cleanly: no bump, no tag, no commit.
+   merge, say), the workflow exits cleanly: no bump, no branch, no PR.
 4. Otherwise: bumps each qualifying file's script-local version, bumps the
    overall `VERSION`, renames `CHANGELOG.md`'s `## [Unreleased]` heading to
    `## [<version>] - <date>` and inserts a fresh empty `## [Unreleased]`
-   above it, commits all of that as `github-actions[bot]`
-   (`chore(release): v<version>`), tags it, and publishes a GitHub Release
-   whose body lists every bumped file's old → new version and links back
-   to `CHANGELOG.md` for the prose detail.
+   above it, commits all of that on a new `release/v<version>` branch
+   (`chore(release): v<version>`), opens a PR from it against `main`, and
+   enables auto-merge (squash).
 
-The bot's own release commit is guarded against re-triggering this same
-workflow — it only ever runs when a human (or anything other than
-`github-actions[bot]`) is the one who pushed to `main`.
+That PR is opened using a dedicated GitHub App's installation token, not
+`GITHUB_TOKEN` — a `GITHUB_TOKEN`-authored PR wouldn't trigger `ci.yml` at
+all (GitHub doesn't cascade workflow triggers from `GITHUB_TOKEN`-driven
+events), which would leave auto-merge waiting forever on a check that
+never runs. Once `ci.yml` passes on the release PR, GitHub merges it
+itself — signing the merge commit, keeping history linear.
+
+`release-finalize.yml` then picks up: triggered when a `release/v*` PR
+against `main` closes merged, it tags the resulting squash-merge commit
+`v<version>` and publishes a GitHub Release, using that PR's own
+description (built by `release.yml`, listing every bumped file's old →
+new version) as the release body — no bump recomputation, no duplicated
+notes format.
+
+The `chore(release):` commit-message prefix guards `release.yml` against
+re-triggering its own bump computation when that squash-merge commit lands
+back on `main`.
 
 ## The CHANGELOG discipline
 
@@ -117,3 +135,10 @@ write the changelog entry, not something the pipeline can paper over.
 - Nothing here ever partially applies: `apply-bumps.sh` checks the
   CHANGELOG gate before writing anything, and a failed run leaves no
   partial commit on `main`.
+- **The release PR itself goes red**: `ci.yml` runs a second time on the
+  `release/v<version>` PR (this is what lets auto-merge fire in the first
+  place) — a failure there, however unlikely right after the same commit
+  passed on `main`, leaves the PR open with auto-merge armed but waiting.
+  Treat it like any other red PR: fix and push to the release branch, or
+  close it and let the next merge to `main` recompute the same pending
+  bump from scratch.
