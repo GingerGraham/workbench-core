@@ -39,6 +39,18 @@ set -euo pipefail
 # source yet — so it just declares and logs its own inline constant.
 _WB_BOOTSTRAP_VERSION="0.1.0"
 
+# D18 lists bootstrap.sh in the script-local version registry's scope, but
+# nothing ever actually called the registration function here — this line
+# always no-ops at real bootstrap runtime (the function doesn't exist this
+# early), same as any other file sourced standalone. Its only job is to
+# give the release pipeline's bump tooling (.github/scripts/release/) a
+# registration-shaped line to find via the same `_workbench_register_script_
+# version "<path>"` grep every other file uses, while `_WB_BOOTSTRAP_VERSION`
+# above stays the single literal value — passed through here rather than
+# duplicated as a second "0.1.0" string that could drift from it.
+# shellcheck disable=SC2015
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "bootstrap.sh" "${_WB_BOOTSTRAP_VERSION}" || true
+
 OWNER="GingerGraham"
 REPO="workbench-core"
 XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"

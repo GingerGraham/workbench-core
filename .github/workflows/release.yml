@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# Never let the release commit's own push re-trigger this workflow — the
+# `ci` job (and everything downstream via `needs:`) only runs when the
+# actor pushing isn't the bot this workflow itself pushes as.
+jobs:
+  ci:
+    if: github.actor != 'github-actions[bot]'
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: compute and apply release
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Compute bump plan
+        id: compute
+        run: |
+          .github/scripts/release/compute-bumps.sh | tee bump-plan.txt
+          overall_line="$(grep '^OVERALL|' bump-plan.txt)"
+          IFS='|' read -r _ _ new_version severity _ <<< "${overall_line}"
+          echo "severity=${severity}" >> "$GITHUB_OUTPUT"
+          echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Apply bumps
+        if: steps.compute.outputs.severity != 'none'
+        run: .github/scripts/release/apply-bumps.sh bump-plan.txt
+
+      - name: Commit, tag, and push
+        if: steps.compute.outputs.severity != 'none'
+        env:
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+        run: |
+          git add -A
+          git commit -m "chore(release): v${NEW_VERSION}"
+          git tag -a "v${NEW_VERSION}" -m "v${NEW_VERSION}"
+          git push origin HEAD:main
+          git push origin "v${NEW_VERSION}"
+
+      - name: Create GitHub Release
+        if: steps.compute.outputs.severity != 'none'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+        run: |
+          {
+            echo "## Version bumps"
+            echo
+            echo "| File | Old | New | Severity |"
+            echo "|---|---|---|---|"
+            grep -v '^OVERALL|' bump-plan.txt | while IFS='|' read -r path old new severity; do
+              echo "| \`${path}\` | ${old} | ${new} | ${severity} |"
+            done
+            echo
+            overall_line="$(grep '^OVERALL|' bump-plan.txt)"
+            IFS='|' read -r _ overall_old overall_new overall_sev overall_reason <<< "${overall_line}"
+            echo "**Overall:** ${overall_old} → ${overall_new} (${overall_sev} — ${overall_reason})"
+            echo
+            echo "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/v${NEW_VERSION}/CHANGELOG.md) for the human-readable detail."
+          } > release-notes.md
+          gh release create "v${NEW_VERSION}" --title "v${NEW_VERSION}" --notes-file release-notes.md
