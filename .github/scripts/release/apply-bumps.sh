@@ -40,7 +40,10 @@ fi
 while IFS='|' read -r path old new severity; do
     [[ -z "${path}" || "${path}" == "OVERALL" ]] && continue
     echo "apply-bumps: ${path} ${old} -> ${new} (${severity})" >&2
-    _rel_set_version "${path}" "${new}"
+    if ! _rel_set_version "${path}" "${new}"; then
+        echo "apply-bumps: aborting — failed to rewrite ${path}, VERSION/CHANGELOG.md left untouched." >&2
+        exit 1
+    fi
 done < "${PLAN_FILE}"
 
 echo "apply-bumps: VERSION ${OVERALL_OLD} -> ${OVERALL_NEW} (${OVERALL_SEV}, ${OVERALL_REASON})" >&2
