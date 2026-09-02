@@ -16,6 +16,7 @@ jobs:
 
       - name: Run shellcheck
         run: |
+          shopt -s globstar
           shellcheck bin/wb bootstrap.sh lib/**/*.sh tests/*.sh .github/scripts/**/*.sh
 
   test:
@@ -36,16 +37,29 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           HEAD_REF: ${{ github.head_ref }}
           REF_NAME: ${{ github.ref_name }}
+          HEAD_REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
+          HEAD_REPO_NAME: ${{ github.event.pull_request.head.repo.name }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           if [[ "${EVENT_NAME}" == "pull_request" ]]; then
-            echo "branch=${HEAD_REF}" >> "$GITHUB_OUTPUT"
+            {
+              echo "branch=${HEAD_REF}"
+              echo "owner=${HEAD_REPO_OWNER}"
+              echo "repo=${HEAD_REPO_NAME}"
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "branch=${REF_NAME}" >> "$GITHUB_OUTPUT"
+            {
+              echo "branch=${REF_NAME}"
+              echo "owner=${REPOSITORY%%/*}"
+              echo "repo=${REPOSITORY##*/}"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run test suite
         env:
           WORKBENCH_TEST_GH_BRANCH: ${{ steps.ref.outputs.branch }}
+          WORKBENCH_TEST_GH_OWNER: ${{ steps.ref.outputs.owner }}
+          WORKBENCH_TEST_GH_REPO: ${{ steps.ref.outputs.repo }}
         run: .github/scripts/ci/run-tests.sh | tee test-output.log
         shell: bash
 

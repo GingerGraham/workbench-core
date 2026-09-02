@@ -52,7 +52,7 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
         echo
         echo "| Suite | Status | OK | FAIL |"
         echo "|---|---|---|---|"
-        for row in "${ROWS[@]}"; do
+        for row in "${ROWS[@]+"${ROWS[@]}"}"; do
             echo "${row}"
         done
         echo "| **Total** | $([[ ${FAILED_SUITES} -eq 0 ]] && echo OK || echo FAIL) | ${TOTAL_OK} | ${TOTAL_FAIL} |"
