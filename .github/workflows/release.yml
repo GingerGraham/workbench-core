@@ -80,15 +80,91 @@ jobs:
             echo "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md) for the human-readable detail — this PR's diff includes the heading rename."
           } > release-notes.md
 
-      - name: Commit and push release branch
+      # main requires verified commit signatures. A plain `git commit` is
+      # never signed regardless of which token pushes it — only commits
+      # created through GitHub's own API (or web UI) get its automatic
+      # "Verified" badge. So the release commit is created via the
+      # createCommitOnBranch GraphQL mutation instead of local git commit,
+      # exactly like the web editor would.
+      - name: Create release branch and commit via API (verified signature)
         if: steps.compute.outputs.severity != 'none'
+        uses: actions/github-script@v7
         env:
           NEW_VERSION: ${{ steps.compute.outputs.new_version }}
-        run: |
-          git checkout -b "release/v${NEW_VERSION}"
-          git add -u
-          git commit -m "chore(release): v${NEW_VERSION}"
-          git push origin "release/v${NEW_VERSION}"
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const fs = require('fs');
+            const { execSync } = require('child_process');
+
+            const newVersion = process.env.NEW_VERSION;
+            const branchName = `release/v${newVersion}`;
+            const baseSha = execSync('git rev-parse HEAD').toString().trim();
+
+            // A previous run's release/vX.Y.Z branch can still exist (a
+            // failed or interrupted prior attempt, e.g. a downstream step
+            // erroring out before the PR merged) — reset it to the current
+            // base rather than failing with an opaque 422 on a plain create.
+            try {
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/heads/${branchName}`,
+                sha: baseSha,
+              });
+            } catch (err) {
+              if (err.status === 422 && /already exists/i.test(err.message)) {
+                core.info(`refs/heads/${branchName} already exists (stale from a previous run) — resetting it to ${baseSha}`);
+                await github.rest.git.updateRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `heads/${branchName}`,
+                  sha: baseSha,
+                  force: true,
+                });
+              } else {
+                throw err;
+              }
+            }
+
+            // Matches the old `git add -u`: only already-tracked files
+            // apply-bumps.sh modified, never the untracked bump-plan.txt/
+            // release-notes.md working files.
+            const changedFiles = execSync('git diff --name-only')
+              .toString()
+              .trim()
+              .split('\n')
+              .filter(Boolean);
+
+            if (changedFiles.length === 0) {
+              core.setFailed(`apply-bumps.sh reported a ${process.env.NEW_VERSION} bump but left no tracked-file changes — refusing to create an empty release commit.`);
+              return;
+            }
+
+            const additions = changedFiles.map((path) => ({
+              path,
+              contents: fs.readFileSync(path).toString('base64'),
+            }));
+
+            const mutation = `
+              mutation ($input: CreateCommitOnBranchInput!) {
+                createCommitOnBranch(input: $input) {
+                  commit { oid }
+                }
+              }
+            `;
+
+            await github.graphql(mutation, {
+              input: {
+                branch: {
+                  repositoryNameWithOwner: `${context.repo.owner}/${context.repo.repo}`,
+                  branchName,
+                },
+                message: { headline: `chore(release): v${newVersion}` },
+                fileChanges: { additions },
+                expectedHeadOid: baseSha,
+              },
+            });
 
       - name: Open release PR and enable auto-merge
         if: steps.compute.outputs.severity != 'none'
