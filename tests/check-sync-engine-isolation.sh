@@ -78,10 +78,10 @@ EOF
 #    my-feature branch — proves module zero and an ordinary module go
 #    through the identical code path. ─────────────────────────────────────
 setup_module() {
-    local name="$1" mode="$2"
+    local name="$1" mode="$2" repo_url="${3:-${BARE}}"
     mkdir -p "$(workbench_module_dir "${name}")"
     cat > "$(workbench_module_conf_path "${name}")" <<EOF
-REPO_URL=${BARE}
+REPO_URL=${repo_url}
 PRIVATE=true
 TRACK_MODE=${mode}
 REGISTERED=true
@@ -223,8 +223,7 @@ EOF
     git tag v1.0.0
     git push -q origin v1.0.0
 )
-setup_module badversion latest
-sed -i "s#REPO_URL=${BARE}#REPO_URL=${BADBARE}#" "$(workbench_module_conf_path badversion)"
+setup_module badversion latest "${BADBARE}"
 
 badversion_rc=0
 workbench_sync_module badversion >/tmp/wb-sync-badversion.log 2>&1 || badversion_rc=$?
