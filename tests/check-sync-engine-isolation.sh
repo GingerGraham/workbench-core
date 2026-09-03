@@ -245,6 +245,49 @@ else
     fail "badversion: deploy destination was created despite the unsupported version"
 fi
 
+# A manifest missing the (required, contracts/manifest-spec.md §Field
+# reference) version: field entirely must be refused the same way as an
+# explicitly unsupported one — the gate must not silently pass an absent
+# value through as "no opinion".
+NOVERSRC="${WORK}/noversrc"
+NOVERBARE="${WORK}/noversrc-bare.git"
+mkdir -p "${NOVERSRC}"
+git init -q --bare "${NOVERBARE}"
+git clone -q "${NOVERBARE}" "${NOVERSRC}"
+(
+    cd "${NOVERSRC}"
+    git config user.email t@t.com
+    git config user.name Test
+    mkdir -p shell
+    echo 'get-noversion-functions() { :; }' > shell/noversion.sh
+    cat > .dotfiles-sync.yml <<'EOF'
+branch: main
+deploy:
+  - src: shell/noversion.sh
+    dest: ~/.local/share/wb-test/noversion.sh
+    mode: link
+EOF
+    git add -A && git commit -q -m "v1"
+    git branch -M main
+    git push -q origin main
+    git tag v1.0.0
+    git push -q origin v1.0.0
+)
+setup_module noversion latest "${NOVERBARE}"
+
+noversion_rc=0
+workbench_sync_module noversion >/tmp/wb-sync-noversion.log 2>&1 || noversion_rc=$?
+if [[ "${noversion_rc}" -ne 0 ]]; then
+    ok "noversion: workbench_sync_module returned non-zero for a manifest missing version:"
+else
+    fail "noversion: workbench_sync_module returned success for a manifest missing version:"
+fi
+if [[ ! -e "${HOME}/.local/share/wb-test/noversion.sh" ]]; then
+    ok "noversion: deploy destination was not touched"
+else
+    fail "noversion: deploy destination was created despite the missing version:"
+fi
+
 # A genuinely new upstream change for "core" again, so this run has real
 # work to do, then confirm it still syncs successfully alongside the
 # unsupported-version module.
