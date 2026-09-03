@@ -6,6 +6,13 @@ All notable changes to `workbench-core` are documented here.
 
 ### Fixed
 
+- `release.yml`'s release-branch commit was made via plain `git commit`/
+  `git push`, which is never signed regardless of which credential pushes
+  it — only a commit created through GitHub's own API (or web UI) gets its
+  automatic "Verified" badge. `main`'s ruleset requires verified commit
+  signatures, so every release PR was stuck `blocked`, unable to auto-merge.
+  The release commit is now created via the `createCommitOnBranch` GraphQL
+  mutation instead, exactly like the web editor would.
 - `lib/core/semver.sh`'s header comment was stale — it documented two
   consumers of `_wb_semver_cmp` but the release pipeline (`ARCHITECTURE.md`
   §12 D27) added a third (its own sanity assertion that a computed bump
