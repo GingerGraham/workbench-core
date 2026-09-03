@@ -142,3 +142,11 @@ write the changelog entry, not something the pipeline can paper over.
   Treat it like any other red PR: fix and push to the release branch, or
   close it and let the next merge to `main` recompute the same pending
   bump from scratch.
+- **Release PR goes green but auto-merge never completes**: the release
+  App must be on `main`'s ruleset bypass list with bypass mode **Always**,
+  not "For pull requests only" — the latter lets the App open the PR but
+  leaves the actual merge blocked by the same rules everyone else is
+  subject to, which reads as `main`'s ruleset simply refusing every
+  completion attempt. Also allow a short delay: GitHub completes
+  auto-merge asynchronously after the check suite finishes, not the
+  instant it goes green.

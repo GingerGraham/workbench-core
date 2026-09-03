@@ -4,6 +4,15 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `docs/release-process.md`'s "If a release fails" section didn't cover
+  the release App's own ruleset bypass mode — an App bypass-listed as
+  "For pull requests only" can open the release PR but never completes
+  its merge, since that mode doesn't cover the merge itself. Documented
+  alongside the (separate, expected) short async delay before GitHub
+  completes an auto-merge.
+
 ## [1.0.1] - 2026-09-03
 
 ### Fixed
