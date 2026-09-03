@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-03
+
 ### Fixed
 
 - `lib/core/semver.sh`'s header comment was stale — it documented two
