@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-09-03
+
 ### Fixed
 
 - `docs/release-process.md`'s "If a release fails" section didn't cover
