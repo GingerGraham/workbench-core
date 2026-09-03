@@ -21,6 +21,24 @@ _wb_manifest_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/manifest/parse.sh" "0.1.0" || true
 
+# The manifest schema version(s) this running core knows how to sync.
+# Independent of lib/manifest/validate.sh's own
+# _WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED — that script runs standalone
+# without this file loaded; this constant is the hot-path's own answer to
+# "what do I actually know how to process," checked live at sync time
+# rather than at manifest-authoring time. See ARCHITECTURE.md §12 D30.
+_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED="1"
+
+# _wb_manifest_schema_supported <version>
+# True iff <version> (a manifest's own top-level `version:` scalar) is one
+# this running core knows how to sync. Plain space-delimited membership
+# test — bash-3.2-safe, matches the pattern _WB_SCRIPT_VERSIONS/prereqs
+# lists already use elsewhere rather than an associative array.
+_wb_manifest_schema_supported() {
+    local version="$1"
+    [[ " ${_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED} " == *" ${version} "* ]]
+}
+
 # workbench_manifest_scalar <key> <file>
 # Reads a bare top-level scalar (version, branch, core_api). Strips
 # surrounding quotes and whitespace. Ported from install.sh's

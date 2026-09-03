@@ -188,7 +188,83 @@ else
     cat /tmp/wb-sync-all.log
 fi
 
-# ── 6. wb status contract: reading module state does no fetch/lock — a
+# ── 6. Unsupported manifest version: workbench_sync_module refuses to sync
+#    a module declaring a version: this core doesn't know how to process
+#    (ARCHITECTURE.md §12 D30) — deploy and register both skipped, and an
+#    unrelated healthy module in the same workbench_sync_all run still
+#    succeeds. ─────────────────────────────────────────────────────────────
+BADSRC="${WORK}/badsrc"
+BADBARE="${WORK}/badsrc-bare.git"
+mkdir -p "${BADSRC}"
+git init -q --bare "${BADBARE}"
+git clone -q "${BADBARE}" "${BADSRC}"
+(
+    cd "${BADSRC}"
+    git config user.email t@t.com
+    git config user.name Test
+    mkdir -p shell
+    echo 'get-badversion-functions() { :; }' > shell/badversion.sh
+    cat > .dotfiles-sync.yml <<'EOF'
+version: 2
+branch: main
+deploy:
+  - src: shell/badversion.sh
+    dest: ~/.local/share/wb-test/badversion.sh
+    mode: link
+core_api: ">=1.0 <2.0"
+register:
+  shell:
+    - src: shell/badversion.sh
+      tier: tools
+EOF
+    git add -A && git commit -q -m "v1"
+    git branch -M main
+    git push -q origin main
+    git tag v1.0.0
+    git push -q origin v1.0.0
+)
+setup_module badversion latest
+sed -i "s#REPO_URL=${BARE}#REPO_URL=${BADBARE}#" "$(workbench_module_conf_path badversion)"
+
+badversion_rc=0
+workbench_sync_module badversion >/tmp/wb-sync-badversion.log 2>&1 || badversion_rc=$?
+if [[ "${badversion_rc}" -ne 0 ]]; then
+    ok "badversion: workbench_sync_module returned non-zero for an unsupported manifest version"
+else
+    fail "badversion: workbench_sync_module returned success for an unsupported manifest version"
+fi
+# shellcheck disable=SC2015
+grep -q "this core only supports schema version" /tmp/wb-sync-badversion.log && ok "badversion: refusal logged the expected message" || fail "badversion: expected refusal message not logged"
+if [[ ! -f "$(workbench_module_dir badversion)/register.list" ]]; then
+    ok "badversion: register.list was not written"
+else
+    fail "badversion: register.list was written despite the unsupported version"
+fi
+if [[ ! -e "${HOME}/.local/share/wb-test/badversion.sh" ]]; then
+    ok "badversion: deploy destination was not touched"
+else
+    fail "badversion: deploy destination was created despite the unsupported version"
+fi
+
+# A genuinely new upstream change for "core" again, so this run has real
+# work to do, then confirm it still syncs successfully alongside the
+# unsupported-version module.
+(
+    cd "${SRC}"
+    echo "v1.4 content" >> shell/widget.sh
+    git add -A && git commit -q -m "v1.4"
+    git tag v1.4.0
+    git push -q origin main v1.4.0
+)
+workbench_sync_all "test" >/tmp/wb-sync-all2.log 2>&1 || true
+if [[ -f "${HOME}/.local/share/wb-test/widget.sh" ]] && grep -q "v1.4 content" "${HOME}/.local/share/wb-test/widget.sh"; then
+    ok "core: still syncs successfully in the same workbench_sync_all run as the unsupported-version module"
+else
+    fail "core: sync did not succeed alongside the unsupported-version module — isolation broken"
+    cat /tmp/wb-sync-all2.log
+fi
+
+# ── 7. wb status contract: reading module state does no fetch/lock — a
 #    read-only conf-get call must not itself perform network I/O. Verified
 #    structurally: workbench_module_conf_get never calls resolve/fetch
 #    functions. ───────────────────────────────────────────────────────────

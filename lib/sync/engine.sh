@@ -447,6 +447,16 @@ workbench_sync_module() {
     workbench_module_conf_set "${name}" RESOLVED_SHA "${new_sha}"
     workbench_module_conf_set "${name}" TRACK_REF "${ref_value:-${ref_label}}"
 
+    local new_manifest manifest_version
+    new_manifest="$(workbench_module_current_dir "${name}")/.dotfiles-sync.yml"
+    if [[ -f "${new_manifest}" ]]; then
+        manifest_version="$(workbench_manifest_scalar version "${new_manifest}")"
+        if [[ -n "${manifest_version}" ]] && ! _wb_manifest_schema_supported "${manifest_version}"; then
+            log_error "${name}: declares version '${manifest_version}', this core only supports schema version(s) ${_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED} — refusing to sync (deploy and register both skipped)"
+            return 1
+        fi
+    fi
+
     workbench_render_register_list "${name}"
     workbench_render_installers_list "${name}"
     workbench_deploy_module "${name}"
