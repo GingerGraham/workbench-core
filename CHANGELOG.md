@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-03
+
 ### Fixed
 
 - `release.yml`'s release-branch commit was made via plain `git commit`/
