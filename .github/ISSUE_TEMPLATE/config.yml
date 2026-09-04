@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting guide
+    url: https://github.com/GingerGraham/workbench-core/blob/main/docs/troubleshooting.md
+    about: Check here before opening an issue — covers prereq, loader, sync, and SSH problems.
+  - name: Architecture & decisions log
+    url: https://github.com/GingerGraham/workbench-core/blob/main/ARCHITECTURE.md
+    about: Check §12 before proposing anything that touches repo structure, the manifest schema, or the sync engine — it may already be a settled decision.

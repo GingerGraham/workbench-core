@@ -1,0 +1,8 @@
+# See ARCHITECTURE.md §12 D31/D33. Sole maintainer today — this file
+# exists so review requests are automatic and so a future collaborator's
+# ownership boundaries are explicit and file-path-based rather than
+# assumed. main's branch ruleset deliberately does NOT require Code
+# Owner review yet (D33) — turning that on with a single owner would
+# block solo self-merges.
+
+* @GingerGraham

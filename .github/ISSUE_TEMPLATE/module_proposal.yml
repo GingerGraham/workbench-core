@@ -1,0 +1,42 @@
+name: Module proposal
+description: Propose a new workbench-* module (Wave C extraction or a new tracked tool)
+title: "[Module]: "
+labels: ["module-proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a new `workbench-*` module (git, gpg, ssh, shell, or a new
+        tracked tool) — see `docs/module-authoring.md` for the manifest
+        contract this needs to satisfy.
+  - type: input
+    id: name
+    attributes:
+      label: Module name
+      placeholder: "workbench-git"
+    validations:
+      required: true
+  - type: dropdown
+    id: visibility
+    attributes:
+      label: Visibility / tracking
+      options:
+        - Public (tarball fetch)
+        - Private (SSH deploy key, shallow-clone-and-discard)
+    validations:
+      required: true
+  - type: textarea
+    id: manifest-sketch
+    attributes:
+      label: Manifest sketch
+      description: Rough .dotfiles-sync.yml shape — register.shell entries, tiers, hooks, whatever's relevant.
+      render: yaml
+    validations:
+      required: false
+  - type: textarea
+    id: core-api-needs
+    attributes:
+      label: Core API surface this depends on
+      description: Which contracts/core-api.md functions/variables, and roughly what CORE_API_VERSION floor.
+    validations:
+      required: false

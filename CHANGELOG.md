@@ -4,6 +4,25 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Repo governance and agent-instruction files: `.github/PULL_REQUEST_TEMPLATE.md`,
+  `.github/ISSUE_TEMPLATE/bug_report.yml`,
+  `.github/ISSUE_TEMPLATE/feature_request.yml`,
+  `.github/ISSUE_TEMPLATE/module_proposal.yml`,
+  `.github/ISSUE_TEMPLATE/config.yml`,
+  `.github/CODEOWNERS`, `CONTRIBUTING.md`, `SECURITY.md` — the first
+  documented, discoverable version of the discipline `pr-check.yml`/
+  `release.yml` (D26–D30) already enforced silently. Also `AGENTS.md`
+  (canonical agent instructions), `CLAUDE.md` (a single-line
+  `@AGENTS.md` import, per Claude Code's documented import syntax), a
+  mirrored `.github/copilot-instructions.md`, and two path-scoped
+  `.github/instructions/*.instructions.md` files distinguishing the
+  Bash-3.2-constrained shell surface from the Bash-4+-exempt
+  `.github/scripts/**` release tooling. `CODEOWNERS` assigns
+  `@GingerGraham` but `main`'s ruleset deliberately does not require
+  Code Owner review yet. See `ARCHITECTURE.md` §12 D31–D33.
+
 ## [1.1.1] - 2026-09-04
 
 ### Fixed
