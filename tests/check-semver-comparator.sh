@@ -97,6 +97,11 @@ _wb_version_satisfies 1.5 ">=1.0 <2.0" && ok "1.5 satisfies >=1.0 <2.0" || fail 
 # shellcheck disable=SC2015
 _wb_version_satisfies 0.9 ">=1.0 <2.0" && fail "0.9 should NOT satisfy >=1.0 <2.0" || ok "0.9 correctly fails >=1.0 <2.0"
 
+# shellcheck disable=SC2015
+_wb_version_satisfies 1.0 ">=1.1 <2.0" && fail "1.0 should NOT satisfy a >=1.1 minor floor" || ok "1.0 correctly fails a >=1.1 minor floor — minor-version gating works"
+# shellcheck disable=SC2015
+_wb_version_satisfies 1.1 ">=1.1 <2.0" && ok "1.1 satisfies its own >=1.1 minor floor" || fail "1.1 should satisfy >=1.1 <2.0"
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."

@@ -78,10 +78,10 @@ EOF
 #    my-feature branch — proves module zero and an ordinary module go
 #    through the identical code path. ─────────────────────────────────────
 setup_module() {
-    local name="$1" mode="$2"
+    local name="$1" mode="$2" repo_url="${3:-${BARE}}"
     mkdir -p "$(workbench_module_dir "${name}")"
     cat > "$(workbench_module_conf_path "${name}")" <<EOF
-REPO_URL=${BARE}
+REPO_URL=${repo_url}
 PRIVATE=true
 TRACK_MODE=${mode}
 REGISTERED=true
@@ -188,7 +188,197 @@ else
     cat /tmp/wb-sync-all.log
 fi
 
-# ── 6. wb status contract: reading module state does no fetch/lock — a
+# ── 6. Unsupported manifest version: workbench_sync_module refuses to sync
+#    a module declaring a version: this core doesn't know how to process
+#    (ARCHITECTURE.md §12 D30) — deploy and register both skipped, and an
+#    unrelated healthy module in the same workbench_sync_all run still
+#    succeeds. ─────────────────────────────────────────────────────────────
+BADSRC="${WORK}/badsrc"
+BADBARE="${WORK}/badsrc-bare.git"
+mkdir -p "${BADSRC}"
+git init -q --bare "${BADBARE}"
+git clone -q "${BADBARE}" "${BADSRC}"
+(
+    cd "${BADSRC}"
+    git config user.email t@t.com
+    git config user.name Test
+    mkdir -p shell
+    echo 'get-badversion-functions() { :; }' > shell/badversion.sh
+    cat > .dotfiles-sync.yml <<'EOF'
+version: 2
+branch: main
+deploy:
+  - src: shell/badversion.sh
+    dest: ~/.local/share/wb-test/badversion.sh
+    mode: link
+core_api: ">=1.0 <2.0"
+register:
+  shell:
+    - src: shell/badversion.sh
+      tier: tools
+EOF
+    git add -A && git commit -q -m "v1"
+    git branch -M main
+    git push -q origin main
+    git tag v1.0.0
+    git push -q origin v1.0.0
+)
+setup_module badversion latest "${BADBARE}"
+
+badversion_rc=0
+workbench_sync_module badversion >/tmp/wb-sync-badversion.log 2>&1 || badversion_rc=$?
+if [[ "${badversion_rc}" -ne 0 ]]; then
+    ok "badversion: workbench_sync_module returned non-zero for an unsupported manifest version"
+else
+    fail "badversion: workbench_sync_module returned success for an unsupported manifest version"
+fi
+# shellcheck disable=SC2015
+grep -q "this core only supports schema version" /tmp/wb-sync-badversion.log && ok "badversion: refusal logged the expected message" || fail "badversion: expected refusal message not logged"
+if [[ ! -f "$(workbench_module_dir badversion)/register.list" ]]; then
+    ok "badversion: register.list was not written"
+else
+    fail "badversion: register.list was written despite the unsupported version"
+fi
+if [[ ! -e "${HOME}/.local/share/wb-test/badversion.sh" ]]; then
+    ok "badversion: deploy destination was not touched"
+else
+    fail "badversion: deploy destination was created despite the unsupported version"
+fi
+
+# An already-synced module whose upstream later bumps to an unsupported
+# version: must have the refusal actually keep the *previous* good content
+# live — current must stay pointed at the old snapshot and RESOLVED_SHA
+# must not advance, not just skip re-rendering register/installers against
+# already-swapped-in bad content (the ordering fix core review caught).
+UPGSRC="${WORK}/upgsrc"
+UPGBARE="${WORK}/upgsrc-bare.git"
+mkdir -p "${UPGSRC}"
+git init -q --bare "${UPGBARE}"
+git clone -q "${UPGBARE}" "${UPGSRC}"
+(
+    cd "${UPGSRC}"
+    git config user.email t@t.com
+    git config user.name Test
+    mkdir -p shell
+    echo 'get-upgrade-functions() { :; }' > shell/upgrade.sh
+    cat > .dotfiles-sync.yml <<'EOF'
+version: 1
+branch: main
+deploy:
+  - src: shell/upgrade.sh
+    dest: ~/.local/share/wb-test/upgrade.sh
+    mode: link
+register:
+  shell:
+    - src: shell/upgrade.sh
+      tier: tools
+EOF
+    git add -A && git commit -q -m "v1 - good"
+    git branch -M main
+    git push -q origin main
+    git tag v1.0.0
+    git push -q origin v1.0.0
+)
+setup_module upgrade latest "${UPGBARE}"
+workbench_sync_module upgrade >/tmp/wb-sync-upgrade1.log 2>&1
+resolved_before="$(workbench_module_conf_get upgrade RESOLVED_SHA "")"
+if [[ -f "${HOME}/.local/share/wb-test/upgrade.sh" ]] && [[ -n "${resolved_before}" ]]; then
+    ok "upgrade: first sync (version: 1) deployed successfully"
+else
+    fail "upgrade: first sync did not deploy as expected"
+    cat /tmp/wb-sync-upgrade1.log
+fi
+
+(
+    cd "${UPGSRC}"
+    sed -i.bak 's/^version: 1/version: 2/' .dotfiles-sync.yml
+    rm -f .dotfiles-sync.yml.bak
+    echo "should never go live" >> shell/upgrade.sh
+    git add -A && git commit -q -m "v2 - bumps to an unsupported schema version"
+    git tag v2.0.0
+    git push -q origin main v2.0.0
+)
+upgrade_rc=0
+workbench_sync_module upgrade >/tmp/wb-sync-upgrade2.log 2>&1 || upgrade_rc=$?
+if [[ "${upgrade_rc}" -ne 0 ]]; then
+    ok "upgrade: re-sync onto an unsupported version: refuses (non-zero)"
+else
+    fail "upgrade: re-sync onto an unsupported version: returned success"
+fi
+if grep -q "should never go live" "${HOME}/.local/share/wb-test/upgrade.sh" 2>/dev/null; then
+    fail "upgrade: the unsupported snapshot's content went live despite the refusal"
+else
+    ok "upgrade: the previous good content is still what's deployed — refusal didn't let bad content through"
+fi
+resolved_after="$(workbench_module_conf_get upgrade RESOLVED_SHA "")"
+if [[ "${resolved_after}" == "${resolved_before}" ]]; then
+    ok "upgrade: RESOLVED_SHA was not advanced onto the refused snapshot"
+else
+    fail "upgrade: RESOLVED_SHA advanced despite the sync being refused"
+fi
+
+# A manifest missing the (required, contracts/manifest-spec.md §Field
+# reference) version: field entirely must be refused the same way as an
+# explicitly unsupported one — the gate must not silently pass an absent
+# value through as "no opinion".
+NOVERSRC="${WORK}/noversrc"
+NOVERBARE="${WORK}/noversrc-bare.git"
+mkdir -p "${NOVERSRC}"
+git init -q --bare "${NOVERBARE}"
+git clone -q "${NOVERBARE}" "${NOVERSRC}"
+(
+    cd "${NOVERSRC}"
+    git config user.email t@t.com
+    git config user.name Test
+    mkdir -p shell
+    echo 'get-noversion-functions() { :; }' > shell/noversion.sh
+    cat > .dotfiles-sync.yml <<'EOF'
+branch: main
+deploy:
+  - src: shell/noversion.sh
+    dest: ~/.local/share/wb-test/noversion.sh
+    mode: link
+EOF
+    git add -A && git commit -q -m "v1"
+    git branch -M main
+    git push -q origin main
+    git tag v1.0.0
+    git push -q origin v1.0.0
+)
+setup_module noversion latest "${NOVERBARE}"
+
+noversion_rc=0
+workbench_sync_module noversion >/tmp/wb-sync-noversion.log 2>&1 || noversion_rc=$?
+if [[ "${noversion_rc}" -ne 0 ]]; then
+    ok "noversion: workbench_sync_module returned non-zero for a manifest missing version:"
+else
+    fail "noversion: workbench_sync_module returned success for a manifest missing version:"
+fi
+if [[ ! -e "${HOME}/.local/share/wb-test/noversion.sh" ]]; then
+    ok "noversion: deploy destination was not touched"
+else
+    fail "noversion: deploy destination was created despite the missing version:"
+fi
+
+# A genuinely new upstream change for "core" again, so this run has real
+# work to do, then confirm it still syncs successfully alongside the
+# unsupported-version module.
+(
+    cd "${SRC}"
+    echo "v1.4 content" >> shell/widget.sh
+    git add -A && git commit -q -m "v1.4"
+    git tag v1.4.0
+    git push -q origin main v1.4.0
+)
+workbench_sync_all "test" >/tmp/wb-sync-all2.log 2>&1 || true
+if [[ -f "${HOME}/.local/share/wb-test/widget.sh" ]] && grep -q "v1.4 content" "${HOME}/.local/share/wb-test/widget.sh"; then
+    ok "core: still syncs successfully in the same workbench_sync_all run as the unsupported-version module"
+else
+    fail "core: sync did not succeed alongside the unsupported-version module — isolation broken"
+    cat /tmp/wb-sync-all2.log
+fi
+
+# ── 7. wb status contract: reading module state does no fetch/lock — a
 #    read-only conf-get call must not itself perform network I/O. Verified
 #    structurally: workbench_module_conf_get never calls resolve/fetch
 #    functions. ───────────────────────────────────────────────────────────

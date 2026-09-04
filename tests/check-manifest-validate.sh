@@ -133,6 +133,24 @@ else
     ok "an invalid register.shell[].tier is rejected"
 fi
 
+# ── Fixture 6: unsupported version — must FAIL ──────────────────────────────
+mkdir -p "${WORK}/badversion"
+cat > "${WORK}/badversion/.dotfiles-sync.yml" <<'EOF'
+version: 2
+deploy:
+  - src: shell/
+    dest: ~/.config/workbench-badversion-test/
+EOF
+mkdir -p "${WORK}/badversion/shell"
+touch "${WORK}/badversion/shell/x.sh"
+if "${VALIDATE}" "${WORK}/badversion/.dotfiles-sync.yml" >/tmp/wb-validate-badversion.log 2>&1; then
+    fail "a version: 2 manifest was accepted — schema version gate not enforced"
+else
+    ok "a version: 2 manifest is rejected — schema version gate enforced"
+fi
+# shellcheck disable=SC2015
+grep -q "version must be one of" /tmp/wb-validate-badversion.log && ok "rejects unsupported version with the expected message" || fail "unsupported-version rejection message missing"
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."

@@ -14,13 +14,14 @@ Plain `KEY=VALUE`, readable via `grep`/`cut` alone — no core library needs
 to be loadable to check it:
 
 ```
-CORE_API_VERSION=1
+CORE_API_VERSION=1.0
 MANIFEST_SCHEMA_VERSION=1
 STATE_SCHEMA_VERSION=2
 WORKBENCH_CORE_SEMVER=0.1.0
 ```
 
-See `contracts/core-api.md` for what each integer gates.
+See `contracts/core-api.md` for what each value gates (`CORE_API_VERSION`
+is `X.Y`, not a bare integer — see ARCHITECTURE.md §12 D29).
 `STATE_SCHEMA_VERSION` bumped `1` → `2` when `installers.list` (below) was
 added — purely additive, so an existing `1` value on disk is migrated to
 `2` in place by `wb install`/`wb apply` (`_workbench_migrate_state_schema`),

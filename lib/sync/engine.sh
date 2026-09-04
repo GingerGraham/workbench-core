@@ -442,6 +442,24 @@ workbench_sync_module() {
         fi
     fi
 
+    # Checked against the newly-fetched snapshot itself, before it becomes
+    # `current` — a refusal here must leave whatever was previously synced
+    # (current symlink, RESOLVED_SHA) untouched, not swap unsupported
+    # content live and then merely skip re-rendering it (ARCHITECTURE.md
+    # §12 D30). Deliberately re-checked every cycle a mismatch persists
+    # (RESOLVED_SHA is never advanced past it), unlike the core_api gate's
+    # once-per-change frequency — going quiet on a module stuck on an
+    # unsupported version would be a worse silence than a repeated log line.
+    local new_manifest manifest_version
+    new_manifest="${new_snapshot}/.dotfiles-sync.yml"
+    if [[ -f "${new_manifest}" ]]; then
+        manifest_version="$(workbench_manifest_scalar version "${new_manifest}")"
+        if ! _wb_manifest_schema_supported "${manifest_version}"; then
+            log_error "${name}: declares version '${manifest_version:-<missing>}', this core only supports schema version(s) ${_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED} — refusing to sync (previous snapshot, if any, stays current)"
+            return 1
+        fi
+    fi
+
     workbench_snapshot_swap "${name}" "${new_snapshot}"
     workbench_snapshot_prune "${name}"
     workbench_module_conf_set "${name}" RESOLVED_SHA "${new_sha}"
