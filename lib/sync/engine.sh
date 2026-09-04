@@ -14,6 +14,7 @@
 _wb_engine_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 for _wb_engine_dep in \
     "${_wb_engine_lib_dir}/../core/log.sh" \
+    "${_wb_engine_lib_dir}/../core/functions.sh" \
     "${_wb_engine_lib_dir}/../core/semver.sh" \
     "${_wb_engine_lib_dir}/../core/version.sh" \
     "${_wb_engine_lib_dir}/../manifest/parse.sh" \
@@ -26,6 +27,9 @@ for _wb_engine_dep in \
     [[ -f "${_wb_engine_dep}" ]] && source "${_wb_engine_dep}"
 done
 unset _wb_engine_dep
+
+# shellcheck disable=SC2015
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/sync/engine.sh" "0.2.0" || true
 
 # ── Cadence (ARCHITECTURE.md §9.4/D8) ─────────────────────────────────────────
 : "${WORKBENCH_CADENCE_DEFAULT_SECONDS:=604800}"   # weekly
@@ -178,7 +182,7 @@ workbench_deploy_link_file() {
 
 workbench_deploy_module() {
     local name="$1"
-    local current_dir deploy_list src dest dest_macos mode force platforms
+    local current_dir src dest dest_macos mode force platforms
     current_dir="$(workbench_module_current_dir "${name}")"
     [[ -d "${current_dir}" ]] || { log_warn "workbench_deploy_module: ${name}: no current snapshot yet"; return 1; }
 
@@ -239,9 +243,9 @@ workbench_render_register_list() {
     core_api="$(workbench_manifest_scalar core_api "${manifest}")"
     [[ -z "${core_api}" ]] && return 0
 
-    if command -v workbench_core_api_version &>/dev/null; then
+    if command -v _workbench_core_api_version &>/dev/null; then
         local running
-        running="$(workbench_core_api_version)"
+        running="$(_workbench_core_api_version)"
         if [[ -n "${running}" ]] && ! _wb_version_satisfies "${running}" "${core_api}"; then
             log_error "workbench_render_register_list: ${name}: declares core_api '${core_api}', running Core API is ${running} — refusing to register its shell content"
             return 1
@@ -252,6 +256,63 @@ workbench_render_register_list() {
         [[ -z "${src}" ]] && continue
         printf '%s|%s\n' "${current_dir}/${src}" "${tier}" >> "${reglist}"
     done < <(workbench_manifest_register_shell_entries "${manifest}")
+}
+
+# ── installers.list rendering (ARCHITECTURE.md §12 D23) ───────────────────────
+# workbench_render_installers_list <name>
+# The tool-registry framework's discovery half: rewrites
+# <module>/installers.list from the module's manifest register.installers[]
+# entries, resolved against that module's current snapshot. Called at
+# exactly the same point workbench_render_register_list is (every
+# successful fetch, and the unconditional wb install/apply convergence
+# pass) — see bin/wb's _wb_converge_module_registrations.
+#
+# Each declared file is introspected as plain text via
+# _extract_function_names (lib/core/functions.sh — the same primitive
+# get-functions already uses for register.shell[] files), never sourced:
+# core only needs the *names* of the install-<x> functions a module
+# declares, not to actually run any of them yet, and text introspection
+# can't have side effects the way sourcing an arbitrary module file could.
+workbench_render_installers_list() {
+    local name="$1"
+    local current_dir manifest instlist src abs_path func_name
+    current_dir="$(workbench_module_current_dir "${name}")"
+    manifest="${current_dir}/.dotfiles-sync.yml"
+    instlist="$(workbench_module_dir "${name}")/installers.list"
+
+    : > "${instlist}"
+    [[ -f "${manifest}" ]] || return 0
+
+    local core_api
+    core_api="$(workbench_manifest_scalar core_api "${manifest}")"
+    [[ -z "${core_api}" ]] && return 0
+
+    if command -v _workbench_core_api_version &>/dev/null; then
+        local running
+        running="$(_workbench_core_api_version)"
+        if [[ -n "${running}" ]] && ! _wb_version_satisfies "${running}" "${core_api}"; then
+            log_error "workbench_render_installers_list: ${name}: declares core_api '${core_api}', running Core API is ${running} — refusing to register its installers"
+            return 1
+        fi
+    fi
+
+    while IFS= read -r src; do
+        [[ -z "${src}" ]] && continue
+        abs_path="${current_dir}/${src}"
+        if [[ ! -f "${abs_path}" ]]; then
+            log_warn "workbench_render_installers_list: ${name}: register.installers[] src not found: ${abs_path}"
+            continue
+        fi
+
+        while IFS= read -r func_name; do
+            [[ -z "${func_name}" ]] && continue
+            case "${func_name}" in
+                install-?*)
+                    printf '%s|%s|%s\n' "${abs_path}" "${func_name}" "${func_name#install-}" >> "${instlist}"
+                    ;;
+            esac
+        done < <(_extract_function_names "${abs_path}")
+    done < <(workbench_manifest_register_installer_entries "${manifest}")
 }
 
 # ── Hooks ──────────────────────────────────────────────────────────────────────
@@ -381,12 +442,31 @@ workbench_sync_module() {
         fi
     fi
 
+    # Checked against the newly-fetched snapshot itself, before it becomes
+    # `current` — a refusal here must leave whatever was previously synced
+    # (current symlink, RESOLVED_SHA) untouched, not swap unsupported
+    # content live and then merely skip re-rendering it (ARCHITECTURE.md
+    # §12 D30). Deliberately re-checked every cycle a mismatch persists
+    # (RESOLVED_SHA is never advanced past it), unlike the core_api gate's
+    # once-per-change frequency — going quiet on a module stuck on an
+    # unsupported version would be a worse silence than a repeated log line.
+    local new_manifest manifest_version
+    new_manifest="${new_snapshot}/.dotfiles-sync.yml"
+    if [[ -f "${new_manifest}" ]]; then
+        manifest_version="$(workbench_manifest_scalar version "${new_manifest}")"
+        if ! _wb_manifest_schema_supported "${manifest_version}"; then
+            log_error "${name}: declares version '${manifest_version:-<missing>}', this core only supports schema version(s) ${_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED} — refusing to sync (previous snapshot, if any, stays current)"
+            return 1
+        fi
+    fi
+
     workbench_snapshot_swap "${name}" "${new_snapshot}"
     workbench_snapshot_prune "${name}"
     workbench_module_conf_set "${name}" RESOLVED_SHA "${new_sha}"
     workbench_module_conf_set "${name}" TRACK_REF "${ref_value:-${ref_label}}"
 
     workbench_render_register_list "${name}"
+    workbench_render_installers_list "${name}"
     workbench_deploy_module "${name}"
     workbench_run_post_deploy_hook "${name}" "${reason}" "true" "${is_first}"
 

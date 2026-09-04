@@ -3,6 +3,9 @@
 # verb `wb dev` (lib/modules/dev.sh) wraps; returning a module to production
 # is `wb track <name> --latest`, not a separate command.
 
+# shellcheck disable=SC2015
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/track.sh" "0.1.0" || true
+
 # _wb_track_ref_is_safe <value>
 # TRACK_REF ends up written verbatim into sync.conf (a line-based
 # KEY=VALUE file) and, for `latest`/`branch:`, into a snapshot directory
@@ -121,7 +124,18 @@ workbench_cmd_track() {
         return 0
     fi
 
+    # Captured before the sync regardless of which module is being tracked —
+    # _wb_maybe_reconverge_core (bin/wb, ARCHITECTURE.md §12 D20) already
+    # no-ops via its own SHA-diff when core wasn't the module just synced, so
+    # no extra name check is needed here.
+    local core_sha_before
+    core_sha_before="$(workbench_module_conf_get core RESOLVED_SHA "")"
+
     workbench_module_conf_set "${name}" TRACK_MODE "${new_mode}"
     log_info "wb track: '${name}' now tracking ${new_mode} (was ${current_mode}) — syncing now..."
     workbench_sync_module "${name}" "track"
+
+    # _wb_maybe_reconverge_core is defined in bin/wb, not this file — guarded
+    # so this file stays sourceable standalone (as tests already do).
+    command -v _wb_maybe_reconverge_core &>/dev/null && _wb_maybe_reconverge_core "${core_sha_before}" false
 }

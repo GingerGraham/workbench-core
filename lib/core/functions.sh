@@ -18,10 +18,13 @@ _wb_functions_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 [[ -f "${_wb_functions_dir}/log.sh" ]] && source "${_wb_functions_dir}/log.sh"
 unset _wb_functions_dir
 
+# shellcheck disable=SC2015
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/functions.sh" "0.1.0" || true
+
 # ── OS / WSL / Distro / Shell / Arch detection (run once per session) ───────
 # Reconciles loader.sh's inline detection block and functions.sh's separate
 # detect-distro() into one routine, per the build brief's §4 callout.
-workbench_detect_platform() {
+_workbench_detect_platform() {
     [[ "${WORKBENCH_PLATFORM_DETECTED:-false}" == "true" ]] && return 0
 
     local _raw_os
@@ -83,7 +86,7 @@ workbench_detect_platform() {
 
     WORKBENCH_PLATFORM_DETECTED="true"
 }
-workbench_detect_platform
+_workbench_detect_platform
 
 # ── Prompt helpers ────────────────────────────────────────────────────────
 # Ported verbatim from workbench-precursor's shell/config/tools/git.sh —
@@ -175,6 +178,7 @@ elevate-cmd() {
     fi
 
     log_debug "Executing with ${elevation_cmd}: ${cmd_to_run}"
+    # shellcheck disable=SC2086
     ${elevation_cmd} ${cmd_to_run}
 }
 
@@ -232,10 +236,6 @@ _get_aliases_in() {
     elif [[ -n "${_pattern}" ]]; then
         _names="$(printf '%s\n' "${_names}" | grep -E "${_pattern}")"
     fi
-    _names="$(printf '%s\n' "${_names}" | while IFS= read -r _an; do
-        [[ -z "${_an}" ]] && continue
-        alias "${_an}" &>/dev/null && echo "${_an}"
-    done)"
     if [[ -z "${_names}" ]]; then
         echo "  (none)"
     else

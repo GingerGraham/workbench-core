@@ -76,7 +76,7 @@ if [[ "${result_rc}" -eq 0 && -d "${DEST}" ]]; then
     ok "fetched snapshot is a non-empty directory: $(find "${DEST}" -maxdepth 1 | wc -l | tr -d ' ') entries"
 else
     echo "SKIP: could not reach codeload.github.com for ${TEST_OWNER}/${TEST_REPO}@${TEST_BRANCH} in this environment — see ${WORK}/fetch.log. This is a network-reachability skip, not a test failure; the static check above (and a manual run outside a sandboxed environment) cover the guarantee."
-    cat "${WORK}/fetch.log" 2>/dev/null | sed 's/^/  /'
+    sed 's/^/  /' "${WORK}/fetch.log" 2>/dev/null
 fi
 
 echo

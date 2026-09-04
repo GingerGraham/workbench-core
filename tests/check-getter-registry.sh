@@ -45,7 +45,7 @@ mkdir -p "${SRC}"
 git init -q --bare "${BARE}"
 git clone -q "${BARE}" "${SRC}"
 (
-    cd "${SRC}"
+    cd "${SRC}" || exit 1
     git config user.email t@t.com
     git config user.name Test
     mkdir -p shell
@@ -89,10 +89,10 @@ else
     fail "wb functions did not include the getter's label"
 fi
 
-if echo "${functions_out}" | grep -q "\[tools\].*widget\.sh"; then
-    ok "wb functions lists the module's registered shell file entry under its declared tier (tools)"
+if echo "${functions_out}" | grep -q "widget-do-a-thing"; then
+    ok "wb functions lists a function actually defined in the module's registered shell file"
 else
-    fail "wb functions did not list the registered shell file"
+    fail "wb functions did not list a function from the registered shell file"
     echo "${functions_out}"
 fi
 

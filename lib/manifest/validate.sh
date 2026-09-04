@@ -24,9 +24,24 @@ SCRIPT_NAME="$(basename "$0")"
 ERRORS=0
 WARNINGS=0
 
+# The manifest schema version(s) this copy of the validator understands.
+# Bump when contracts/manifest-spec.md's `version: 2` escape hatch (§5.4)
+# is actually built. Deliberately independent of the hot-path's own
+# _WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED in lib/manifest/parse.sh — this
+# script must run standalone, without workbench-core installed alongside
+# it (a module repo's own CI, say), so it cannot read the live
+# ~/.config/workbench/core/version file. Two constants, same reason
+# bootstrap.sh duplicates fetch logic instead of sourcing
+# lib/distribution/fetch-tarball.sh — structurally unavoidable. See
+# ARCHITECTURE.md §12 D30.
+_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED="1"
+
 err()  { echo "[ERROR] $*" >&2; ERRORS=$((ERRORS + 1)); }
 warn() { echo "[WARN]  $*" >&2; WARNINGS=$((WARNINGS + 1)); }
 info() { echo "[INFO]  $*"; }
+
+# shellcheck disable=SC2015
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/manifest/validate.sh" "0.2.0" || true
 
 usage() {
     cat << EOF
@@ -168,8 +183,8 @@ _is_safe_dest() {
 _version=$(yq eval '.version' "${MANIFEST}")
 if [[ -z "${_version}" || "${_version}" == "null" ]]; then
     err "version is required (contracts/manifest-spec.md §Field reference)."
-elif [[ "${_version}" != "1" ]]; then
-    err "version must be 1 — found '${_version}' (contracts/manifest-spec.md §Schema version 1)."
+elif [[ " ${_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED} " != *" ${_version} "* ]]; then
+    err "version must be one of: ${_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED} — found '${_version}' (contracts/manifest-spec.md §Schema version 1)."
 fi
 
 # ── deploy[] ─────────────────────────────────────────────────────────────────

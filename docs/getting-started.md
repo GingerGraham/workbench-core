@@ -10,26 +10,73 @@ needs, it installs itself.
 ## Install
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh | bash
+```
+
+This is the production path — no `git` involved anywhere. `bootstrap.sh`
+is deliberately tiny (it's the one thing that has to work before any of the
+real engine code exists locally to run):
+
+1. If core is already bootstrapped, skips straight to re-running
+   convergence — safe to run more than once.
+2. Checks for `curl` and `tar` (the only prerequisites it needs itself).
+3. Resolves the latest `vX.Y.Z` release tag via GitHub's API (falling back
+   to `main` with a warning if no release has been tagged yet).
+4. Fetches that release as a tarball and extracts it straight into its
+   final, permanent location — the same immutable snapshot shape an
+   ordinary sync cycle produces later.
+5. Writes core's own tracking state (`TRACK_MODE=latest`, the resolved
+   commit) and hands off to `bin/wb install`, which then:
+   - Checks and (with your permission) installs any remaining missing
+     prerequisites.
+   - Writes the version taxonomy file (`~/.config/workbench/core/version`).
+   - Adds a loader stub to `~/.bashrc` (and `~/.zshrc` if present).
+   - Runs the Ansible convergence pass (if `ansible-playbook` is available
+     — see below if it isn't).
+   - Sets up SSH deploy keys for any private module you've already
+     registered (none, on a fresh install).
+
+Start a new shell (or `source ~/.bashrc`) and you're done. Nothing else is
+required — `workbench-core` works standalone, with zero other modules
+registered.
+
+More cautious about piping straight into `bash`? Download it first and take
+a look:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh
+less bootstrap.sh
+bash bootstrap.sh
+```
+
+Passing flags through the piped form needs the `-s --` separator, same as
+any script run this way:
+
+```sh
+curl -fsSL .../bootstrap.sh | bash -s -- --bundle <name>
+```
+
+(or skip bundle selection at install time entirely and just `wb add` a
+module afterward — see below.)
+
+### Developer setup
+
+Working on `workbench-core` itself? Use a real `git clone` instead — this
+is the one case that's meant to track a persistent, incrementally-pulled
+checkout, per `ARCHITECTURE.md` §9.6:
+
+```sh
 git clone https://github.com/GingerGraham/workbench-core.git
 cd workbench-core
 ./bin/wb install
 ```
 
-This will:
-
-1. Check and (with your permission) install missing prerequisites.
-2. Write the version taxonomy file (`~/.config/workbench/core/version`).
-3. Register core itself as "module zero," pointing its `current` snapshot
-   at the checkout you just ran `wb install` from.
-4. Add a loader stub to `~/.bashrc` (and `~/.zshrc` if present).
-5. Run the Ansible convergence pass (if `ansible-playbook` is available —
-   see below if it isn't).
-6. Set up SSH deploy keys for any private module you've already registered
-   (none, on a fresh install).
-
-Start a new shell (or `source ~/.bashrc`) and you're done. Nothing else is
-required — `workbench-core` works standalone, with zero other modules
-registered.
+`wb install` detects the `.git` checkout and registers core with
+`TRACK_MODE=branch:<your current branch>` instead of `latest` — the same
+dev-tracking pathway `wb dev`/`wb track --branch` gives every other module.
+See `ARCHITECTURE.md` §9.6 for why your own editing clone and workbench's
+own fetched snapshot are expected to be two separate copies on disk, not a
+bug.
 
 ### Without Ansible
 
@@ -63,7 +110,30 @@ wb dev awsconfd                    # guided switch to your own dev branch
 wb sync disable awsconfd           # pause auto-sync without deregistering
 wb remove awsconfd                 # deregister (deployed content stays)
 wb functions                       # what shell functions/getters are live
+wb tools list                      # what install-* functions are available
+wb version                         # release version + every loaded file's version
 ```
+
+## Personal shell overrides
+
+`wb install`/`wb apply` create `~/.config/workbench/local/settings.sh` for
+you (with commented examples) — this one reserved filename is where the
+documented switches live (`WORKBENCH_PLAIN_SHELL`, `WORKBENCH_SHOW_FUNCTIONS`,
+etc.), and it's sourced twice: once early, so a flag you set there gates
+everything else that loads afterward, and again at the very end, so it
+wins over anything a module also touched.
+
+Want your own functions or aliases, entirely separate from that switches
+file? Drop any number of other `*.sh` files into the same
+`~/.config/workbench/local/` directory — they're sourced once, together,
+in filename order, right after `settings.sh`'s final pass, and are live in
+your very next new shell. No naming convention required beyond `.sh`, and
+nothing here is validated the way a module's manifest is — keep it simple
+and flat.
+
+(This is separate from `~/.config/workbench/user/*.sh`, which is for
+hand-authored "pseudo-module" extensions rather than personal overrides —
+see `contracts/state-schema.md` if you need the distinction.)
 
 ## Uninstalling a module cleanly
 

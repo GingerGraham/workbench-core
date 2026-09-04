@@ -236,9 +236,9 @@ no functions, no sourcing required to read them):
 
 ```
 # ~/.config/workbench/core/version — plain KEY=VALUE, readable via source or grep
-CORE_API_VERSION=1
+CORE_API_VERSION=1.0
 MANIFEST_SCHEMA_VERSION=1
-STATE_SCHEMA_VERSION=1
+STATE_SCHEMA_VERSION=2   # bumped from 1 — see D23 (installers.list, additive)
 WORKBENCH_CORE_SEMVER=0.1.0
 ```
 
@@ -247,7 +247,8 @@ WORKBENCH_CORE_SEMVER=0.1.0
   platform-fact block (`WORKBENCH_OS`, `WORKBENCH_DISTRO`, `WORKBENCH_WSL`,
   `WORKBENCH_SHELL`, `WORKBENCH_ARCH`), the registration directory layout,
   and the tracking-variable contract (`WORKBENCH_TRACK_<MODULE>`, §9.5).
-  A module declares `core_api: ">=1.0 <2.0"` in its manifest; core checks
+  Carries `X.Y` minor-version granularity, not a bare integer — see D29
+  (§12) for the bump policy. A module declares `core_api: ">=1.0 <2.0"` in its manifest; core checks
   this **before** sourcing any of that module's `register.shell[]` files,
   and refuses (loud warning, not a silent skip) rather than sourcing
   something that may call an undefined function. Shell scope for this
@@ -263,13 +264,46 @@ WORKBENCH_CORE_SEMVER=0.1.0
 These are independent on purpose — a new Core API function doesn't require a
 manifest or state change, and vice versa.
 
+### 6.1 Three version concepts (bootstrap-fix brief §5)
+
+The contract versions above are one of **three** independent, deliberately
+decoupled version concepts in this codebase — a later reader who sees a bare
+"version" mentioned somewhere should be able to tell which of the three it
+means:
+
+| Concept | Shape | Where it lives | Purpose |
+|---|---|---|---|
+| **Contract versions** (`CORE_API_VERSION`/`MANIFEST_SCHEMA_VERSION`/`STATE_SCHEMA_VERSION`) | small integers | `~/.config/workbench/core/version` | compatibility gating between core and modules — §6 above |
+| **Release/tag version** | `vX.Y.Z`, matches the git tag | `VERSION` file, repo root | "which release of `workbench-core` is this checkout" |
+| **Script-local version** | `X.Y.Z`, one per file | inline constant, registered via `workbench_register_script_version()` (`lib/core/version.sh`) | "which version of *this specific file* produced this output" — independent of the release tag, bumped by that file's own author on its own schedule |
+
+The release version is read by `workbench_release_version()`, which reads
+the repo-root `VERSION` file relative to wherever `lib/core/version.sh` is
+actually running from — this works identically for a developer's git clone
+or a fetched snapshot, since both are the full repo tree with `VERSION` at
+the root, no special-casing needed. `VERSION` is bumped as the last commit
+before cutting a tag (or the same commit), so the file and the tag never
+drift apart.
+
+The script-local registry is a plain indexed array
+(`_WB_SCRIPT_VERSIONS`, `path|version` entries), not a same-named variable
+repeated per file — `bin/wb` sources on the order of twenty files into one
+shell process, and a repeated variable name would get clobbered file-to-file
+(or throw outright if `readonly`). This is the same pattern already
+established for `_WB_SHELL_PREREQS_REQUIRED` in `lib/core/prereqs.sh`, not a
+new convention. `wb version` surfaces both the release version and the full
+registered-script-version list; `wb install`/`wb apply` print the release
+version once at the start; hot-path operations (`wb update`,
+`sync run-if-due`, the loader on every shell start) log it only at
+`log_debug`, gated by `WORKBENCH_DEBUG`.
+
 ---
 
 ## 7. Addressing missing components
 
 Confirmed gaps, with the fix each maps to:
 
-1. **`awk` (and friends) never checked as a prerequisite.** `check_prereqs()` in `install.sh` checks only `git`, `python3`, `ansible-core`. `awk` is a hard dependency of `dedupe-path()` and the host-vars YAML reader, and is confirmed absent on minimal Fedora WSL images. `wb install`'s prereq phase must enumerate every external binary any Core API function calls (`awk`, `sed`, `tr`, `grep -E`, `column`, `git`, `curl`, `ssh-keyscan`, optionally `gpg`) and check/install all of them, not just the three checked today.
+1. **`awk` (and friends) never checked as a prerequisite.** `check_prereqs()` in `install.sh` checks only `git`, `python3`, `ansible-core`. `awk` is a hard dependency of `dedupe-path()` and the host-vars YAML reader, and is confirmed absent on minimal Fedora WSL images. `wb install`'s prereq phase must enumerate every external binary any Core API function calls (`awk`, `sed`, `tr`, `grep -E`, `column`, `git`, `curl`, `ssh-keyscan`, optionally `gpg`, `unzip`, `zip`) and check/install all of them, not just the three checked today.
 2. **No mechanism for a module to register shell functions/aliases.** Root-caused in §5.1, fixed by `register:`.
 3. **Sync is all-or-nothing.** One flag gates both self-sync and every external repo together. Fixed by per-module `sync.enabled` + independent core toggle (§9).
 4. **No hot-add path.** Registering a new module today requires a full Ansible re-run. Fixed by `wb add`/`wb remove` (§9/§10) — but see the convergence constraint in §8.
@@ -370,6 +404,51 @@ working copy — with one deliberate, opt-in exception (dev tracking, below).
   pruned beyond a small retention window — the same pattern `dotfiles`'
   existing self-sync release mode already uses, generalised to every
   module.
+
+### 9.1a Bootstrap: the initial fetch (bootstrap-fix brief)
+
+§9.1 above specifies the *ongoing* sync mechanism — it deliberately doesn't
+say how `workbench-core` gets onto a machine that has nothing installed yet,
+before any of that engine code exists locally to run at all. That gap is
+closed here: **`bootstrap.sh`** (repo root) is the canonical, documented
+production entry point —
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh | bash
+```
+
+— curl + tar, no `git`, resolving the latest release tag the same way §9.1's
+public-repo path does, fetching straight into the real
+`snapshots/<ref-slug>-<shortsha>/` path (never a scratch/temp directory —
+a tmp-cleaner sweep or reboot could silently delete `current`'s target
+otherwise, breaking the loader with no obvious cause days later), writing
+core's own `sync.conf`, and handing off to `bin/wb install`. A developer
+working on `workbench-core` itself uses a real `git clone` +
+`./bin/wb install` instead (§9.6's dev-tracking pathway, for core rather
+than an ecosystem module) — that path is correct as-is and isn't going
+away, it's just no longer what the docs lead with.
+
+`bootstrap.sh` cannot depend on anything under `lib/` — none of that code
+exists locally until bootstrap fetches it — so its ref-resolution and
+tarball-fetch logic is a small, deliberate, accepted duplication of
+`lib/distribution/resolve.sh`/`fetch-tarball.sh` and
+`lib/distribution/snapshot.sh`'s slugify routine, the same narrow-exception
+precedent as the private-repo git-as-transport case in §9.1/D5. It stays
+deliberately tiny (get *just enough* on disk to hand off to
+`bin/wb install`, nothing more) and cross-references the files it
+duplicates from, and vice versa.
+
+`bootstrap.sh` also falls back to `main` when no `vX.Y.Z` tag exists yet —
+not just a bring-up convenience: without it, bootstrap is unconditionally
+broken until the first tag is cut. This fallback is permanent, not removed
+once a release exists.
+
+**Deliberate asymmetry:** unlike every module `workbench-core` fetches,
+`bootstrap.sh` itself is hosted unversioned, at `main` — it has no
+persistent state of its own to drift, since it either succeeds once (then
+hands off to the real, tag-tracked engine) or doesn't run again. Tag-pinning
+it the way modules are tag-pinned would just mean an old bootstrap fetching
+a new engine, buying nothing.
 
 ### 9.2 Tracking model
 
@@ -510,6 +589,7 @@ Wave B. `workbench` is reserved for a separate TUI repo (Wave D) that fronts
 | `wb update [<n>]` | On-demand, single-run sync-and-deploy trigger — available regardless of cadence or tracking mode. No argument syncs every registered, sync-enabled module once. |
 | `wb status` | Per-module sync/apply drift, current `TRACK_MODE`/`TRACK_REF`, resolved SHA, whether a newer `latest` tag or branch commit is available, and whether the fast (5-minute) cadence is currently active. |
 | `wb functions` | The generalised `get-functions` — walks every registered module's declared getters (§5). |
+| `wb tools [list] \| update [<n>]` | The tool-updating framework (§12 D23) — discovers `install-<n>` functions modules declared via `register.installers[]` and invokes them. Manual only, never on the sync timer; distinct from `wb update`, which syncs modules, not the tools their installers happen to install. |
 
 ### Known-modules catalog & bundles
 
@@ -583,3 +663,44 @@ interest when Wave D arrives.
 | D14 | Snapshot atomic-swap primitive | `ln -sfn` (GNU) with a fallback to `ln -sfh` (BSD/macOS, since GNU coreutils 9.4 as tested does not recognise `-h`, and BSD `ln` does not recognise `-n`) directly against the final `current` path — not a temp-symlink-then-`mv`. `mv src dest` treats an existing symlink-to-directory `dest` as a directory to move *into* rather than replacing it, which would silently nest the new snapshot inside the old one; this was caught by `tests/check-snapshot-atomicity.sh` during the build (the temp+`mv` form initially implemented left `current` stuck on the very first snapshot forever) and fixed to match the direct-`ln` primitive `workbench-precursor`'s own release-mode swap already used successfully. See `lib/distribution/snapshot.sh`. |
 | D15 | `deploy.list`/`register.list`/`hooks.list` as static rendered artifacts | Only `register.list` is materialised on disk (written by the sync engine after every successful fetch, from the module's manifest in `current`) — `deploy.list` and `hooks.list` are NOT pre-rendered separate files; `lib/sync/engine.sh` reads deploy and hook entries live from the manifest via `lib/manifest/parse.sh` (already pure bash/awk, already hot-path-safe) at the moment they're needed. This simplifies the brief's original three-file-per-module shape to one, without reintroducing a `yq`/`python3` dependency or a second source of truth to keep in sync with the manifest — `ansible/roles/module_sync` accordingly does not render these files itself; it only invokes `wb add`, which triggers the same live read. |
 | D16 | `register.shell[]` destination shape (supersedes §5.2's `modules.d/` sketch) | `register.list` entries point directly at `<module>/current/<src>` — the file exactly where it already lives inside that module's own fetched snapshot — rather than a separate `${WORKBENCH_HOME}/modules.d/<module-name>/<basename>` symlink tree. Since every registered file is read straight out of `current` at source time (`lib/loader.sh`), an extra symlink layer would only reproduce the same path with more moving parts; the "engine-computed, not author-supplied, and structurally confined to the module's own namespace" property §5.1/§5.2 cares about holds identically either way. Caught during PR review (a doc/implementation mismatch flagged against `contracts/manifest-spec.md`) rather than found during the build itself — logged here so the two don't drift again. |
+| D17 | Bootstrap fetch mechanism | `bootstrap.sh` (repo root) is the canonical, documented production install path — curl + tar, no `git`, resolving the latest release tag and fetching straight into the real `snapshots/<ref-slug>-<shortsha>/` path (never a scratch/temp directory), then handing off to `bin/wb install`. It duplicates a small, deliberate slice of `lib/distribution/resolve.sh`/`fetch-tarball.sh`/`snapshot.sh`'s slugify — structurally unavoidable, since bootstrap can't depend on code it hasn't fetched yet — the same narrow-exception precedent as the private-repo git-as-transport case (§9.1/D5). Falls back to `main` when no `vX.Y.Z` tag exists yet, permanently (not just for bring-up). Hosted unversioned at `main`, unlike every tag-tracked module — it has no persistent state of its own to drift. The developer `git clone` + `./bin/wb install` path is unchanged and still correct (§9.6); it's relabelled "Developer setup" in the docs rather than removed. See §9.1a. |
+| D18 | Script versioning | Three independent, decoupled version concepts: contract versions (§6, unchanged), a new release/tag version (`VERSION` file at the repo root, `vX.Y.Z`, read via `workbench_release_version()`), and a new script-local version (one `X.Y.Z` per operational file — `bin/wb`, `bootstrap.sh`, `lib/loader.sh`, every file under `lib/`; not `tests/` or the Ansible playbooks/roles). Script-local versions are tracked via a plain indexed array (`_WB_SCRIPT_VERSIONS`, `workbench_register_script_version()`/`workbench_print_script_versions()` in `lib/core/version.sh`), not a repeated same-named variable — the latter would get clobbered file-to-file across `bin/wb`'s ~20-file single-process source pass (or throw, if `readonly`); the array pattern mirrors `_WB_SHELL_PREREQS_REQUIRED`'s existing convention. `wb version` is a new subcommand surfacing both the release version and the full script-version list. See §6.1. |
+| D19 | `wb` CLI exposure on `PATH` | `wb install`/`wb apply` symlinks `~/.local/bin/wb` → `<core>/current/bin/wb` (`_wb_link_cli_bin`, `bin/wb`), non-destructive on collision. `lib/loader.sh` additionally guarantees `~/.local/bin` is prepended to `PATH` on every shell start, unconditionally — distro/shell rc-file conventions for this are inconsistent (absent on stock macOS zsh, conditional-on-existence on Debian/WSL) and can't be relied on alone. Confirmed gap: no mechanism for this existed anywhere in the Wave B build — `bin/wb` was only ever invoked internally by full path (`get-functions()`). |
+| D20 | Core self-convergence on update | `wb update`/`wb track`/`wb dev` targeting `core`, and the background timer's `wb sync run-if-due`, now detect when `core`'s resolved commit actually changed and automatically re-run `wb apply` afterward — so a `core` update always leaves the host fully converged (PATH symlink, rc stub, prereqs, SSH bootstrap, Ansible) without a separate manual step. Scoped to `core` only (principle 4 — no special-cased branch inside `lib/sync/engine.sh`; the new logic lives at the CLI layer, `_wb_maybe_reconverge_core` in `bin/wb`, called from `_wb_cmd_update`, `_wb_cmd_sync`'s `run-if-due` branch, and `workbench_cmd_track`) — the same question for ordinary modules is explicitly deferred, since none has an install/apply concept today. Only fires on an actual commit change, not every cycle — a no-op sync cycle never pays the convergence cost. The Ansible pass specifically is skipped when triggered from the unattended timer path (`--skip-ansible`, a new flag on `wb install`/`wb apply`, also usable directly by a human for a faster apply), preserving §8's "unattended stays pure shell, no Ansible" principle for that one component; everything else in convergence — prereq installs and SSH bootstrap included — now legitimately runs unattended for `core`, since both are already idempotent/non-interactive and core's own PATH-symlink/rc-stub convergence needs them to actually converge. A convergence failure is logged as a warning and never fails the triggering command — same non-fatal pattern already used for post-deploy hook failures (`workbench_run_post_deploy_hook`). |
+| D21 | `register.list`/`installers.list` convergence on `wb install`/`wb apply` (baseline-completion brief §Phase 1) | A confirmed regression: `bootstrap.sh`-driven installs never rendered core's own `register.list` at all, because `_wb_bootstrap_core_module`'s early-return (correctly reached once `bootstrap.sh` has already registered core) skips the `workbench_render_register_list` call further down in that same function's body, and nothing else in `wb install`/`wb apply`/`wb update` called it unconditionally — only a genuine upstream commit change did, via the sync engine's fetch path. Net effect: a `bootstrap.sh`-installed host silently never got core's own shell content (`get-functions`, `sudo-test`, `get-elevation-command`, `dedupe-path`, etc.), with no error anywhere. Fixed by making `register.list`/`installers.list` rendering an unconditional, idempotent step of `wb install`/`wb apply` (`_wb_converge_module_registrations` in `bin/wb`) for **every** loadable module, every run, regardless of whether anything changed — one general fix (principle 4), not a core-specific patch. `wb status` additionally flags loudly (not silently) a registered, sync-enabled module whose manifest declares `register.shell[]`/`register.installers[]` entries but whose `register.list` is missing or empty. |
+| D22 | Local overrides directory (baseline-completion brief §Phase 2) | `~/.config/workbench/local/` replaces the single-file `90-local.sh` — one reserved-name `settings.sh` keeping today's early+final two-pass semantics, plus any number of other user-authored `.sh` files sourced together, filename-sorted, immediately after `settings.sh`'s final pass. `WORKBENCH_USER_EXT_DIR` is unchanged and stays the true last-of-everything, kept conceptually distinct from personal overrides — sourced after the new "other files" pass, per the repo owner's steer that it should continue to be sourced last. `wb install`/`wb apply` scaffold the directory and a default, commented `settings.sh` (never overwriting an existing one). While reworking this block, fixed a latent ordering bug this brief's own done-when criteria exposed: `lib/loader.sh`'s "Behaviour flags" block (which reads `WORKBENCH_PLAIN_SHELL` to force `WORKBENCH_SHOW_FUNCTIONS=false`) previously ran *before* the local-overrides file was ever sourced, so a `WORKBENCH_PLAIN_SHELL=true` set only there (never as a real pre-existing environment variable) correctly gated the later prompt-fallback block but silently failed to gate `WORKBENCH_SHOW_FUNCTIONS` — the early source now runs first, so both are gated consistently, matching what the file's own comments already claimed. See §9.3/contracts/state-schema.md. |
+| D23 | Tool-updating framework (baseline-completion brief §Phase 3) | `wb tools` (not `wb update-tools`, not folded into `wb update`) is the command surface for a genuine design gap: `register.installers[].src` was declared/parsed/validated from Wave B onward but nothing ever consumed it at runtime. Discovery is by `install-<name>` naming-convention introspection over each declared file's plain text (`_extract_function_names`, `lib/core/functions.sh` — the same primitive `get-functions` already uses, never a second parser), rendered into a new per-module `installers.list` (`workbench_render_installers_list`, `lib/sync/engine.sh`) at exactly the same points `register.list` is rendered — not a new per-tool manifest declaration. `wb tools list`/`wb tools update [<name>]` (`lib/core/tools.sh`'s `workbench_tools_collect`/`workbench_tools_lookup`, consumed by `bin/wb`) discover and invoke; update logic, idempotency, and version-checking are entirely the module author's responsibility — core calls the function and reports what it says, never tracking installed-tool versions or diffing state itself. Manual-only, no cadence/timer integration, and excluded for disabled modules exactly like `register.list`. A friendly-name collision across modules (two `install-terraform` functions, say) is resolved by first-by-module-name-order-wins, the same tie-break the loader's tier-sourcing already uses, warned about once. `STATE_SCHEMA_VERSION` bumped `1` → `2` for the new `installers.list` file, migrated in place by `wb install`/`wb apply` (`workbench_migrate_state_schema`, `lib/core/version.sh`) even though the change is purely additive. |
+| D24 | Internal Core API function naming convention | `lib/core/version.sh`'s twelve version/schema-bookkeeping functions and `lib/core/functions.sh`'s `workbench_detect_platform` — thirteen in total — were never meant to be invoked from a prompt or appear in `wb functions`/`get-functions` output, but weren't `_`-prefixed, so once that listing actually walked and extracted real function names they showed up as noise next to genuinely user-facing commands (`sudo-test`, `dedupe-path`, etc.). Renamed all thirteen (e.g. `workbench_detect_platform` → `_workbench_detect_platform`) to the `_`-prefixed convention `_read_prompt`/`_read_prompt_silent` already established; none are named in the `CORE_API_VERSION` contract paragraph, so this is not a Core API surface break and required no version bump — purely a display/discovery convention, since `_`-prefixing a bash function doesn't restrict who can call it, only whether `_extract_function_names` lists it. |
+| D25 | Prereq list addition: `unzip`/`zip` | Added `unzip` and `zip` to `_WB_SHELL_PREREQS_OPTIONAL` in `lib/core/prereqs.sh`, ahead of any Wave C module actually needing them — anticipated for modules distributing `.zip`-packaged tools (Ubuntu does not ship `unzip` by default). Optional, not required, matching the existing `gpg` precedent: nothing in core itself calls either binary. No new package-name mapping needed in `workbench_install_shell_prereqs`'s case statement — binary and package names match on every checked package manager (apt/dnf/yum/zypper/pacman/brew), so both fall through to the existing default branch. |
+| D26 | CI test/lint pipeline | `.github/workflows/ci.yml`: shellcheck lint (single run) + the existing `tests/check-*.sh` suite (all 22, matrix across `ubuntu-latest`/`macos-latest`), triggered on PR-open to `main` and manual dispatch, also exposed via `workflow_call` so `release.yml` (D27) depends on it rather than duplicating a test run. `check-distribution-no-git.sh` is pointed at the PR's own branch/SHA in CI via `WORKBENCH_TEST_GH_BRANCH`, not left at its `main` default — a PR run must validate the code under review, not always re-validate `main`. The exact `shellcheck bin/wb bootstrap.sh lib/**/*.sh tests/*.sh .github/scripts/**/*.sh` invocation (no `.shellcheckrc`, no severity flag) surfaced a pre-existing backlog across the codebase — 26 real warnings (unguarded `cd`, unquoted expansions, unused variables, a couple of genuine array/string mix-ups) and ~105 stylistic/info notes (almost all the same `cond && ok || fail` idiom the test suite's own `ok()`/`fail()` convention relies on everywhere, which is safe here since neither function can itself fail). Rather than relaxing severity or adding a `.shellcheckrc`, the warnings were fixed in place and the info-level idiom was suppressed with inline `# shellcheck disable=` comments at each site, matching the codebase's existing annotation convention — so lint runs clean at full severity with no new suppression mechanism. Deliberately phase one of a larger planned structure — a black-box bootstrap/install test and a synthetic-fixture ecosystem-readiness test (full Core API surface, since no extension modules exist yet) remain a separate follow-up, not built here. |
+| D27 | Release automation | Two GitHub Actions workflows: `pr-check.yml` validates Conventional-Commit-formatted messages on any commit touching a registered script-local-versioned file; `release.yml` runs on every merge to `main` (guarded against re-triggering on its own bot commit), deriving per-file and overall bump severity from commit history since the last tag (`.github/scripts/release/`), gated on a non-empty `CHANGELOG.md` `[Unreleased]` section. `core`-scoped commits (no corresponding file) can independently drive the overall `VERSION` bump above whatever the per-file rollup alone would produce. `release.yml`'s own test-suite safety net is `ci.yml` (D26) via `workflow_call`, not a duplicated inline run. First tag cut manually as `v1.0.0` (§7 of the release brief) since Wave B is functionally complete; the automation requires an existing baseline tag to diff against. Resolved the `bootstrap.sh`/D18 mismatch (bootstrap.sh had no registration call despite being listed in scope) by adding one that references its existing `_WB_BOOTSTRAP_VERSION` variable rather than a second literal version string, so there's still exactly one source of truth for that file's version. See `docs/release-process.md`. **Superseded in part by D28**: `release.yml`'s original direct-push-to-`main` mechanism described here was replaced before this ever shipped, once `main`'s actual branch ruleset (no bot/App bypass) made a direct push unworkable — the bump computation, CHANGELOG gate, and per-file rewrite logic described above are unchanged; only how the result lands on `main` changed. |
+| D28 | Release pipeline: PR + auto-merge instead of direct push to `main` | `main`'s branch ruleset (require PR, require signed commits, require linear history, require status checks, block force pushes; no bot/App bypass entry) makes a direct-push release step (D27's original design) unworkable without weakening the ruleset — not an option. Resolved by splitting `release.yml` into a propose step (computes the version bump exactly as D27 describes, then opens a PR from `release/v<VERSION>` to `main`) and a new `release-finalize.yml` (tags the resulting squash-merge commit and publishes the GitHub Release once that PR merges). The PR is opened and auto-merge enabled using a dedicated GitHub App installation token (`RELEASE_APP_ID`/`RELEASE_APP_PRIVATE_KEY`, `actions/create-github-app-token`) rather than `GITHUB_TOKEN` — not to bypass any rule, but because events triggered by `GITHUB_TOKEN` don't cascade to trigger other workflows, so a `GITHUB_TOKEN`-opened PR would never fire `ci.yml` (D26) and auto-merge would wait forever. Every ruleset requirement is satisfied by the normal PR path (GitHub signs its own merge commit; squash-merge preserves linear history); `main`'s bypass list stays untouched — Repository admin only, no App exception added. The `chore(release):` self-trigger guard moved from an actor check to a commit-message-prefix check, since the actor completing an auto-merge isn't reliably attributable to a known bot identity the way a direct `GITHUB_TOKEN` push was. Whether a separate tag-ref protection ruleset applies to `v*` tags (distinct from the `main` branch ruleset) was flagged back rather than assumed either way — if one exists, the App needs adding to that bypass list specifically, a narrower grant than the `main` bypass this decision deliberately avoids touching. |
+| D29 | `CORE_API_VERSION` granularity | Widened from a bare integer to `X.Y` (`1` → `1.0`) so additive, non-breaking growth of the Core API surface (§6) can be signalled to modules via minor-version floors, without forcing every existing `core_api: ">=1.0 <2.0"` declaration to change — the range comparator already treats `1`/`1.0` as equal. Bump policy: minor for anything added to contracts/core-api.md's documented surface, major (minor resets to 0) for anything removed or behaviourally changed there. No STATE_SCHEMA_VERSION bump — the version file's shape is unchanged, only one value's precision widens. |
+| D30 | `MANIFEST_SCHEMA_VERSION` enforcement | Closed a real gap: nothing in the hot sync path checked a manifest's own `version:` field — only the standalone, developer-time validator did, via a bare literal. Split into two fixes: the validator's literal becomes a named `_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED` constant (readiness for the `version: 2` escape hatch, §5.4, no behaviour change yet); the sync engine gains an explicit gate in `workbench_sync_module`, refusing to sync a module (deploy and register both) whose declared `version:` isn't in that supported set, matching how the `core_api` gate already refuses loudly rather than silently guessing (principle 5). The validator's and the engine's constants are intentionally separate, unshared values — the validator must run standalone without a `workbench-core` install present, mirroring the accepted `bootstrap.sh`/`fetch-tarball.sh` duplication (D5's rationale). Checked against the freshly-fetched snapshot *before* `workbench_snapshot_swap`/`RESOLVED_SHA` persistence, not after like the `core_api` gate — a post-swap check would repoint `current` (and therefore every already-deployed symlink/register entry resolving through it) at unsupported content and then freeze `RESOLVED_SHA` on it, so refusal wouldn't actually keep the bad content off an already-synced module and the next cycle would short-circuit as "up to date" and never re-evaluate. Consequence: unlike `core_api`'s once-per-change frequency, this gate's `log_error` re-fires every cycle a mismatch persists (`RESOLVED_SHA` is deliberately never advanced past it) — a deliberate tradeoff, going quiet on a module stuck on an unsupported version being the worse silence. No new throttle/dedup mechanism added either way. |
+
+---
+
+## 13. CI
+
+Automated lint + test pipeline, D26. `.github/workflows/ci.yml` runs
+shellcheck against the shell surface (`bin/wb`, `bootstrap.sh`, `lib/`,
+`tests/`, `.github/scripts/`) plus the full `tests/check-*.sh` suite across
+`ubuntu-latest`/`macos-latest`, on PR-open to `main`, manual dispatch, and
+`workflow_call` for `release.yml` (§14) to depend on. See the workflow
+file and D26 for the mechanics and the rationale behind the shellcheck
+baseline fixes that came with it.
+
+## 14. Release automation
+
+Automated semver/tagging/release pipeline, D27/D28. `.github/workflows/
+pr-check.yml`, `release.yml`, and `release-finalize.yml`, backed by
+`.github/scripts/release/`, turn Conventional-Commit-formatted merges to
+`main` into version bumps, tags, and GitHub Releases without a manual cut.
+`release.yml` proposes a release as a `release/v<VERSION>` PR with
+auto-merge enabled (D28 — `main`'s branch ruleset requires a PR, so the
+bump can't land any other way); `release-finalize.yml` tags the resulting
+merge commit and publishes the GitHub Release once that PR merges. See
+`docs/release-process.md` for the full mechanics — the Conventional
+Commit scoping rules, the `core`-scope convention, the CHANGELOG
+discipline this builds on, and what to do if a release fails its own
+safety net.

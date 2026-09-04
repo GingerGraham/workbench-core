@@ -94,7 +94,9 @@ if "${VALIDATE}" "${WORK}/bad/.dotfiles-sync.yml" >/tmp/wb-validate-bad.log 2>&1
 else
     ok "an unsafe src (../escape.sh), dest (/etc/passwd), and mode (bogus) are all rejected"
 fi
+# shellcheck disable=SC2015
 grep -q "must be a path relative to the repo root" /tmp/wb-validate-bad.log && ok "rejects unsafe src with the expected message" || fail "unsafe src rejection message missing"
+# shellcheck disable=SC2015
 grep -q "must start with ~/" /tmp/wb-validate-bad.log && ok "rejects unsafe dest with the expected message" || fail "unsafe dest rejection message missing"
 
 # ── Fixture 4: register.shell[] with a dest field — must FAIL ───────────────
@@ -130,6 +132,24 @@ if "${VALIDATE}" "${WORK}/badtier/.dotfiles-sync.yml" >/dev/null 2>&1; then
 else
     ok "an invalid register.shell[].tier is rejected"
 fi
+
+# ── Fixture 6: unsupported version — must FAIL ──────────────────────────────
+mkdir -p "${WORK}/badversion"
+cat > "${WORK}/badversion/.dotfiles-sync.yml" <<'EOF'
+version: 2
+deploy:
+  - src: shell/
+    dest: ~/.config/workbench-badversion-test/
+EOF
+mkdir -p "${WORK}/badversion/shell"
+touch "${WORK}/badversion/shell/x.sh"
+if "${VALIDATE}" "${WORK}/badversion/.dotfiles-sync.yml" >/tmp/wb-validate-badversion.log 2>&1; then
+    fail "a version: 2 manifest was accepted — schema version gate not enforced"
+else
+    ok "a version: 2 manifest is rejected — schema version gate enforced"
+fi
+# shellcheck disable=SC2015
+grep -q "version must be one of" /tmp/wb-validate-badversion.log && ok "rejects unsupported version with the expected message" || fail "unsupported-version rejection message missing"
 
 echo
 if [[ "${FAILED}" -eq 0 ]]; then

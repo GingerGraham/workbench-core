@@ -21,6 +21,8 @@
 # task doesn't need yet.
 
 _wb_catalog_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+# shellcheck disable=SC2015
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/catalog.sh" "0.1.0" || true
 
 _wb_catalog_modules_file() {
     local override="${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/catalog/modules.list"
@@ -37,7 +39,7 @@ _wb_catalog_bundles_file() {
 # workbench_catalog_lookup <name>
 # Prints "<url>|<private>" for a known module name, or nothing (exit 1).
 workbench_catalog_lookup() {
-    local name="$1" file line n u p
+    local name="$1" file n u p
     file="$(_wb_catalog_modules_file)"
     [[ -f "${file}" ]] || return 1
     while IFS='|' read -r n u p; do
@@ -54,7 +56,7 @@ workbench_catalog_lookup() {
 # Prints the member module names, one per line, or nothing (exit 1) if the
 # bundle isn't known.
 workbench_catalog_bundle_modules() {
-    local bundle="$1" file line n members m
+    local bundle="$1" file n members
     file="$(_wb_catalog_bundles_file)"
     [[ -f "${file}" ]] || return 1
     while IFS='|' read -r n members; do

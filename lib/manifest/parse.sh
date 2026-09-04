@@ -18,6 +18,26 @@
 # it ever reaches this code path.
 
 _wb_manifest_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+# shellcheck disable=SC2015
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/manifest/parse.sh" "0.2.0" || true
+
+# The manifest schema version(s) this running core knows how to sync.
+# Independent of lib/manifest/validate.sh's own
+# _WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED — that script runs standalone
+# without this file loaded; this constant is the hot-path's own answer to
+# "what do I actually know how to process," checked live at sync time
+# rather than at manifest-authoring time. See ARCHITECTURE.md §12 D30.
+_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED="1"
+
+# _wb_manifest_schema_supported <version>
+# True iff <version> (a manifest's own top-level `version:` scalar) is one
+# this running core knows how to sync. Plain space-delimited membership
+# test — bash-3.2-safe, matches the pattern _WB_SCRIPT_VERSIONS/prereqs
+# lists already use elsewhere rather than an associative array.
+_wb_manifest_schema_supported() {
+    local version="$1"
+    [[ " ${_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED} " == *" ${version} "* ]]
+}
 
 # workbench_manifest_scalar <key> <file>
 # Reads a bare top-level scalar (version, branch, core_api). Strips
@@ -185,8 +205,8 @@ workbench_manifest_register_getter_entries() {
             return s
         }
         function flush() {
-            if (have_item) print name "|" func "|" label
-            have_item = 0; name = ""; func = ""; label = ""
+            if (have_item) print name "|" fn "|" label
+            have_item = 0; name = ""; fn = ""; label = ""
         }
         /^register:[[:space:]]*$/ { in_register = 1; next }
         in_register && /^[A-Za-z]/ { flush(); in_register = 0; in_getters = 0 }
@@ -201,7 +221,7 @@ workbench_manifest_register_getter_entries() {
             next
         }
         in_register && in_getters && have_item && /^[[:space:]]+function:/ {
-            line = $0; sub(/^[[:space:]]+function:[[:space:]]*/, "", line); func = clean(line); next
+            line = $0; sub(/^[[:space:]]+function:[[:space:]]*/, "", line); fn = clean(line); next
         }
         in_register && in_getters && have_item && /^[[:space:]]+label:/ {
             line = $0; sub(/^[[:space:]]+label:[[:space:]]*/, "", line); label = clean(line); next

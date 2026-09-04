@@ -7,10 +7,19 @@ any of that module's `register.shell[]` files are sourced. A module whose
 declared range isn't satisfied is refused loudly (a warning naming the
 module and the mismatch), never silently skipped.
 
+**Before editing anything below this line:** adding a function, variable,
+or platform fact to this file's documented surface requires bumping
+`CORE_API_VERSION`'s minor segment in the same change (`lib/core/version.sh`
+and `lib/core/version-defaults.conf`). Removing or changing the behaviour
+of anything already documented here requires a major bump instead (reset
+minor to `0`) — this invalidates every module's existing `<A.B>` upper
+bound, so treat it as a real break, not a routine edit. See ARCHITECTURE.md
+§12 D29.
+
 ## Platform facts
 
 Exported once per shell session (`lib/loader.sh`, re-affirmed idempotently
-by `workbench_detect_platform()` in `lib/core/functions.sh` if core's own
+by `_workbench_detect_platform()` in `lib/core/functions.sh` if core's own
 tier is sourced later):
 
 | Variable | Values | Notes |
@@ -87,6 +96,7 @@ though none exist yet. See `contracts/tracking-spec.md` for the full
 
 ## Versioning
 
-Three independent integers/semver in `~/.config/workbench/core/version` —
+Three independent values (the first, `CORE_API_VERSION`, is itself `X.Y`,
+not a bare integer — see D29) in `~/.config/workbench/core/version` —
 see `contracts/state-schema.md` for the full file shape and
 `lib/core/semver.sh` for the range-satisfaction check.

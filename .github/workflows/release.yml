@@ -1,0 +1,180 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# Serialize releases: two merges landing close together must not run two
+# `propose` jobs at once and race on pushing a release branch. Never cancel
+# a release mid-flight — queue the next one behind it instead.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# Never let the release PR's own squash-merge commit re-trigger this
+# workflow's bump computation — it would otherwise try to compute a bump
+# against its own release commit. This is a message-prefix guard, not an
+# actor check: the merge is completed by GitHub itself once the release
+# PR's checks pass, not by a push this workflow can attribute to a known
+# bot identity.
+jobs:
+  ci:
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    uses: ./.github/workflows/ci.yml
+
+  propose:
+    name: propose release
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint release App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Compute bump plan
+        id: compute
+        run: |
+          .github/scripts/release/compute-bumps.sh | tee bump-plan.txt
+          overall_line="$(grep -m 1 '^OVERALL|' bump-plan.txt)"
+          IFS='|' read -r _ _ new_version severity _ <<< "${overall_line}"
+          echo "severity=${severity}" >> "$GITHUB_OUTPUT"
+          echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Apply bumps
+        if: steps.compute.outputs.severity != 'none'
+        run: .github/scripts/release/apply-bumps.sh bump-plan.txt
+
+      - name: Build release notes
+        if: steps.compute.outputs.severity != 'none'
+        env:
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+        run: |
+          {
+            echo "## Version bumps"
+            echo
+            echo "| File | Old | New | Severity |"
+            echo "|---|---|---|---|"
+            grep -v '^OVERALL|' bump-plan.txt | while IFS='|' read -r path old new severity; do
+              echo "| \`${path}\` | ${old} | ${new} | ${severity} |"
+            done
+            echo
+            overall_line="$(grep -m 1 '^OVERALL|' bump-plan.txt)"
+            IFS='|' read -r _ overall_old overall_new overall_sev overall_reason <<< "${overall_line}"
+            echo "**Overall:** ${overall_old} → ${overall_new} (${overall_sev} — ${overall_reason})"
+            echo
+            echo "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md) for the human-readable detail — this PR's diff includes the heading rename."
+          } > release-notes.md
+
+      # main requires verified commit signatures. A plain `git commit` is
+      # never signed regardless of which token pushes it — only commits
+      # created through GitHub's own API (or web UI) get its automatic
+      # "Verified" badge. So the release commit is created via the
+      # createCommitOnBranch GraphQL mutation instead of local git commit,
+      # exactly like the web editor would.
+      - name: Create release branch and commit via API (verified signature)
+        if: steps.compute.outputs.severity != 'none'
+        uses: actions/github-script@v7
+        env:
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const fs = require('fs');
+            const { execSync } = require('child_process');
+
+            const newVersion = process.env.NEW_VERSION;
+            const branchName = `release/v${newVersion}`;
+            const baseSha = execSync('git rev-parse HEAD').toString().trim();
+
+            // A previous run's release/vX.Y.Z branch can still exist (a
+            // failed or interrupted prior attempt, e.g. a downstream step
+            // erroring out before the PR merged) — reset it to the current
+            // base rather than failing with an opaque 422 on a plain create.
+            try {
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/heads/${branchName}`,
+                sha: baseSha,
+              });
+            } catch (err) {
+              if (err.status === 422 && /already exists/i.test(err.message)) {
+                core.info(`refs/heads/${branchName} already exists (stale from a previous run) — resetting it to ${baseSha}`);
+                await github.rest.git.updateRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `heads/${branchName}`,
+                  sha: baseSha,
+                  force: true,
+                });
+              } else {
+                throw err;
+              }
+            }
+
+            // Matches the old `git add -u`: only already-tracked files
+            // apply-bumps.sh modified, never the untracked bump-plan.txt/
+            // release-notes.md working files.
+            const changedFiles = execSync('git diff --name-only')
+              .toString()
+              .trim()
+              .split('\n')
+              .filter(Boolean);
+
+            if (changedFiles.length === 0) {
+              core.setFailed(`apply-bumps.sh reported a ${process.env.NEW_VERSION} bump but left no tracked-file changes — refusing to create an empty release commit.`);
+              return;
+            }
+
+            const additions = changedFiles.map((path) => ({
+              path,
+              contents: fs.readFileSync(path).toString('base64'),
+            }));
+
+            const mutation = `
+              mutation ($input: CreateCommitOnBranchInput!) {
+                createCommitOnBranch(input: $input) {
+                  commit { oid }
+                }
+              }
+            `;
+
+            await github.graphql(mutation, {
+              input: {
+                branch: {
+                  repositoryNameWithOwner: `${context.repo.owner}/${context.repo.repo}`,
+                  branchName,
+                },
+                message: { headline: `chore(release): v${newVersion}` },
+                fileChanges: { additions },
+                expectedHeadOid: baseSha,
+              },
+            });
+
+      - name: Open release PR and enable auto-merge
+        if: steps.compute.outputs.severity != 'none'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+        run: |
+          PR_URL="$(gh pr create \
+            --base main \
+            --head "release/v${NEW_VERSION}" \
+            --title "chore(release): v${NEW_VERSION}" \
+            --body-file release-notes.md)"
+          gh pr merge --auto --squash "${PR_URL}"
