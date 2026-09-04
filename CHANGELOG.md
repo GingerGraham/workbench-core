@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-09-04
+
 ### Fixed
 
 - `wb track`'s missing-`<name>` argument no longer gets silently swallowed
