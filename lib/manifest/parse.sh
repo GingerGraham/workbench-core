@@ -19,7 +19,7 @@
 
 _wb_manifest_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/manifest/parse.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/manifest/parse.sh" "0.2.0" || true
 
 # The manifest schema version(s) this running core knows how to sync.
 # Independent of lib/manifest/validate.sh's own

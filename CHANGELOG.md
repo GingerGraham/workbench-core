@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-04
+
 ### Changed
 
 - `CORE_API_VERSION` widened from a bare integer to `X.Y` (`1` → `1.0`) so

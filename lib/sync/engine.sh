@@ -29,7 +29,7 @@ done
 unset _wb_engine_dep
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/sync/engine.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/sync/engine.sh" "0.2.0" || true
 
 # ── Cadence (ARCHITECTURE.md §9.4/D8) ─────────────────────────────────────────
 : "${WORKBENCH_CADENCE_DEFAULT_SECONDS:=604800}"   # weekly
