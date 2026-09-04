@@ -6,6 +6,16 @@ All notable changes to `workbench-core` are documented here.
 
 ### Added
 
+- `lib/core/installers-common.sh` — install-helper primitives
+  (`_download_file_robust`, `_ensure_npm`, `_node_version_at_least`,
+  `_npm_global_install`) promoted from `workbench-precursor` to Core API
+  surface, registered at `tier: core` in core's own manifest so every
+  Wave C module's `install-<name>` functions can rely on them instead of
+  duplicating the file. `CORE_API_VERSION` bumped `1.0` → `1.1`
+  (`contracts/core-api.md`, ARCHITECTURE.md §12 D34).
+- `lib/modules/modules.list`/`bundles.list` populated with real URLs for
+  `workbench-git`, `workbench-gpg`, `workbench-ssh`, `workbench-shell` —
+  the `workstation`/`server`/`minimal` bundles now resolve. See D34.
 - Repo governance and agent-instruction files: `.github/PULL_REQUEST_TEMPLATE.md`,
   `.github/ISSUE_TEMPLATE/bug_report.yml`,
   `.github/ISSUE_TEMPLATE/feature_request.yml`,

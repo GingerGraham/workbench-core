@@ -53,6 +53,31 @@ once core's own `core`-tier registration is sourced:
   `get-<domain>-functions` getter (declared via a module's
   `register.getters[]`) is built from.
 
+## Install-helper functions (`lib/core/installers-common.sh`)
+
+**New in `CORE_API_VERSION` 1.1.** Promoted from workbench-precursor's
+`installers-common.sh` (ARCHITECTURE.md §12 D34) so every module's
+`install-<name>` functions (`register.installers[]`) share one
+implementation instead of each ecosystem module (`workbench-cloud`,
+`workbench-iac`, `workbench-containers`, `workbench-security`,
+`workbench-ai`, `workbench-devtools`, `workbench-desktop`, and any future
+module) carrying its own copy:
+
+- `_download_file_robust <url> <output_file>` — retried, resumable `curl`
+  download; falls back to HTTP/1.1 and discards a truncated partial file
+  on repeated failure.
+- `_node_version_at_least <major>` — true if the active `node`'s major
+  version is `>= <major>`.
+- `_ensure_npm` — ensures `npm` resolves, preferring `nvm` (live shell
+  function → unsourced `nvm.sh` → LTS install → package-manager fallback).
+- `_npm_global_install <package>` — installs/updates a global npm package,
+  redirecting to `~/.local` when the active npm prefix is system-owned
+  (`/usr`, `/opt`) so no elevation is required.
+
+Registered in core's own `.dotfiles-sync.yml` at `tier: core`, the same
+tier `functions.sh`/`version.sh` use — every module's `lazy`-tier installer
+file is guaranteed these are already sourced by the time it runs.
+
 ## Loader tiers
 
 `register.shell[].tier` is one of `env` / `core` / `tools` / `platform` /
