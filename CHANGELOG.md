@@ -4,6 +4,24 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- `CORE_API_VERSION` widened from a bare integer to `X.Y` (`1` → `1.0`) so
+  additive, non-breaking growth of the Core API surface
+  (`contracts/core-api.md`) can be signalled to modules via a minor-version
+  floor, without forcing every module's existing
+  `core_api: ">=1.0 <2.0"` declaration to change (ARCHITECTURE.md §12 D29).
+
+### Fixed
+
+- The hot sync path (`lib/sync/engine.sh`) now enforces a manifest's
+  declared `version:` against the schema versions this core knows how to
+  sync, refusing the whole module sync (deploy and register both) on a
+  mismatch. Previously only the standalone, developer-time
+  `lib/manifest/validate.sh` checked this field, so an unsupported
+  `version:` would silently sync and deploy as if it were `version: 1`
+  (ARCHITECTURE.md §12 D30).
+
 ## [1.0.2] - 2026-09-03
 
 ### Fixed
