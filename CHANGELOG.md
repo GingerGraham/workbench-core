@@ -4,6 +4,21 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `wb track`'s missing-`<name>` argument no longer gets silently swallowed
+  by the next flag. `wb track --latest` (name omitted) used to capture
+  `--latest` itself as `<name>`, report it as unregistered, and suggest
+  `wb add --latest` — not even a valid flag for `wb add`, so that path
+  dead-ended too. `lib/modules/track.sh` now checks for a leading `--` in
+  the name slot before the not-registered check, naming the intended flag
+  directly when it's one of `--latest`/`--branch`/`--tag`/`--commit`.
+- A bare `wb track` (zero arguments) crashed with an unbound-variable error
+  under `bin/wb`'s `set -uo pipefail` instead of showing usage —
+  `local name="$1"` dereferenced `$1` before the empty-name check ever ran.
+  Now `${1:-}`, matching the same pattern already used in `dev.sh`.
+- Added `tests/check-wb-track-parsing.sh` regression coverage for both.
+
 ## [1.1.0] - 2026-09-04
 
 ### Changed

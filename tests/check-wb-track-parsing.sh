@@ -65,7 +65,7 @@ if [[ "${rc}" -eq 2 ]] && echo "${out}" | grep -qi "did you mean 'wb track <modu
 else
     fail "'wb track --latest' (no name): missing hint (rc=${rc}): ${out}"
 fi
-if echo "${out}" | grep -qi "is not registered\|wb add"; then
+if echo "${out}" | grep -Eqi "is not registered|wb add"; then
     fail "'wb track --latest' (no name): still mentions the misleading 'wb add' path"
 else
     ok "'wb track --latest' (no name): no more misleading 'wb add' suggestion"
