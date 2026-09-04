@@ -57,8 +57,8 @@ workbench_cmd_track() {
     # <flag>' first", which sent people to 'wb add --latest' — not even a
     # valid flag for wb add.
     if [[ "${name}" == --* ]]; then
-        case " --latest --branch --tag --commit " in
-            *" ${name} "*)
+        case "${name}" in
+            --latest|--branch|--tag|--commit)
                 log_error "wb track: missing <name> — did you mean 'wb track <module> ${name}'?"
                 ;;
             *)
