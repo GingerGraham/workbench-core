@@ -1,0 +1,56 @@
+name: Bug report
+description: Report unexpected behaviour in workbench-core
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. `docs/troubleshooting.md`
+        covers the common prereq/loader/sync/SSH issues — worth a quick
+        check before filing.
+  - type: input
+    id: version
+    attributes:
+      label: workbench-core version
+      description: Output of `wb version`
+      placeholder: "v1.1.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Fedora / RHEL-family Linux
+        - Other Linux
+        - macOS
+        - WSL2
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you expected to happen too, if it's not obvious.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Re-run with `WORKBENCH_DEBUG=true` if you can, and paste the relevant portion. This renders as a code block automatically.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I checked docs/troubleshooting.md first
+          required: true

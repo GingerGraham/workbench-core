@@ -138,6 +138,8 @@ and the rationale behind it.
 | [`contracts/tracking-spec.md`](contracts/tracking-spec.md) | How a module's tracked ref is resolved, fetched, and re-checked. |
 | [`contracts/state-schema.md`](contracts/state-schema.md) | The on-disk file/directory shapes `wb` reads and writes. |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | The full design rationale, repo topology, rollout plan, and decisions log (§12) — read this before proposing anything that touches repo structure, the manifest schema, or the sync engine. |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to propose a change — dev setup, commit/CHANGELOG discipline, the PR checklist. |
+| [`SECURITY.md`](SECURITY.md) | How to report a vulnerability, and the trust boundaries this project actually has. |
 | [`CHANGELOG.md`](CHANGELOG.md) | What's shipped, in order. |
 
 ## Design principles
