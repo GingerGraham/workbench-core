@@ -30,7 +30,7 @@ _workbench_ensure_version_file() {
         cp "${_wb_version_lib_dir}/version-defaults.conf" "${file}"
     else
         cat > "${file}" <<'EOF'
-CORE_API_VERSION=1.0
+CORE_API_VERSION=1.1
 MANIFEST_SCHEMA_VERSION=1
 STATE_SCHEMA_VERSION=2
 WORKBENCH_CORE_SEMVER=0.1.0
