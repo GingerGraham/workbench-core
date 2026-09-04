@@ -245,6 +245,78 @@ else
     fail "badversion: deploy destination was created despite the unsupported version"
 fi
 
+# An already-synced module whose upstream later bumps to an unsupported
+# version: must have the refusal actually keep the *previous* good content
+# live — current must stay pointed at the old snapshot and RESOLVED_SHA
+# must not advance, not just skip re-rendering register/installers against
+# already-swapped-in bad content (the ordering fix core review caught).
+UPGSRC="${WORK}/upgsrc"
+UPGBARE="${WORK}/upgsrc-bare.git"
+mkdir -p "${UPGSRC}"
+git init -q --bare "${UPGBARE}"
+git clone -q "${UPGBARE}" "${UPGSRC}"
+(
+    cd "${UPGSRC}"
+    git config user.email t@t.com
+    git config user.name Test
+    mkdir -p shell
+    echo 'get-upgrade-functions() { :; }' > shell/upgrade.sh
+    cat > .dotfiles-sync.yml <<'EOF'
+version: 1
+branch: main
+deploy:
+  - src: shell/upgrade.sh
+    dest: ~/.local/share/wb-test/upgrade.sh
+    mode: link
+register:
+  shell:
+    - src: shell/upgrade.sh
+      tier: tools
+EOF
+    git add -A && git commit -q -m "v1 - good"
+    git branch -M main
+    git push -q origin main
+    git tag v1.0.0
+    git push -q origin v1.0.0
+)
+setup_module upgrade latest "${UPGBARE}"
+workbench_sync_module upgrade >/tmp/wb-sync-upgrade1.log 2>&1
+resolved_before="$(workbench_module_conf_get upgrade RESOLVED_SHA "")"
+if [[ -f "${HOME}/.local/share/wb-test/upgrade.sh" ]] && [[ -n "${resolved_before}" ]]; then
+    ok "upgrade: first sync (version: 1) deployed successfully"
+else
+    fail "upgrade: first sync did not deploy as expected"
+    cat /tmp/wb-sync-upgrade1.log
+fi
+
+(
+    cd "${UPGSRC}"
+    sed -i.bak 's/^version: 1/version: 2/' .dotfiles-sync.yml
+    rm -f .dotfiles-sync.yml.bak
+    echo "should never go live" >> shell/upgrade.sh
+    git add -A && git commit -q -m "v2 - bumps to an unsupported schema version"
+    git tag v2.0.0
+    git push -q origin main v2.0.0
+)
+upgrade_rc=0
+workbench_sync_module upgrade >/tmp/wb-sync-upgrade2.log 2>&1 || upgrade_rc=$?
+if [[ "${upgrade_rc}" -ne 0 ]]; then
+    ok "upgrade: re-sync onto an unsupported version: refuses (non-zero)"
+else
+    fail "upgrade: re-sync onto an unsupported version: returned success"
+fi
+if grep -q "should never go live" "${HOME}/.local/share/wb-test/upgrade.sh" 2>/dev/null; then
+    fail "upgrade: the unsupported snapshot's content went live despite the refusal"
+else
+    ok "upgrade: the previous good content is still what's deployed — refusal didn't let bad content through"
+fi
+resolved_after="$(workbench_module_conf_get upgrade RESOLVED_SHA "")"
+if [[ "${resolved_after}" == "${resolved_before}" ]]; then
+    ok "upgrade: RESOLVED_SHA was not advanced onto the refused snapshot"
+else
+    fail "upgrade: RESOLVED_SHA advanced despite the sync being refused"
+fi
+
 # A manifest missing the (required, contracts/manifest-spec.md §Field
 # reference) version: field entirely must be refused the same way as an
 # explicitly unsupported one — the gate must not silently pass an absent
