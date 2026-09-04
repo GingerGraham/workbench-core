@@ -1,11 +1,13 @@
 # Copilot instructions — workbench-core
 
-Mirrors `AGENTS.md` at the repo root. Copilot's various surfaces (CLI,
-coding agent, Chat, code review) don't uniformly discover a root
-`AGENTS.md`, so this is a deliberate, maintained duplicate — see
-`ARCHITECTURE.md` §12 D32. If the two ever disagree, `AGENTS.md` is the
-one that's current; update this file to match rather than treating the
-drift as acceptable.
+Adapted from `AGENTS.md` at the repo root — same content, with this
+file's own preface and its relative links path-adjusted for its
+location under `.github/`. Copilot's various surfaces (CLI, coding
+agent, Chat, code review) don't uniformly discover a root `AGENTS.md`,
+so this is a deliberate, maintained duplicate — see `ARCHITECTURE.md`
+§12 D32. `AGENTS.md` is always the canonical, current version; if the
+two ever disagree, update this file to match it rather than treating
+the drift as acceptable.
 
 ## Read first
 

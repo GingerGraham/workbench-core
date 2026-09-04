@@ -19,7 +19,7 @@
 
 - [ ] Every commit touching a registered file (`bin/`, `lib/`,
       `bootstrap.sh`) follows Conventional Commits — `pr-check.yml`
-      fails the PR otherwise. See [`docs/release-process.md`](../docs/release-process.md).
+      fails the PR otherwise. See [`docs/release-process.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/release-process.md).
 - [ ] If this is user-facing, `CHANGELOG.md`'s `## [Unreleased]` has a
       new entry under the right heading — `release.yml` refuses to cut
       a release with an empty `[Unreleased]` section.
@@ -27,10 +27,10 @@
       and a new/updated suite exists if behaviour changed.
 - [ ] `shellcheck bin/wb bootstrap.sh lib/**/*.sh tests/*.sh .github/scripts/**/*.sh` is clean.
 - [ ] Anything under `bin/`, `lib/`, `bootstrap.sh`, or `tests/` stays
-      Bash 3.2 compatible — see [`CONTRIBUTING.md`](../CONTRIBUTING.md#bash-3.2-compatibility).
+      Bash 3.2 compatible — see [`CONTRIBUTING.md`](https://github.com/GingerGraham/workbench-core/blob/main/CONTRIBUTING.md#bash-32-compatibility).
       `.github/scripts/**` is exempt.
 - [ ] If this touches repo structure, the manifest schema, or the sync
-      engine, [`ARCHITECTURE.md`](../ARCHITECTURE.md) §12 has been
+      engine, [`ARCHITECTURE.md`](https://github.com/GingerGraham/workbench-core/blob/main/ARCHITECTURE.md) §12 has been
       checked for an existing decision, and a new entry added if this
       settles something new.
 - [ ] Docs (`docs/`, `contracts/`, `README.md`) updated if behaviour or

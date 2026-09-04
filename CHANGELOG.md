@@ -7,7 +7,10 @@ All notable changes to `workbench-core` are documented here.
 ### Added
 
 - Repo governance and agent-instruction files: `.github/PULL_REQUEST_TEMPLATE.md`,
-  `.github/ISSUE_TEMPLATE/{bug_report,feature_request,module_proposal,config}`,
+  `.github/ISSUE_TEMPLATE/bug_report.yml`,
+  `.github/ISSUE_TEMPLATE/feature_request.yml`,
+  `.github/ISSUE_TEMPLATE/module_proposal.yml`,
+  `.github/ISSUE_TEMPLATE/config.yml`,
   `.github/CODEOWNERS`, `CONTRIBUTING.md`, `SECURITY.md` — the first
   documented, discoverable version of the discipline `pr-check.yml`/
   `release.yml` (D26–D30) already enforced silently. Also `AGENTS.md`
