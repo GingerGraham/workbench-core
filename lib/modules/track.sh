@@ -4,7 +4,7 @@
 # is `wb track <name> --latest`, not a separate command.
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/track.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/track.sh" "0.1.1" || true
 
 # _wb_track_ref_is_safe <value>
 # TRACK_REF ends up written verbatim into sync.conf (a line-based
