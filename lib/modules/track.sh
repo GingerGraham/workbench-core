@@ -43,11 +43,31 @@ _wb_track_commit_is_safe() {
 
 # workbench_cmd_track <name> --latest | --branch <b> | --tag <t> | --commit <sha>
 workbench_cmd_track() {
-    local name="$1"; shift || true
+    local name="${1:-}"; shift || true
     if [[ -z "${name}" ]]; then
         log_error "wb track: usage: wb track <name> --latest | --branch <b> | --tag <t> | --commit <sha>"
         return 2
     fi
+
+    # A leading '--' means <name> was omitted and the first flag got
+    # captured as the name instead (e.g. 'wb track --latest' with nothing
+    # else). Module names are always repo/directory-derived and never
+    # start with '--', so this check is unambiguous. Without it, a missing
+    # name fell through to "'<flag>' is not registered — run 'wb add
+    # <flag>' first", which sent people to 'wb add --latest' — not even a
+    # valid flag for wb add.
+    if [[ "${name}" == --* ]]; then
+        case "${name}" in
+            --latest|--branch|--tag|--commit)
+                log_error "wb track: missing <name> — did you mean 'wb track <module> ${name}'?"
+                ;;
+            *)
+                log_error "wb track: missing <name> — usage: wb track <name> --latest | --branch <b> | --tag <t> | --commit <sha>"
+                ;;
+        esac
+        return 2
+    fi
+
     if ! workbench_is_registered "${name}"; then
         log_error "wb track: '${name}' is not registered — run 'wb add ${name}' first"
         return 1
