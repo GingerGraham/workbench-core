@@ -41,7 +41,7 @@ warn() { echo "[WARN]  $*" >&2; WARNINGS=$((WARNINGS + 1)); }
 info() { echo "[INFO]  $*"; }
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/manifest/validate.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/manifest/validate.sh" "0.2.0" || true
 
 usage() {
     cat << EOF
