@@ -11,8 +11,10 @@ All notable changes to `workbench-core` are documented here.
   `_npm_global_install`) promoted from `workbench-precursor` to Core API
   surface, registered at `tier: core` in core's own manifest so every
   Wave C module's `install-<name>` functions can rely on them instead of
-  duplicating the file. `CORE_API_VERSION` bumped `1.0` → `1.1`
-  (`contracts/core-api.md`, ARCHITECTURE.md §12 D34).
+  duplicating the file. Also ported `_str_lower` (`lib/core/functions.sh`)
+  — used by multiple Wave C modules but never carried into core's own
+  `functions.sh` during Wave B, a confirmed gap. `CORE_API_VERSION`
+  bumped `1.0` → `1.1` (`contracts/core-api.md`, ARCHITECTURE.md §12 D34).
 - `lib/modules/modules.list`/`bundles.list` populated with real URLs for
   `workbench-git`, `workbench-gpg`, `workbench-ssh`, `workbench-shell` —
   the `workstation`/`server`/`minimal` bundles now resolve. See D34.

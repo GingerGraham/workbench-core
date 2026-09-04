@@ -41,6 +41,8 @@ once core's own `core`-tier registration is sourced:
   `sudo`/`run0` access.
 - `dedupe-path` — removes duplicate `PATH` entries in place, preserving
   first-seen order.
+- `_str_lower <string>` — lowercases via `tr`, bash-3.2/zsh-safe (no
+  `${var,,}`). **New in `CORE_API_VERSION` 1.1.**
 - `detect-package-manager` — sets/exports `PACKAGE_MANAGER` to one of
   `apt`/`dnf`/`yum`/`zypper`/`pacman`/`brew`.
 - `_read_prompt <prompt> <var>` / `_read_prompt_silent <prompt> <var>` —
