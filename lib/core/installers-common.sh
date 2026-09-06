@@ -57,9 +57,11 @@ _download_file_robust() {
 # True if the active node's major version is >= <major>.
 _node_version_at_least() {
     local want="$1" have
+    [[ "${want}" =~ ^[0-9]+$ ]] || { log_error "_node_version_at_least: <major> must be a numeric version, got '${want}'"; return 1; }
     command -v node &>/dev/null || return 1
     have="$(node --version 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/')"
-    [[ -n "${have}" && "${have}" =~ ^[0-9]+$ && "${have}" -ge "${want}" ]]
+    [[ -n "${have}" && "${have}" =~ ^[0-9]+$ ]] || return 1
+    [[ "${have}" -ge "${want}" ]]
 }
 
 # _ensure_npm — ensure npm is usable, preferring nvm. Returns 0 if npm resolves.
@@ -69,7 +71,7 @@ _ensure_npm() {
         return 0
     fi
 
-    if declare -f npm &>/dev/null || declare -f nvm &>/dev/null; then
+    if command -v npm &>/dev/null || command -v nvm &>/dev/null; then
         log_info "Activating nvm to access npm..."
         nvm --version &>/dev/null || true
         command -v npm &>/dev/null && return 0
