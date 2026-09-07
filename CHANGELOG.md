@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-07
+
 ### Added
 
 - `wb scheduler enable|disable|status` — host-wide on/off switch for the

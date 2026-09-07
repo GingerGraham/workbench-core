@@ -274,4 +274,4 @@ _workbench_print_script_versions() {
 }
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/version.sh" "0.3.1" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/version.sh" "0.3.2" || true

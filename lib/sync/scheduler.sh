@@ -30,7 +30,7 @@
 _wb_scheduler_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/sync/scheduler.sh" "0.2.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/sync/scheduler.sh" "0.2.1" || true
 
 # ── persisted on/off state ───────────────────────────────────────────────────
 
