@@ -453,8 +453,11 @@ wb() {
         status|functions|tools|version|help|-h|--help|"") ;;
         *)
             # shellcheck disable=SC1090
-            source "${WORKBENCH_LOADER_PATH}"
-            log_info "wb: reloaded workbench-core in this shell"
+            if source "${WORKBENCH_LOADER_PATH}"; then
+                log_info "wb: reloaded workbench-core in this shell"
+            else
+                log_error "wb: failed to reload workbench-core in this shell"
+            fi
             ;;
     esac
 
