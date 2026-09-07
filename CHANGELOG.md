@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-07
+
 ### Added
 
 - `lib/modules/modules.list` populated with the remaining seven Wave C
