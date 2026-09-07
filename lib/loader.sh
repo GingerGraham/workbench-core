@@ -426,10 +426,24 @@ fi
 # run-if-due`), not something the user ran by hand in this shell.
 wb() {
     if [[ "${1:-}" == "reload" ]]; then
+        # -h/--help still needs the real binary's help text (bin/wb's own
+        # central help interception), not a reload — and any other extra
+        # argument is rejected rather than silently ignored.
+        case "${2:-}" in
+            -h|--help) command wb "$@"; return $? ;;
+        esac
+        if [[ $# -gt 1 ]]; then
+            log_error "wb reload: unexpected argument '${2}'"
+            return 1
+        fi
         # shellcheck disable=SC1090
-        source "${WORKBENCH_LOADER_PATH}"
-        log_info "wb: reloaded workbench-core in this shell"
-        return 0
+        if source "${WORKBENCH_LOADER_PATH}"; then
+            log_info "wb: reloaded workbench-core in this shell"
+            return 0
+        else
+            log_error "wb: failed to reload workbench-core in this shell"
+            return 1
+        fi
     fi
 
     local _wb_wrapper_rc=0

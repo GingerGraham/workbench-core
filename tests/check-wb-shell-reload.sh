@@ -38,9 +38,15 @@ mkdir -p "${CORE_DIR}/snapshots/fixture-0000000/bin"
 INVOKE_LOG="${WORK}/wb-stub-invocations.log"
 cat > "${CORE_DIR}/snapshots/fixture-0000000/bin/wb" <<EOF
 #!/usr/bin/env bash
-echo "\${1:-}" >> "${INVOKE_LOG}"
+echo "\$*" >> "${INVOKE_LOG}"
 case "\${1:-}" in
     update) exit 3 ;;
+    reload)
+        case "\${2:-}" in
+            -h|--help) echo "fake help text: wb reload is a shell function" ;;
+        esac
+        exit 0
+        ;;
     *) exit 0 ;;
 esac
 EOF
@@ -127,6 +133,45 @@ if [[ ! -s "${INVOKE_LOG}" ]]; then
 else
     fail "'wb reload' unexpectedly reached the real binary"
     cat "${INVOKE_LOG}"
+fi
+
+# ── 4b. 'wb reload --help'/'-h' show help instead of reloading (they must
+#    reach bin/wb's own central help interception, not the reload branch) ──
+: > "${INVOKE_LOG}"
+unset WORKBENCH_OS
+HELP_OUT="$(wb reload --help 2>&1)"
+if [[ -z "${WORKBENCH_OS:-}" ]] && echo "${HELP_OUT}" | grep -qi "shell function"; then
+    ok "'wb reload --help' shows help instead of reloading"
+else
+    fail "'wb reload --help' did not show help as expected"
+    echo "${HELP_OUT}"
+fi
+if [[ "$(cat "${INVOKE_LOG}")" == "reload --help" ]]; then
+    ok "'wb reload --help' reached the real binary (for its help text), exactly once"
+else
+    fail "'wb reload --help' did not reach the real binary as expected"
+    cat "${INVOKE_LOG}"
+fi
+
+: > "${INVOKE_LOG}"
+unset WORKBENCH_OS
+HELP_OUT_SHORT="$(wb reload -h 2>&1)"
+if [[ -z "${WORKBENCH_OS:-}" ]] && [[ "${HELP_OUT_SHORT}" == "${HELP_OUT}" ]]; then
+    ok "'wb reload -h' agrees with 'wb reload --help' and does not reload"
+else
+    fail "'wb reload -h' did not agree with 'wb reload --help'"
+    echo "${HELP_OUT_SHORT}"
+fi
+
+# ── 4c. An unexpected extra argument is rejected, not silently ignored ─────
+: > "${INVOKE_LOG}"
+unset WORKBENCH_OS
+wb reload bogus-extra-arg >/dev/null 2>&1
+rc_extra=$?
+if [[ "${rc_extra}" -ne 0 && -z "${WORKBENCH_OS:-}" ]]; then
+    ok "'wb reload <extra arg>' is rejected instead of silently reloading"
+else
+    fail "'wb reload <extra arg>' was not rejected as expected (rc=${rc_extra}, WORKBENCH_OS='${WORKBENCH_OS:-}')"
 fi
 
 # ── 5. The real binary itself explains 'reload' if invoked directly
