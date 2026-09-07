@@ -28,6 +28,21 @@ All notable changes to `workbench-core` are documented here.
   `lib/manifest/parse.sh`/`validate.sh`), and keeping an unread second copy
   of the same fact implied it did something it never did. See
   `ARCHITECTURE.md` §12 D37.
+- Fixed: the scheduled-sync OS timer (systemd `--user` timer on
+  Linux/WSL2, launchd agent on macOS) depended entirely on
+  `ansible-playbook` being installed — `wb install`/`wb apply` silently
+  skipped scheduled-sync setup on any host without it, with `wb sync
+  enable <module>` reporting a false-positive "already true — no-op" the
+  whole time, since it only ever checked the `SYNC_ENABLED` config flag,
+  never the OS timer's actual existence. Confirmed on a real host, not
+  hypothetical. Moved timer install out of the Ansible `module_sync` role
+  entirely into `lib/sync/scheduler.sh` (`workbench_scheduler_install`),
+  called unconditionally from `wb install`/`wb apply` on every platform,
+  independent of whether Ansible is present at all — matches the sync
+  engine's own existing zero-Ansible-dependency hot path (§9.1). Unit/plist
+  content and the fixed 5-minute poll design are otherwise unchanged from
+  the Ansible-era templates. See `ARCHITECTURE.md` §12 D38,
+  `tests/check-scheduler-install.sh`.
 
 ## [1.3.0] - 2026-09-07
 

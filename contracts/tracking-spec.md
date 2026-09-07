@@ -67,7 +67,7 @@ One shared interval, **recomputed fresh on every check** — weekly
 module (core included) is `branch:`-tracked, reverting the moment none are.
 
 The OS-level scheduling primitive (systemd timer / launchd agent — see
-`ansible/roles/module_sync/templates/{systemd,launchd}/`) is a **fixed**
+`lib/sync/scheduler.sh`) is a **fixed**
 5-minute poll that never itself changes: it invokes `wb sync run-if-due`
 every 5 minutes unconditionally, and `lib/sync/engine.sh`'s
 `workbench_sync_due()` decides in userspace whether this firing should

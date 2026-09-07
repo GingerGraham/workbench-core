@@ -42,6 +42,7 @@ for _wb_f in \
     sync/engine.sh \
     core/tools.sh \
     ssh/bootstrap.sh \
+    sync/scheduler.sh \
     modules/catalog.sh modules/add.sh modules/remove.sh modules/track.sh modules/dev.sh modules/sync-toggle.sh \
     ; do
     # shellcheck disable=SC1090
@@ -323,6 +324,7 @@ _wb_cmd_install() {
     fi
 
     workbench_ssh_bootstrap_all
+    workbench_scheduler_install
 
     if [[ "${skip_ansible}" == "true" ]]; then
         log_warn "wb install: --skip-ansible given — skipping the Ansible convergence step (host_vars templating etc.), regardless of whether ansible-playbook is available. The shell itself is already fully bootstrapped."
@@ -695,14 +697,19 @@ Usage: wb install [--bundle <name>] [--skip-ansible]
 First-run convergence for this host: checks/installs shell prerequisites,
 bootstraps the core module itself, symlinks 'wb' onto PATH, writes the
 shell rc loader stub, provisions SSH deploy keys for any private modules,
-and (unless --skip-ansible is given, or ansible-playbook isn't found)
-runs the Ansible convergence pass.
+installs/refreshes the OS-level scheduled-sync timer (systemd --user timer
+on Linux/WSL2, launchd agent on macOS — independent of Ansible), and
+(unless --skip-ansible is given, or ansible-playbook isn't found) runs the
+Ansible convergence pass for whatever else it still covers (host_vars
+templating etc.).
 
   --bundle <name>   Also register every module in the named bundle (the
                       known-modules catalog) before converging — equivalent
                       to one 'wb add' call per bundle member.
   --skip-ansible    Skip the Ansible convergence step even if
-                      ansible-playbook is available.
+                      ansible-playbook is available. Does not affect the
+                      scheduled-sync timer install, which never depended
+                      on Ansible.
 
 Confused with 'wb apply'? Same convergence — 'wb install' is the first-run
 entry point (and accepts --bundle); 'wb apply' is a literal alias for
@@ -717,10 +724,12 @@ Usage: wb apply [--skip-ansible]
 Re-runs the exact same convergence as 'wb install' (it is a literal
 alias), minus --bundle — use this to re-converge a host after a manual
 change, after installing Ansible, or any time you want the PATH
-symlink/rc stub/prereqs/Ansible state re-checked.
+symlink/rc stub/prereqs/scheduled-sync timer/Ansible state re-checked.
 
   --skip-ansible    Skip the Ansible convergence step even if
-                      ansible-playbook is available.
+                      ansible-playbook is available. Does not affect the
+                      scheduled-sync timer install, which never depended
+                      on Ansible.
 
 'wb update core' already calls this automatically — with --skip-ansible
 when the background timer detected the change, without it when a human
