@@ -114,6 +114,30 @@ wb tools list                      # what install-* functions are available
 wb version                         # release version + every loaded file's version
 ```
 
+## Scheduled sync
+
+By default, nothing runs in the background — `wb update`/`wb apply` only
+happen when you run them. If you'd rather modules stay current on their
+own, turn on the host-wide OS timer (a systemd `--user` timer on
+Linux/WSL2, a launchd agent on macOS) that polls every 5 minutes and lets
+the sync engine decide, in userspace, whether anything is actually due:
+
+```sh
+wb scheduler enable     # turn scheduled sync on for this host, right now
+wb scheduler status     # is it enabled, and is the OS timer actually active
+wb scheduler disable    # turn it off and remove the installed timer/agent
+```
+
+This is a separate, host-wide switch from `wb sync enable|disable
+[<name>]` — that one controls which *registered modules* a running timer
+is allowed to touch; `wb scheduler enable|disable` controls whether the
+timer runs at all. Both need to be "on" for a given module to ever sync
+in the background. If you'd previously gotten scheduled sync via this
+project's Ansible integration, upgrading to a core release with this
+built-in timer preserves that as enabled automatically the first time you
+run `wb apply` — you don't need to re-run `wb scheduler enable` yourself
+unless you'd rather turn it off.
+
 ## Personal shell overrides
 
 `wb install`/`wb apply` create `~/.config/workbench/local/settings.sh` for

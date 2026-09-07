@@ -23,7 +23,7 @@ else
     fail "version-defaults.conf missing"
 fi
 
-for key in CORE_API_VERSION MANIFEST_SCHEMA_VERSION STATE_SCHEMA_VERSION WORKBENCH_CORE_SEMVER; do
+for key in CORE_API_VERSION STATE_SCHEMA_VERSION WORKBENCH_CORE_SEMVER; do
     if grep -q "^${key}=" "${REPO_ROOT}/lib/core/version-defaults.conf" 2>/dev/null; then
         ok "version-defaults.conf declares ${key}"
     else

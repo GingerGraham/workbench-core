@@ -127,3 +127,19 @@ Three independent values (the first, `CORE_API_VERSION`, is itself `X.Y`,
 not a bare integer — see D29) in `~/.config/workbench/core/version` —
 see `contracts/state-schema.md` for the full file shape and
 `lib/core/semver.sh` for the range-satisfaction check.
+
+`CORE_API_VERSION` is unconditionally resynced to the currently-running
+release's value on every `wb install`/`wb apply`
+(`_workbench_sync_version_facts`, `lib/core/version.sh`) — it states only
+what the running code provides, with no side effect to sequence, so an
+existing host is never allowed to lag a fresh install (ARCHITECTURE.md §12
+D36). `STATE_SCHEMA_VERSION` keeps its separate, deliberate
+migrate-then-advance semantics (`_workbench_migrate_state_schema`),
+unchanged — it asserts a claim about the shape of other on-disk files, so
+advancing it has to be sequenced with that shape's own migration.
+
+The version file previously also carried a `MANIFEST_SCHEMA_VERSION`
+field; it has been retired (ARCHITECTURE.md §12 D37) — its getter had zero
+callers, and real manifest-schema-version enforcement was always the
+separate, hardcoded `_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED` constant
+(`lib/manifest/parse.sh`/`validate.sh`).

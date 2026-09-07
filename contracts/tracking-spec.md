@@ -67,7 +67,7 @@ One shared interval, **recomputed fresh on every check** — weekly
 module (core included) is `branch:`-tracked, reverting the moment none are.
 
 The OS-level scheduling primitive (systemd timer / launchd agent — see
-`ansible/roles/module_sync/templates/{systemd,launchd}/`) is a **fixed**
+`lib/sync/scheduler.sh`) is a **fixed**
 5-minute poll that never itself changes: it invokes `wb sync run-if-due`
 every 5 minutes unconditionally, and `lib/sync/engine.sh`'s
 `workbench_sync_due()` decides in userspace whether this firing should
@@ -83,6 +83,15 @@ weekly.
 
 `wb update [<name>]` bypasses `workbench_sync_due()` entirely — always
 runs immediately, regardless of cadence state.
+
+**Opt-in, host-wide, default OFF (§12 D38):** the OS timer/agent above is
+never installed automatically. `wb scheduler enable|disable|status`
+controls it explicitly, separate from — and required in addition to —
+each module's own `SYNC_ENABLED` (`wb sync enable|disable [<name>]`). A
+host upgrading from an Ansible-installed timer that predates D38 has its
+existing enabled state carried forward once, automatically, rather than
+silently losing it (`_workbench_scheduler_migrate_existing_install`,
+`lib/sync/scheduler.sh`).
 
 ## Persistence & `WORKBENCH_TRACK_<MODULE>` (§9.5/D7)
 

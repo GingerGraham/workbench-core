@@ -15,7 +15,6 @@ to be loadable to check it:
 
 ```
 CORE_API_VERSION=1.1
-MANIFEST_SCHEMA_VERSION=1
 STATE_SCHEMA_VERSION=2
 WORKBENCH_CORE_SEMVER=0.1.0
 ```
@@ -25,7 +24,13 @@ is `X.Y`, not a bare integer — see ARCHITECTURE.md §12 D29).
 `STATE_SCHEMA_VERSION` bumped `1` → `2` when `installers.list` (below) was
 added — purely additive, so an existing `1` value on disk is migrated to
 `2` in place by `wb install`/`wb apply` (`_workbench_migrate_state_schema`),
-never left stale.
+never left stale. `CORE_API_VERSION` is unconditionally resynced to the
+running release's value on every `wb install`/`wb apply`
+(`_workbench_sync_version_facts`) rather than migrated — see
+`contracts/core-api.md`'s Versioning section (ARCHITECTURE.md §12 D36). A
+fourth field, `MANIFEST_SCHEMA_VERSION`, previously lived here but has
+been retired as dead (ARCHITECTURE.md §12 D37) — `wb apply` strips it from
+any existing host's file.
 
 ## Module state root
 

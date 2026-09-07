@@ -4,6 +4,57 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- `wb scheduler enable|disable|status` — host-wide on/off switch for the
+  OS-level scheduled-sync timer, separate from and layered underneath the
+  existing per-module `wb sync enable|disable [<name>]`. **Off by
+  default** — no background timer is ever written to a host's disk, or
+  handed to systemd/launchd, without an explicit `wb scheduler enable`.
+
+### Fixed
+
+- Fixed: an existing host's `CORE_API_VERSION` (in
+  `~/.config/workbench/core/version`) stayed frozen at its
+  original-bootstrap value forever, since `_workbench_ensure_version_file`
+  correctly never overwrites an existing file and nothing else ever
+  advanced it — permanently refusing any module whose declared `core_api`
+  floor rose past that frozen value on every subsequent core release, with
+  no self-healing path short of a manual file edit. Unlike
+  `STATE_SCHEMA_VERSION` (which asserts a claim about the shape of other
+  on-disk files and rightly needs a deliberate, sequenced migration step),
+  `CORE_API_VERSION` states only what the currently-running release
+  provides — a pure fact with no side effect to sequence. Fixed by
+  unconditionally resyncing it to `_WB_CORE_API_VERSION_CURRENT` on every
+  `wb install`/`wb apply` (`_workbench_sync_version_facts`,
+  `lib/core/version.sh`) — the same discipline D21 already gave
+  `register.list`/`installers.list`. See `ARCHITECTURE.md` §12 D36,
+  `tests/check-version-file-sync.sh`.
+- Removed the dead `MANIFEST_SCHEMA_VERSION` version-file field — its
+  getter had zero callers; real manifest-schema enforcement was always a
+  separate, hardcoded constant (`_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED`,
+  `lib/manifest/parse.sh`/`validate.sh`), and keeping an unread second copy
+  of the same fact implied it did something it never did. See
+  `ARCHITECTURE.md` §12 D37.
+- Fixed: the scheduled-sync OS timer (systemd `--user` timer on
+  Linux/WSL2, launchd agent on macOS) depended entirely on
+  `ansible-playbook` being installed — `wb install`/`wb apply` silently
+  skipped scheduled-sync setup on any host without it, with `wb sync
+  enable <module>` reporting a false-positive "already true — no-op" the
+  whole time, since it only ever checked the `SYNC_ENABLED` config flag,
+  never the OS timer's actual existence. Confirmed on a real host, not
+  hypothetical. Moved timer install out of the Ansible `module_sync` role
+  entirely into `lib/sync/scheduler.sh` (`workbench_scheduler_install`),
+  independent of whether Ansible is present at all, and gated behind the
+  new opt-in `wb scheduler enable|disable` switch above — **off by
+  default**, so nothing is written to systemd/launchd without an explicit
+  choice. A host with an already-working Ansible-installed timer from
+  before this change has that state carried forward automatically on
+  first upgrade, rather than silently losing it. Unit/plist content and
+  the fixed 5-minute poll design are otherwise unchanged from the
+  Ansible-era templates. See `ARCHITECTURE.md` §12 D38,
+  `tests/check-scheduler-install.sh`.
+
 ## [1.3.0] - 2026-09-07
 
 ### Added

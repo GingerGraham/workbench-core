@@ -46,6 +46,15 @@ set --
 # shellcheck source=bin/wb
 source "${WB}" >/tmp/wb-core-auto-apply-source.log 2>&1
 
+# 'wb sync run-if-due' is gated behind the opt-in, default-off scheduler
+# switch (ARCHITECTURE.md §12 D38) — orthogonal to what this suite tests
+# (the convergence-trigger logic once a firing actually proceeds), so flip
+# the persisted flag directly rather than going through
+# workbench_scheduler_cmd_enable, which would also try to touch a real
+# systemd/launchd on this host. See tests/check-scheduler-install.sh for
+# coverage of the on/off switch itself.
+_workbench_scheduler_conf_set SCHEDULER_ENABLED true
+
 # ── Stub _wb_cmd_apply: records every invocation's args, returns
 #    APPLY_EXIT. Redefining it after sourcing is safe — bash functions are
 #    just the last definition standing. ─────────────────────────────────────
