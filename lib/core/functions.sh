@@ -121,6 +121,16 @@ dedupe-path() {
     export PATH="$(echo "${PATH}" | tr ':' '\n' | awk '!seen[$0]++' | tr '\n' ':' | sed 's/:$//')"
 }
 
+# ── String helpers ─────────────────────────────────────────────────────────
+# _str_lower <string>
+# Lowercases via `tr`, not `${var,,}` — the latter is a bash-4+-only
+# construct (ARCHITECTURE.md §7 item 11) and breaks on bash 3.2/zsh. Ported
+# from workbench-precursor's core/functions.sh — used across multiple Wave
+# C modules (workbench-git, workbench-gpg, workbench-security) for
+# case-insensitive comparisons, so it belongs in Core API rather than each
+# module carrying its own copy.
+_str_lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+
 # ── Package manager detection ─────────────────────────────────────────────
 detect-package-manager() {
     if command -v apt     &>/dev/null; then PACKAGE_MANAGER="apt"

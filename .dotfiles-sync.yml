@@ -19,3 +19,5 @@ register:
       tier: core
     - src: lib/core/version.sh
       tier: core
+    - src: lib/core/installers-common.sh
+      tier: core

@@ -2,11 +2,9 @@
 #
 # Pure sugar over repeated `wb add` calls (ARCHITECTURE.md principle 4,
 # §10) — `wb install --bundle workstation` is exactly equivalent to one
-# `wb add` call per listed name, nothing more. Empty of resolvable members
-# until the modules.list catalog in this same directory is populated
-# (Wave C); mirrors the three `dotfiles` profiles for continuity.
-#
-# Example (uncomment once the referenced modules exist in modules.list):
-# workstation|git,gpg,ssh,shell
-# server|git,ssh,shell
-# minimal|git,ssh
+# `wb add` call per listed name, nothing more. Mirrors the three `dotfiles`
+# profiles for continuity, now that modules.list (Wave C, §12 D34) has
+# real entries for all four members below.
+workstation|git,gpg,ssh,shell
+server|git,ssh,shell
+minimal|git,ssh

@@ -43,7 +43,7 @@ rc=0
     source "${REPO_ROOT}/lib/core/version.sh"
     _workbench_ensure_version_file
     [[ -f "${TMP_XDG}/workbench/core/version" ]] || exit 1
-    [[ "$(_workbench_core_api_version)" == "1.0" ]] || exit 1
+    [[ "$(_workbench_core_api_version)" == "1.1" ]] || exit 1
     [[ "$(_workbench_core_semver)" == "0.1.0" ]] || exit 1
 ) || rc=$?
 if [[ "${rc}" -eq 0 ]]; then
