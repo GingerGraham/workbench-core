@@ -4,6 +4,15 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- `lib/modules/modules.list` populated with the remaining seven Wave C
+  ecosystem modules (`cloud`/`iac`/`containers`/`security`/`ai`/`desktop`/
+  `devtools`), now that each has landed its own decomposition PR — `wb add
+  <name>` resolves all eleven catalogued modules without an explicit
+  `--url` (ARCHITECTURE.md §12 D35). `lib/modules/bundles.list` is
+  unchanged; see D35 for why.
+
 ## [1.2.0] - 2026-09-07
 
 ### Added

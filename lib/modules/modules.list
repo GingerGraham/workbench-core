@@ -1,14 +1,17 @@
 # Known-modules catalog — <name>|<url>|<private:true|false>
 #
-# Populated at Wave C (ARCHITECTURE.md §10/§11, §12 D34) as each ecosystem
-# module's repo lands. `wb add <name>` still works for any name by passing
-# a url explicitly; this file only saves typing the url once a module is
-# listed here.
+# Populated at Wave C (ARCHITECTURE.md §10/§11, §12 D34/D35) as each
+# ecosystem module's repo lands. `wb add <name>` still works for any name
+# by passing a url explicitly; this file only saves typing the url once a
+# module is listed here.
 git|https://github.com/GingerGraham/workbench-git.git|false
 gpg|https://github.com/GingerGraham/workbench-gpg.git|false
 ssh|https://github.com/GingerGraham/workbench-ssh.git|false
 shell|https://github.com/GingerGraham/workbench-shell.git|false
-#
-# Not yet added — pending their own decomposition PRs (see the Wave C
-# module map): workbench-cloud, workbench-iac, workbench-containers,
-# workbench-security, workbench-ai, workbench-desktop, workbench-devtools.
+cloud|https://github.com/GingerGraham/workbench-cloud.git|false
+iac|https://github.com/GingerGraham/workbench-iac.git|false
+containers|https://github.com/GingerGraham/workbench-containers.git|false
+security|https://github.com/GingerGraham/workbench-security.git|false
+ai|https://github.com/GingerGraham/workbench-ai.git|false
+desktop|https://github.com/GingerGraham/workbench-desktop.git|false
+devtools|https://github.com/GingerGraham/workbench-devtools.git|false
