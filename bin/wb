@@ -90,6 +90,11 @@ SETUP & HOST-LEVEL CONVERGENCE
                                interactively. 'wb update core' already
                                triggers this automatically when core
                                changes — run by hand for anything else.
+  scheduler enable|disable|status
+                               Turn the OS-level scheduled-sync timer on/off
+                               for this whole host. OFF by default — see
+                               'wb sync enable|disable [<name>]' for the
+                               per-module layer underneath it.
 
 MANAGING MODULES
   add <name> [url] [--private] [--allow-hooks]
@@ -397,6 +402,10 @@ _wb_cmd_sync() {
     case "${sub}" in
         enable|disable) workbench_cmd_sync_toggle "${sub}" "$@" ;;
         run-if-due)
+            if ! workbench_scheduler_enabled; then
+                log_debug "wb sync run-if-due: scheduled sync is disabled — no-op"
+                return 0
+            fi
             log_debug "wb sync run-if-due: workbench-core release $(_workbench_release_version), bin/wb v0.1.0"
             if workbench_sync_due; then
                 local core_sha_before
@@ -409,6 +418,20 @@ _wb_cmd_sync() {
             ;;
         *)
             log_error "wb sync: usage: wb sync enable|disable [<name>] | wb sync run-if-due"
+            return 2
+            ;;
+    esac
+}
+
+# ── scheduler ──────────────────────────────────────────────────────────────
+_wb_cmd_scheduler() {
+    local sub="${1:-}"; shift || true
+    case "${sub}" in
+        enable)  workbench_scheduler_cmd_enable ;;
+        disable) workbench_scheduler_cmd_disable ;;
+        status)  workbench_scheduler_cmd_status ;;
+        *)
+            log_error "wb scheduler: usage: wb scheduler enable|disable|status"
             return 2
             ;;
     esac
@@ -697,19 +720,18 @@ Usage: wb install [--bundle <name>] [--skip-ansible]
 First-run convergence for this host: checks/installs shell prerequisites,
 bootstraps the core module itself, symlinks 'wb' onto PATH, writes the
 shell rc loader stub, provisions SSH deploy keys for any private modules,
-installs/refreshes the OS-level scheduled-sync timer (systemd --user timer
-on Linux/WSL2, launchd agent on macOS — independent of Ansible), and
-(unless --skip-ansible is given, or ansible-playbook isn't found) runs the
-Ansible convergence pass for whatever else it still covers (host_vars
-templating etc.).
+refreshes the OS-level scheduled-sync timer IF it's already enabled (OFF
+by default — see 'wb scheduler enable'; never installed automatically),
+and (unless --skip-ansible is given, or ansible-playbook isn't found)
+runs the Ansible convergence pass for whatever else it still covers
+(host_vars templating etc.).
 
   --bundle <name>   Also register every module in the named bundle (the
                       known-modules catalog) before converging — equivalent
                       to one 'wb add' call per bundle member.
   --skip-ansible    Skip the Ansible convergence step even if
                       ansible-playbook is available. Does not affect the
-                      scheduled-sync timer install, which never depended
-                      on Ansible.
+                      scheduled-sync timer, which never depended on Ansible.
 
 Confused with 'wb apply'? Same convergence — 'wb install' is the first-run
 entry point (and accepts --bundle); 'wb apply' is a literal alias for
@@ -724,12 +746,12 @@ Usage: wb apply [--skip-ansible]
 Re-runs the exact same convergence as 'wb install' (it is a literal
 alias), minus --bundle — use this to re-converge a host after a manual
 change, after installing Ansible, or any time you want the PATH
-symlink/rc stub/prereqs/scheduled-sync timer/Ansible state re-checked.
+symlink/rc stub/prereqs/scheduled-sync timer (if enabled)/Ansible state
+re-checked.
 
   --skip-ansible    Skip the Ansible convergence step even if
                       ansible-playbook is available. Does not affect the
-                      scheduled-sync timer install, which never depended
-                      on Ansible.
+                      scheduled-sync timer, which never depended on Ansible.
 
 'wb update core' already calls this automatically — with --skip-ansible
 when the background timer detected the change, without it when a human
@@ -829,6 +851,35 @@ snapshot) regardless of what TRACK_MODE it's set to.
 EOF
 }
 
+_wb_help_scheduler() {
+    cat <<'EOF'
+Usage: wb scheduler enable|disable|status
+
+Controls whether the OS-level scheduled-sync timer (systemd --user timer
+on Linux/WSL2, launchd agent on macOS) exists on this host at all — a
+separate, host-wide layer underneath 'wb sync enable|disable [<name>]'.
+
+  enable     Turns scheduled sync on for this host and installs/starts the
+              timer immediately (no separate 'wb apply' needed). OFF by
+              default (ARCHITECTURE.md §12 D38) — nothing is ever written
+              to systemd/launchd, or run in the background, until you run
+              this once.
+  disable    Turns scheduled sync off and immediately removes the
+              installed timer/agent — not just "stops reinstalling it on
+              the next wb apply".
+  status     Whether scheduled sync is enabled on this host, and (if so)
+              whether the OS timer is actually active right now.
+
+Confused with 'wb sync enable|disable [<name>]'? That one is per-MODULE:
+which modules a *running* timer is allowed to touch. This one is the
+timer's own on/off switch for the whole host. Both must be "on" — this
+enabled, AND a given module's own sync enabled — for that module to ever
+be touched automatically. 'wb apply' never installs, upgrades, or removes
+the timer on its own initiative; it only ever refreshes an
+already-enabled one, and does nothing at all while disabled.
+EOF
+}
+
 _wb_help_functions() {
     cat <<'EOF'
 Usage: wb functions
@@ -916,6 +967,7 @@ _wb_cmd_help() {
         track)     _wb_help_track ;;
         dev)       _wb_help_dev ;;
         sync)      _wb_help_sync ;;
+        scheduler) _wb_help_scheduler ;;
         version)   _wb_help_version ;;
         help)      _wb_help_help ;;
         *)
@@ -948,6 +1000,7 @@ case "${_wb_cmd}" in
     track)     workbench_cmd_track "$@" ;;
     dev)       workbench_cmd_dev "$@" ;;
     sync)      _wb_cmd_sync "$@" ;;
+    scheduler) _wb_cmd_scheduler "$@" ;;
     update)    _wb_cmd_update "$@" ;;
     status)    _wb_cmd_status "$@" ;;
     functions) _wb_cmd_functions "$@" ;;

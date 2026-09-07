@@ -4,6 +4,14 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- `wb scheduler enable|disable|status` — host-wide on/off switch for the
+  OS-level scheduled-sync timer, separate from and layered underneath the
+  existing per-module `wb sync enable|disable [<name>]`. **Off by
+  default** — no background timer is ever written to a host's disk, or
+  handed to systemd/launchd, without an explicit `wb scheduler enable`.
+
 ### Fixed
 
 - Fixed: an existing host's `CORE_API_VERSION` (in
@@ -37,11 +45,14 @@ All notable changes to `workbench-core` are documented here.
   never the OS timer's actual existence. Confirmed on a real host, not
   hypothetical. Moved timer install out of the Ansible `module_sync` role
   entirely into `lib/sync/scheduler.sh` (`workbench_scheduler_install`),
-  called unconditionally from `wb install`/`wb apply` on every platform,
-  independent of whether Ansible is present at all — matches the sync
-  engine's own existing zero-Ansible-dependency hot path (§9.1). Unit/plist
-  content and the fixed 5-minute poll design are otherwise unchanged from
-  the Ansible-era templates. See `ARCHITECTURE.md` §12 D38,
+  independent of whether Ansible is present at all, and gated behind the
+  new opt-in `wb scheduler enable|disable` switch above — **off by
+  default**, so nothing is written to systemd/launchd without an explicit
+  choice. A host with an already-working Ansible-installed timer from
+  before this change has that state carried forward automatically on
+  first upgrade, rather than silently losing it. Unit/plist content and
+  the fixed 5-minute poll design are otherwise unchanged from the
+  Ansible-era templates. See `ARCHITECTURE.md` §12 D38,
   `tests/check-scheduler-install.sh`.
 
 ## [1.3.0] - 2026-09-07

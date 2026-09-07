@@ -84,6 +84,15 @@ weekly.
 `wb update [<name>]` bypasses `workbench_sync_due()` entirely — always
 runs immediately, regardless of cadence state.
 
+**Opt-in, host-wide, default OFF (§12 D38):** the OS timer/agent above is
+never installed automatically. `wb scheduler enable|disable|status`
+controls it explicitly, separate from — and required in addition to —
+each module's own `SYNC_ENABLED` (`wb sync enable|disable [<name>]`). A
+host upgrading from an Ansible-installed timer that predates D38 has its
+existing enabled state carried forward once, automatically, rather than
+silently losing it (`_workbench_scheduler_migrate_existing_install`,
+`lib/sync/scheduler.sh`).
+
 ## Persistence & `WORKBENCH_TRACK_<MODULE>` (§9.5/D7)
 
 `sync.conf`'s `TRACK_MODE`/`TRACK_REF`/`RESOLVED_SHA` is the sole persistent
