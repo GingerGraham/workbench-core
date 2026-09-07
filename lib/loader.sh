@@ -63,6 +63,15 @@ fi
 # ── Locate our own lib/ root (this file's directory) ─────────────────────────
 _wb_loader_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
+# WORKBENCH_LOADER_PATH (ARCHITECTURE.md §12 D39) — this file's own full
+# path, exported so the `wb` shell-function wrapper defined near the
+# bottom of this file (and its `wb reload` pseudo-command) can re-source
+# it without recomputing the path `_wb_write_rc_stub`'s rc-stub line
+# already embeds, from a shell where `_wb_loader_lib_dir` itself may since
+# have gone out of scope (it's unset at the end of every source pass,
+# below).
+export WORKBENCH_LOADER_PATH="${_wb_loader_lib_dir}/loader.sh"
+
 # shellcheck source=lib/sync/state.sh
 [[ -f "${_wb_loader_lib_dir}/sync/state.sh" ]] && source "${_wb_loader_lib_dir}/sync/state.sh"
 
@@ -377,6 +386,66 @@ if [[ "${WORKBENCH_USER_EXT_ENABLED}" == "true" ]]; then
         "${WORKBENCH_USER_EXT_DIR}" \
         "${XDG_CACHE_HOME:-${HOME}/.cache}/workbench/user-ext.stamp"
 fi
+
+# ── Interactive `wb` wrapper: auto-reload after state-changing commands ──────
+# (ARCHITECTURE.md §12 D39)
+#
+# A subprocess (the real `bin/wb` binary) cannot alter its parent shell's
+# functions/environment — Unix process semantics, not a workbench bug (see
+# the debugging session this decision is built on: register.list was
+# already correctly rendered, `wb functions` already listed the content
+# correctly — it just was never sourced into the *already-open* shell that
+# ran the update). The only way `wb apply`/`wb update` (etc.) can make
+# freshly-registered content callable in the same shell the user just ran
+# them from, rather than only in the next new shell, is a shell function
+# of the same name that runs the real binary via `command` and then
+# re-sources this file itself in the caller's own shell — the same
+# "activate" pattern tools like nvm/rbenv/direnv already use for exactly
+# this constraint.
+#
+# `command wb` bypasses this function (and any alias), reaching
+# ~/.local/bin/wb → core's real bin/wb, so there is no recursion.
+#
+# Every subcommand that can change what's registered/loadable reloads
+# unconditionally afterwards — deliberately not conditioned on "did
+# anything actually change" (same reasoning as D21's unconditional,
+# idempotent register.list render: re-sourcing this file is already
+# idempotent by design, so a needless reload after a genuine no-op update
+# is a cheap no-op itself, not a bug worth guarding against). The handful
+# of purely-informational subcommands are excluded below since reloading
+# after them would be pointless, not because it would be unsafe — any
+# future subcommand not in that list defaults to reloading, which is the
+# safe direction to default in (a missed addition here just costs one
+# harmless extra reload, not a silently-stale shell again).
+#
+# `wb reload` itself is a pseudo-command that only exists as this function
+# — it is never forwarded to the real binary (bin/wb's own `reload)` case
+# exists only to explain that, for anyone who reaches it before this
+# wrapper is in scope). It covers the one case the wrapper above doesn't:
+# content that changed via the background scheduled-sync timer (`wb sync
+# run-if-due`), not something the user ran by hand in this shell.
+wb() {
+    if [[ "${1:-}" == "reload" ]]; then
+        # shellcheck disable=SC1090
+        source "${WORKBENCH_LOADER_PATH}"
+        log_info "wb: reloaded workbench-core in this shell"
+        return 0
+    fi
+
+    local _wb_wrapper_rc=0
+    command wb "$@" || _wb_wrapper_rc=$?
+
+    case "${1:-}" in
+        status|functions|tools|version|help|-h|--help|"") ;;
+        *)
+            # shellcheck disable=SC1090
+            source "${WORKBENCH_LOADER_PATH}"
+            log_info "wb: reloaded workbench-core in this shell"
+            ;;
+    esac
+
+    return "${_wb_wrapper_rc}"
+}
 
 # ── PATH deduplication ────────────────────────────────────────────────────────
 command -v dedupe-path &>/dev/null && dedupe-path 2>/dev/null

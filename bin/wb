@@ -950,6 +950,22 @@ this process.
 EOF
 }
 
+_wb_help_reload() {
+    cat <<'EOF'
+Usage: wb reload
+
+Re-sources workbench-core in *this* shell without running a real sync —
+useful right after the background scheduled-sync timer changed something
+you didn't run by hand. Only exists as a shell function, defined by
+lib/loader.sh (ARCHITECTURE.md §12 D39): every shell that's sourced it
+already gets this and every state-changing 'wb' command (update, apply,
+add, remove, track, dev, sync) auto-reloading after itself, with no
+separate step needed. If you're seeing an error instead of this text,
+that wrapper isn't in scope yet — run 'source ~/.bashrc' or open a new
+shell once.
+EOF
+}
+
 _wb_help_help() {
     cat <<'EOF'
 Usage: wb help [<command>]  |  wb <command> --help  |  wb <command> -h
@@ -983,6 +999,7 @@ _wb_cmd_help() {
         scheduler) _wb_help_scheduler ;;
         version)   _wb_help_version ;;
         help)      _wb_help_help ;;
+        reload)    _wb_help_reload ;;
         *)
             echo "wb help: unknown command '${cmd}'"
             echo
@@ -1020,6 +1037,10 @@ case "${_wb_cmd}" in
     tools)     _wb_cmd_tools "$@" ;;
     version)   _wb_cmd_version "$@" ;;
     help)      _wb_cmd_help "$@" ;;
+    reload)
+        log_error "wb reload: this only works as a shell function, defined by lib/loader.sh — a subprocess (this one) can't reload its own parent shell. Either you're not in a shell that's sourced lib/loader.sh yet, or this host predates this wrapper (ARCHITECTURE.md §12 D39). Run 'source ~/.bashrc' (or open a new shell) once — 'wb reload' and every state-changing 'wb' command will auto-reload from then on."
+        exit 1
+        ;;
     -h|--help|"") _wb_usage ;;
     *)
         echo "wb: unknown command '${_wb_cmd}'" >&2
