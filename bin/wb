@@ -402,6 +402,19 @@ _wb_cmd_sync() {
     case "${sub}" in
         enable|disable) workbench_cmd_sync_toggle "${sub}" "$@" ;;
         run-if-due)
+            # The one-time upgrade-safety migration normally runs inside
+            # workbench_scheduler_install (wb install/wb apply). But a host
+            # can auto-update core entirely through its own already-active
+            # OS timer firing run-if-due — nobody ever runs `wb apply` by
+            # hand — and core's own auto-reconvergence (which would
+            # otherwise reach workbench_scheduler_install) lives BELOW this
+            # gate. Without running the migration here too, a pre-existing
+            # Ansible-era timer would get silently and permanently gated
+            # off the first time scheduler.conf doesn't exist yet: this
+            # firing no-ops before ever syncing core, so the apply that
+            # would perform the migration never happens either. Cheap
+            # no-op on every later call once scheduler.conf exists.
+            _workbench_scheduler_migrate_existing_install
             if ! workbench_scheduler_enabled; then
                 log_debug "wb sync run-if-due: scheduled sync is disabled — no-op"
                 return 0

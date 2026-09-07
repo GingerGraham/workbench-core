@@ -83,13 +83,21 @@ workbench_scheduler_enabled() {
 # ── one-time upgrade-safety migration ───────────────────────────────────────
 
 # _workbench_scheduler_migrate_existing_install
-# Called once, before every workbench_scheduler_install attempt. A host
-# that already had a working Ansible-installed timer/agent before D38
-# shipped must not have it silently vanish just because the new default
-# is off — that's the same "changed something a user was already relying
-# on" failure this design otherwise exists to prevent. Fires only when
-# scheduler.conf doesn't exist AT ALL yet (never overrides an explicit
-# choice, including one it just wrote itself on a prior run).
+# Called before every workbench_scheduler_install attempt, AND as the
+# first thing inside bin/wb's `wb sync run-if-due` handler (not just
+# `wb install`/`wb apply`) — a host can auto-update core entirely through
+# its own already-active pre-D38 OS timer firing run-if-due, with nobody
+# ever running `wb apply` by hand; without the migration also running
+# there, the very first such firing would see no scheduler.conf yet,
+# default to disabled, and return before ever syncing core — silently and
+# permanently losing scheduled sync, since the apply that would otherwise
+# perform this migration never gets triggered either. A host that already
+# had a working Ansible-installed timer/agent before D38 shipped must not
+# have it silently vanish just because the new default is off — that's
+# the same "changed something a user was already relying on" failure this
+# design otherwise exists to prevent. Fires only when scheduler.conf
+# doesn't exist AT ALL yet (never overrides an explicit choice, including
+# one it just wrote itself on a prior run) — cheap no-op on every other call.
 _workbench_scheduler_migrate_existing_install() {
     local conf_file
     conf_file="$(_workbench_scheduler_conf_path)"

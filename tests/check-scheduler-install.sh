@@ -162,6 +162,21 @@ else
     fail "migration: overrode an explicit prior disable"
 fi
 
+# ── 9. Migration also runs from 'wb sync run-if-due' itself, not just
+#    'wb install'/'wb apply' — a host that auto-updates core entirely
+#    through its own already-active pre-D38 timer firing run-if-due must
+#    not get stuck: the very first firing after upgrading, with no
+#    scheduler.conf yet, has to detect the pre-existing active timer and
+#    flip itself on, or scheduled sync (and the auto-apply that would
+#    otherwise run this same migration) is lost silently and permanently. ──
+rm -f "${CONF_FILE}"
+_wb_cmd_sync run-if-due >/tmp/wb-scheduler-run-if-due.log 2>&1
+if grep -q '^SCHEDULER_ENABLED=true$' "${CONF_FILE}" 2>/dev/null; then
+    ok "'wb sync run-if-due' runs the migration itself and carries forward a pre-existing active timer"
+else
+    fail "'wb sync run-if-due' did not run the migration — a host relying solely on its old timer to auto-update would get stuck disabled forever (see /tmp/wb-scheduler-run-if-due.log)"
+fi
+
 echo
 echo "== ${check_no} checks, ${FAILED} failed =="
 exit "${FAILED}"
