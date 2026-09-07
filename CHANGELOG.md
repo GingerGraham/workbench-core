@@ -4,6 +4,31 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed: an existing host's `CORE_API_VERSION` (in
+  `~/.config/workbench/core/version`) stayed frozen at its
+  original-bootstrap value forever, since `_workbench_ensure_version_file`
+  correctly never overwrites an existing file and nothing else ever
+  advanced it — permanently refusing any module whose declared `core_api`
+  floor rose past that frozen value on every subsequent core release, with
+  no self-healing path short of a manual file edit. Unlike
+  `STATE_SCHEMA_VERSION` (which asserts a claim about the shape of other
+  on-disk files and rightly needs a deliberate, sequenced migration step),
+  `CORE_API_VERSION` states only what the currently-running release
+  provides — a pure fact with no side effect to sequence. Fixed by
+  unconditionally resyncing it to `_WB_CORE_API_VERSION_CURRENT` on every
+  `wb install`/`wb apply` (`_workbench_sync_version_facts`,
+  `lib/core/version.sh`) — the same discipline D21 already gave
+  `register.list`/`installers.list`. See `ARCHITECTURE.md` §12 D36,
+  `tests/check-version-file-sync.sh`.
+- Removed the dead `MANIFEST_SCHEMA_VERSION` version-file field — its
+  getter had zero callers; real manifest-schema enforcement was always a
+  separate, hardcoded constant (`_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED`,
+  `lib/manifest/parse.sh`/`validate.sh`), and keeping an unread second copy
+  of the same fact implied it did something it never did. See
+  `ARCHITECTURE.md` §12 D37.
+
 ## [1.3.0] - 2026-09-07
 
 ### Added

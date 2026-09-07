@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lib/core/version.sh — read/write the version taxonomy file
-# (ARCHITECTURE.md §6): CORE_API_VERSION, MANIFEST_SCHEMA_VERSION,
-# STATE_SCHEMA_VERSION, WORKBENCH_CORE_SEMVER.
+# (ARCHITECTURE.md §6): CORE_API_VERSION, STATE_SCHEMA_VERSION,
+# WORKBENCH_CORE_SEMVER.
 #
 # Deliberately readable with only `grep`/`cut` (both hard baseline prereqs,
 # unlike `awk`) — a module or a diagnostic script that needs to check the
@@ -31,7 +31,6 @@ _workbench_ensure_version_file() {
     else
         cat > "${file}" <<'EOF'
 CORE_API_VERSION=1.1
-MANIFEST_SCHEMA_VERSION=1
 STATE_SCHEMA_VERSION=2
 WORKBENCH_CORE_SEMVER=0.1.0
 EOF
@@ -51,7 +50,6 @@ _workbench_read_version_var() {
 }
 
 _workbench_core_api_version()      { _workbench_read_version_var CORE_API_VERSION; }
-_workbench_manifest_schema_version() { _workbench_read_version_var MANIFEST_SCHEMA_VERSION; }
 _workbench_state_schema_version()  { _workbench_read_version_var STATE_SCHEMA_VERSION; }
 _workbench_core_semver()           { _workbench_read_version_var WORKBENCH_CORE_SEMVER; }
 
@@ -81,6 +79,62 @@ _workbench_version_set_var() {
     else
         printf '%s=%s\n' "${name}" "${value}" >> "${file}"
     fi
+}
+
+# _workbench_version_remove_var <NAME>
+# Companion to _workbench_version_set_var — strips any NAME=... line
+# entirely, for a field being retired from the file format (used below to
+# clean MANIFEST_SCHEMA_VERSION off existing hosts' already-written files;
+# ARCHITECTURE.md §12 D37). No-op if the file or the key doesn't exist.
+_workbench_version_remove_var() {
+    local name="$1" file tmp
+    file="$(_workbench_version_file_path)"
+    [[ -f "${file}" ]] || return 0
+    grep -q "^${name}=" "${file}" 2>/dev/null || return 0
+
+    tmp="$(mktemp "${file}.XXXXXX")"
+    grep -v "^${name}=" "${file}" > "${tmp}"
+    mv "${tmp}" "${file}"
+}
+
+# ── CORE_API_VERSION: unconditional sync (ARCHITECTURE.md §12 D36) ─────────
+# Unlike STATE_SCHEMA_VERSION below, CORE_API_VERSION asserts nothing about
+# the shape of other on-disk files — it states one fact only: what does the
+# code that's currently running provide. That's fully determined the instant
+# this release IS running, so there's no side effect to sequence and no
+# reason an existing host should ever lag a fresh install. Confirmed
+# regression this fixes: a host bootstrapped before D34 shipped
+# CORE_API_VERSION=1.1 as the default stayed frozen at CORE_API_VERSION=1
+# through three subsequent core releases, permanently refusing any module
+# whose declared core_api floor had since risen past that frozen value, with
+# no self-healing path short of a manual file edit. Bump
+# _WB_CORE_API_VERSION_CURRENT by hand alongside future contracts/core-api.md
+# additions (same policy as D29/D34) — never anything in the function below.
+_WB_CORE_API_VERSION_CURRENT="1.1"
+
+# _workbench_sync_version_facts
+# Called from `wb install`/`wb apply`, after _workbench_ensure_version_file
+# and _workbench_migrate_state_schema. Unconditionally rewrites
+# CORE_API_VERSION to _WB_CORE_API_VERSION_CURRENT regardless of the
+# existing value — the same discipline register.list/installers.list
+# rendering already has (_wb_converge_module_registrations, bin/wb),
+# extended to this file. Also retires the dead MANIFEST_SCHEMA_VERSION
+# field (D37) from any existing host's file — its getter had zero callers;
+# real manifest-schema enforcement is _WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED
+# (lib/manifest/parse.sh), and keeping a second, unread copy of the same
+# fact in this file implied it did something it never did.
+_workbench_sync_version_facts() {
+    local file current
+    file="$(_workbench_version_file_path)"
+    [[ -f "${file}" ]] || return 0
+
+    current="$(_workbench_core_api_version)"
+    if [[ "${current}" != "${_WB_CORE_API_VERSION_CURRENT}" ]]; then
+        log_info "workbench: syncing CORE_API_VERSION ${current:-<unset>} -> ${_WB_CORE_API_VERSION_CURRENT}"
+        _workbench_version_set_var CORE_API_VERSION "${_WB_CORE_API_VERSION_CURRENT}"
+    fi
+
+    _workbench_version_remove_var MANIFEST_SCHEMA_VERSION
 }
 
 # ── STATE_SCHEMA_VERSION migration ───────────────────────────────────────────
@@ -209,4 +263,4 @@ _workbench_print_script_versions() {
 }
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/version.sh" "0.2.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/version.sh" "0.3.0" || true

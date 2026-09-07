@@ -298,6 +298,7 @@ _wb_cmd_install() {
 
     _workbench_ensure_version_file
     _workbench_migrate_state_schema
+    _workbench_sync_version_facts
 
     mkdir -p "${XDG_CONFIG_HOME:-${HOME}/.config}/workbench" \
              "${XDG_DATA_HOME:-${HOME}/.local/share}/workbench" \
