@@ -17,8 +17,9 @@
 # firing, whether this cycle should actually do anything. Reconfiguring a
 # *running* timer's own interval requires reloading it — exactly the
 # "restart of timer infrastructure" a tracking-mode change must never
-# require, which is why this file never touches OnCalendar/StartInterval
-# after initial install.
+# require, which is why this file never changes OnCalendar/StartInterval
+# to anything other than the fixed 5-minute value, even though the unit
+# content (those keys included) is rewritten unconditionally below.
 #
 # Best-effort like the Ansible version it replaces: a missing systemd
 # --user session bus or a launchctl failure is warned about, never fatal
@@ -28,7 +29,7 @@
 _wb_scheduler_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/sync/scheduler.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/sync/scheduler.sh" "0.2.0" || true
 
 # workbench_scheduler_wb_path
 # The path scheduled invocations should use — the stable ~/.local/bin/wb
@@ -55,7 +56,7 @@ _workbench_scheduler_install_linux() {
 
     mkdir -p "${unit_dir}"
 
-    cat > "${service_file}" <<EOF
+    if ! cat > "${service_file}" <<EOF
 [Unit]
 Description=workbench-core sync (run-if-due — see workbench-sync.timer)
 
@@ -63,8 +64,12 @@ Description=workbench-core sync (run-if-due — see workbench-sync.timer)
 Type=oneshot
 ExecStart=${wb_path} sync run-if-due
 EOF
+    then
+        log_warn "workbench_scheduler: could not write ${service_file} — scheduled sync will not run automatically on this host. 'wb update'/'wb sync run-if-due' still work manually."
+        return 0
+    fi
 
-    cat > "${timer_file}" <<'EOF'
+    if ! cat > "${timer_file}" <<'EOF'
 [Unit]
 Description=workbench-core sync timer (fixed-interval poll; the sync engine self-throttles to the current dynamic cadence — see contracts/tracking-spec.md §Cadence)
 
@@ -80,6 +85,10 @@ Unit=workbench-sync.service
 [Install]
 WantedBy=timers.target
 EOF
+    then
+        log_warn "workbench_scheduler: could not write ${timer_file} — scheduled sync will not run automatically on this host. 'wb update'/'wb sync run-if-due' still work manually."
+        return 0
+    fi
 
     # Unconditional, every run — not gated on whether the files above
     # actually changed. This is the same WSL2 workaround the Ansible
@@ -116,7 +125,7 @@ _workbench_scheduler_install_macos() {
 
     launchctl list com.workbench.sync &>/dev/null && was_loaded="true"
 
-    cat > "${plist_file}" <<EOF
+    if ! cat > "${plist_file}" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -138,6 +147,10 @@ _workbench_scheduler_install_macos() {
 </dict>
 </plist>
 EOF
+    then
+        log_warn "workbench_scheduler: could not write ${plist_file} — scheduled sync will not run automatically on this host. 'wb update'/'wb sync run-if-due' still work manually."
+        return 0
+    fi
 
     # launchd has no in-place "reload config" — an already-loaded agent
     # must be unloaded before a rewritten plist takes effect, or `load -w`

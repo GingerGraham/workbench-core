@@ -95,14 +95,17 @@ fi
 EMPTY_BIN="${WORK}/empty-bin"
 mkdir -p "${EMPTY_BIN}"
 export PATH="${ORIGINAL_PATH}"
-if PATH="${EMPTY_BIN}" workbench_scheduler_install 2>&1 | grep -q "systemctl not found"; then
+MISSING_OUTPUT="$(PATH="${EMPTY_BIN}" workbench_scheduler_install 2>&1)"
+RC_MISSING=$?
+if grep -q "systemctl not found" <<<"${MISSING_OUTPUT}"; then
     ok "missing systemctl produces a warning, not a hard failure"
 else
     fail "missing systemctl did not produce the expected warning"
 fi
-RC_MISSING=$?
-if [[ ${RC_MISSING} -eq 0 ]] || true; then
+if [[ ${RC_MISSING} -eq 0 ]]; then
     ok "workbench_scheduler_install still returns success when systemctl is absent (non-fatal)"
+else
+    fail "workbench_scheduler_install returned non-zero (${RC_MISSING}) when systemctl is absent — should be non-fatal"
 fi
 
 # ── systemctl present but failing: warns, does not abort ───────────────────

@@ -87,13 +87,24 @@ _workbench_version_set_var() {
 # clean MANIFEST_SCHEMA_VERSION off existing hosts' already-written files;
 # ARCHITECTURE.md §12 D37). No-op if the file or the key doesn't exist.
 _workbench_version_remove_var() {
-    local name="$1" file tmp
+    local name="$1" file tmp rc
     file="$(_workbench_version_file_path)"
     [[ -f "${file}" ]] || return 0
     grep -q "^${name}=" "${file}" 2>/dev/null || return 0
 
     tmp="$(mktemp "${file}.XXXXXX")"
     grep -v "^${name}=" "${file}" > "${tmp}"
+    rc=$?
+    # grep -v exits 1 when every line matched (nothing left to keep) —
+    # not an error for this caller, just an empty result — but exits 2
+    # on a genuine read failure. Only bail out on the latter: mv-ing a
+    # tmp file from a failed grep would otherwise silently truncate the
+    # real version file to empty/partial content.
+    if [[ "${rc}" -gt 1 ]]; then
+        rm -f "${tmp}"
+        log_warn "workbench: could not remove ${name} from ${file} (grep exited ${rc}) — left the file untouched"
+        return 1
+    fi
     mv "${tmp}" "${file}"
 }
 
@@ -263,4 +274,4 @@ _workbench_print_script_versions() {
 }
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/version.sh" "0.3.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/version.sh" "0.3.1" || true
