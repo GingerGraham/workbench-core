@@ -7,7 +7,11 @@ name: Module Release Finalize
 # versioning, D40) -- the version is read back from the release branch's
 # own name (release/v<version>) rather than a file in the tree.
 on:
-  workflow_call: {}
+  workflow_call:
+    secrets:
+      RELEASE_APP_PRIVATE_KEY:
+        description: "Private key for the release GitHub App (RELEASE_APP_ID var + this secret, same App as core's own release pipeline, D28)."
+        required: true
 
 jobs:
   finalize:

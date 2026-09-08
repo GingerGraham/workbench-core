@@ -15,6 +15,10 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      RELEASE_APP_PRIVATE_KEY:
+        description: "Private key for the release GitHub App (RELEASE_APP_ID var + this secret, same App as core's own release pipeline, D28)."
+        required: true
 
 concurrency:
   group: module-release-${{ github.repository }}-${{ github.ref }}
