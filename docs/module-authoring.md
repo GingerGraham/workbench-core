@@ -201,4 +201,74 @@ lib/manifest/validate.sh path/to/.dotfiles-sync.yml
 ```
 
 Requires [mikefarah/yq v4](https://github.com/mikefarah/yq#install) (a
-developer-time-only dependency — see `contracts/manifest-spec.md`).
+developer-time-only dependency — see `contracts/manifest-spec.md`). Run
+this by hand before pushing a manifest change, or let your module repo's
+own CI run it for you — see below.
+
+### CI (ARCHITECTURE.md §12 D40)
+
+Every ecosystem module repo has its own thin `.github/workflows/ci.yml`
+that calls `workbench-core`'s reusable `module-ci.yml`:
+
+```yaml
+name: CI
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      core_ref:
+        description: "workbench-core ref to test against"
+        required: false
+
+jobs:
+  module-ci:
+    uses: GingerGraham/workbench-core/.github/workflows/module-ci.yml@main
+    with:
+      module_name: <your-module's-catalog-name>   # e.g. git, gpg, cloud...
+      core_ref: ${{ inputs.core_ref }}
+```
+
+It runs, on every PR:
+
+- **shellcheck** over your `shell/**/*.sh` and `hooks/*.sh`.
+- **manifest validate** — `lib/manifest/validate.sh` against your
+  `.dotfiles-sync.yml`.
+- **structural tests** — your own `tests/check-*.sh` suite, if you have
+  one, on both `ubuntu-latest` and `macos-latest`.
+- **add to core** — the actual question this brief exists to answer: does
+  *this branch* add correctly to `workbench-core`? It runs real
+  `wb add`/`wb track --branch <your-PR-branch>`/`wb update` against your
+  module's own remote (a fork's, on a fork PR — never silently falling
+  back to testing someone else's `main`), then asserts every `deploy:`
+  destination landed, every `register.getters[]` function surfaced in
+  `wb functions`, any `register.installers[]` entry surfaced in
+  `wb tools list`, a second `wb update` is idempotent, and `wb remove`
+  deregisters cleanly. Runs with `--allow-hooks`, so your `hooks:` content
+  executes for real, against an isolated scratch `HOME`/`XDG_*` — never
+  the runner's own environment.
+
+The `workbench-core` ref this checks against defaults to core's latest
+published GitHub Release, not `main` — override it with the
+`core_ref` input (on a manual `workflow_dispatch` run) to test your module
+against an in-flight core PR branch before it merges.
+
+If the shared "add to core" check can't verify something specific to your
+module (e.g. a side effect your `post_deploy` hook is supposed to have),
+add an executable `tests/check-add-to-core.sh` to your repo — the shared
+check runs it as an extra step if present, with `WB` and `MODULE_NAME`
+already exported.
+
+Commit messages are gated by a second thin workflow,
+`.github/workflows/pr-check.yml` (`uses:
+GingerGraham/workbench-core/.github/workflows/module-pr-check.yml@main`):
+every commit on the PR must parse as a Conventional Commit
+(`<type>[(scope)][!]: <subject>`) — module repos have no per-file
+version-registration convention to gate on selectively, so this applies to
+every commit, no exceptions.
+
+Release automation (`.github/workflows/release.yml` /
+`release-finalize.yml`, thin callers of `module-release.yml` /
+`module-release-finalize.yml`) mirrors core's own propose-PR-then-finalize
+release pipeline, but bumps only your repo's overall version/tag — module
+repos have no per-file script version to bump individually.
