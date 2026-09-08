@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-08
+
 ### Added
 
 - Reusable module CI/release workflows (ARCHITECTURE.md §12 D40):
