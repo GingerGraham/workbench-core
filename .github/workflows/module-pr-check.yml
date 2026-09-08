@@ -22,7 +22,7 @@ jobs:
     outputs:
       ref: ${{ steps.resolve.outputs.ref }}
     steps:
-      - name: Resolve core_ref (default: workbench-core's latest published release)
+      - name: "Resolve core_ref (default: workbench-core's latest published release)"
         id: resolve
         env:
           GH_TOKEN: ${{ github.token }}
