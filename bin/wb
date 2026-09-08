@@ -56,7 +56,7 @@ unset _wb_f
 # `command -v _workbench_register_script_version &>/dev/null &&` for when
 # it's sourced standalone elsewhere — actually fires during this pass.
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "bin/wb" "0.1.1" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "bin/wb" "0.1.2" || true
 
 _wb_usage() {
     cat <<'EOF'
@@ -73,7 +73,7 @@ DAILY USE
                                'core' also auto-triggers 'wb apply' when
                                core's commit actually changed.
   functions                   List registered shell functions/getters.
-  tools [list|update [<name>]]
+  tools [list|update|install [<name>]]
                                List/run the install-* functions modules
                                declared via register.installers[] — manual
                                only, never on the sync timer. Confused with
@@ -598,6 +598,9 @@ _wb_cmd_tools_list() {
     local name abs_path func friendly current_module="" any="false"
     echo
     echo "[INFO] Discovered install-* tools, by module:"
+    echo "  Run 'wb tools update <name>' (or 'wb tools install <name>') using the name"
+    echo "  in the left column below — the right column is the underlying function name,"
+    echo "  not something to type directly."
     while IFS='|' read -r name abs_path func friendly; do
         [[ -z "${friendly}" ]] && continue
         any="true"
@@ -612,18 +615,21 @@ _wb_cmd_tools_list() {
     echo
 }
 
-# _wb_tools_invoke <module> <abs-path> <function> <friendly-name>
+# _wb_tools_invoke <verb> <module> <abs-path> <function> <friendly-name>
 # Sources <abs-path> only if <function> isn't already defined in this
 # shell, then calls it exactly once. Idempotency/version-checking is
 # entirely the function's own responsibility (docs/module-authoring.md) —
 # core calls it and reports what it does, nothing more; there is no
 # aggregate "all up to date" summary, since core has no way to know that.
+# <verb> is "update" or "install" — cosmetic only, so log output echoes
+# back whichever one the caller actually typed rather than always saying
+# "update" under the install alias (ARCHITECTURE.md §12 D41).
 _wb_tools_invoke() {
-    local name="$1" abs_path="$2" func="$3" friendly="$4"
+    local verb="$1" name="$2" abs_path="$3" func="$4" friendly="$5"
 
     if ! command -v "${func}" &>/dev/null; then
         if [[ ! -f "${abs_path}" ]]; then
-            log_error "wb tools update: ${friendly} (${name}): installer file not found: ${abs_path}"
+            log_error "wb tools ${verb}: ${friendly} (${name}): installer file not found: ${abs_path}"
             return 1
         fi
         # shellcheck disable=SC1090
@@ -631,32 +637,33 @@ _wb_tools_invoke() {
     fi
 
     if ! command -v "${func}" &>/dev/null; then
-        log_error "wb tools update: ${friendly} (${name}): '${func}' is not a function after sourcing ${abs_path}"
+        log_error "wb tools ${verb}: ${friendly} (${name}): '${func}' is not a function after sourcing ${abs_path}"
         return 1
     fi
 
-    log_info "wb tools update: ${friendly} (${name}): running ${func}..."
+    log_info "wb tools ${verb}: ${friendly} (${name}): running ${func}..."
     "${func}"
 }
 
 _wb_cmd_tools_update() {
-    local target="${1:-}"
+    local verb="${1:-update}"
+    local target="${2:-}"
 
     if [[ -n "${target}" ]]; then
         local hit name abs_path func
         hit="$(workbench_tools_lookup "${target}")" || {
-            log_error "wb tools update: no discovered installer named '${target}' — see 'wb tools list'"
+            log_error "wb tools ${verb}: no discovered installer named '${target}' — see 'wb tools list'"
             return 1
         }
         IFS='|' read -r name abs_path func <<< "${hit}"
-        _wb_tools_invoke "${name}" "${abs_path}" "${func}" "${target}"
+        _wb_tools_invoke "${verb}" "${name}" "${abs_path}" "${func}" "${target}"
         return $?
     fi
 
     local name abs_path func friendly failures=0
     while IFS='|' read -r name abs_path func friendly; do
         [[ -z "${friendly}" ]] && continue
-        _wb_tools_invoke "${name}" "${abs_path}" "${func}" "${friendly}" || failures=$((failures + 1))
+        _wb_tools_invoke "${verb}" "${name}" "${abs_path}" "${func}" "${friendly}" || failures=$((failures + 1))
     done < <(workbench_tools_collect)
     return "${failures}"
 }
@@ -665,10 +672,10 @@ _wb_cmd_tools() {
     local sub="${1:-list}"
     [[ $# -gt 0 ]] && shift
     case "${sub}" in
-        list)   _wb_cmd_tools_list ;;
-        update) _wb_cmd_tools_update "$@" ;;
+        list)            _wb_cmd_tools_list ;;
+        update|install)  _wb_cmd_tools_update "${sub}" "$@" ;;
         *)
-            log_error "wb tools: usage: wb tools [list] | wb tools update [<name>]"
+            log_error "wb tools: usage: wb tools [list] | wb tools update [<name>] | wb tools install [<name>]"
             return 2
             ;;
     esac
@@ -909,7 +916,7 @@ EOF
 
 _wb_help_tools() {
     cat <<'EOF'
-Usage: wb tools [list]  |  wb tools update [<name>]
+Usage: wb tools [list]  |  wb tools update [<name>]  |  wb tools install [<name>]
 
 The tool-updating framework: discovers and invokes install-<name>
 functions any registered, sync-enabled module declared via its manifest's
@@ -918,14 +925,24 @@ its friendly name (install-<name> with the prefix stripped) — it has no
 idea how any tool is installed, checked, or updated; that's entirely the
 module author's responsibility (docs/module-authoring.md).
 
-  list               Print every discovered installer, grouped by owning
-                       module. Default when no subcommand is given.
-  update [<name>]    With <name>: sources that installer's file (if not
-                       already loaded) and calls install-<name> once.
-                       Without <name>: does this for every discovered
-                       installer, in sequence, reporting per-tool as it
-                       goes — there is no aggregate "all up to date"
-                       summary, since core has no way to know that.
+  list                Print every discovered installer, grouped by owning
+                        module, with a reminder of which column to pass
+                        to update/install. Default with no subcommand.
+  update [<name>]     With <name>: sources that installer's file (if not
+                        already loaded) and calls install-<name> once.
+                        Without <name>: does this for every discovered
+                        installer, in sequence, reporting per-tool as it
+                        goes — there is no aggregate "all up to date"
+                        summary, since core has no way to know that.
+  install [<name>]    Exact alias for 'update' — identical behaviour and
+                        exit status. Core doesn't distinguish first-install
+                        from re-install/update; that split is entirely the
+                        installer function's own responsibility.
+
+<name> is the friendly name shown in 'wb tools list' (e.g. "direnv"), not
+the underlying install-<name> function — though the install-<name> form
+is also accepted, as a fallback, since it's what 'wb tools list' prints
+alongside each friendly name.
 
 Two modules declaring the same friendly name is a collision, resolved by
 first-by-module-name-order-wins and warned about once — 'wb tools list'

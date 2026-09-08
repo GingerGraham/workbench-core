@@ -15,6 +15,14 @@ All notable changes to `workbench-core` are documented here.
   automation), each called by every ecosystem module repo's own thin
   `.github/workflows/*.yml`. See `docs/module-authoring.md`'s "Testing
   your manifest" section.
+- **`wb tools install` alias + tools UX fix.** `wb tools install [<name>]` is now
+  an exact alias for `wb tools update [<name>]` — same behaviour, same exit
+  status; log lines echo back whichever verb was used. `wb tools list`'s
+  output now carries a one-time usage hint pointing at the friendly-name
+  column (not the raw `install-<name>` function name in the right column) as
+  what to pass to `update`/`install`. `workbench_tools_lookup` also accepts
+  the raw `install-<name>` spelling as a fallback, tried only after an exact
+  friendly-name match fails. See `ARCHITECTURE.md` §12 D41.
 
 ## [1.4.0] - 2026-09-08
 

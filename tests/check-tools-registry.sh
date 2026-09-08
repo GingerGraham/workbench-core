@@ -198,6 +198,51 @@ else
     fail "'wb tools update terraform' invoked the wrong function after a collision"
 fi
 
+# ── 6. 'wb tools install' is an exact alias of 'wb tools update'. ──────────
+rm -f "${MARKER_ALPHA_TF}"
+INSTALL_ALIAS_OUT="$(_wb_cmd_tools install terraform 2>&1)"
+if [[ -f "${MARKER_ALPHA_TF}" ]] && [[ "$(wc -l < "${MARKER_ALPHA_TF}")" -eq 1 ]]; then
+    ok "'wb tools install terraform' invokes install-terraform exactly like 'wb tools update terraform'"
+else
+    fail "'wb tools install terraform' did not invoke install-terraform"
+    echo "${INSTALL_ALIAS_OUT}"
+fi
+
+if echo "${INSTALL_ALIAS_OUT}" | grep -q "wb tools install: terraform"; then
+    ok "'wb tools install' log lines say 'wb tools install:', not 'wb tools update:'"
+else
+    fail "'wb tools install' log lines did not echo the 'install' verb back"
+    echo "${INSTALL_ALIAS_OUT}"
+fi
+
+# ── 7. 'wb tools list' carries a one-time usage hint, not per-line noise. ──
+LIST_OUT2="$(_wb_cmd_tools_list 2>&1)"
+HINT_COUNT="$(echo "${LIST_OUT2}" | grep -c "wb tools update <name>")"
+if [[ "${HINT_COUNT}" -eq 1 ]]; then
+    ok "'wb tools list' prints its usage hint exactly once"
+else
+    fail "'wb tools list' usage hint appeared ${HINT_COUNT} times, expected 1"
+    echo "${LIST_OUT2}"
+fi
+
+# ── 8. workbench_tools_lookup accepts the raw install-<name> spelling as a
+#    fallback, without changing what the friendly-name lookup returns. ────
+HIT_FRIENDLY="$(workbench_tools_lookup "terraform")"
+HIT_RAW="$(workbench_tools_lookup "install-terraform")"
+if [[ "${HIT_FRIENDLY}" == "${HIT_RAW}" ]]; then
+    ok "workbench_tools_lookup resolves 'install-terraform' to the same entry as 'terraform'"
+else
+    fail "workbench_tools_lookup gave different results for 'terraform' vs 'install-terraform'"
+    echo "friendly: ${HIT_FRIENDLY}"
+    echo "raw:      ${HIT_RAW}"
+fi
+
+if ! workbench_tools_lookup "nonexistent-tool" >/dev/null 2>&1; then
+    ok "workbench_tools_lookup still fails cleanly for a genuinely unknown name"
+else
+    fail "workbench_tools_lookup unexpectedly matched 'nonexistent-tool'"
+fi
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."

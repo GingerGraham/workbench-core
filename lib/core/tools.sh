@@ -17,7 +17,7 @@
 
 _wb_tools_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/tools.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/tools.sh" "0.1.1" || true
 
 # workbench_tools_collect
 # Emits one line per discovered installer, across every loadable
@@ -61,9 +61,19 @@ ${friendly}|${name}"
     done < <(workbench_list_loadable_modules)
 }
 
-# workbench_tools_lookup <friendly-name>
+# workbench_tools_lookup <name>
 # Prints "<module>|<abs_path>|<function>" for exactly one discovered,
 # de-duplicated installer, or nothing (exit 1) if no such tool exists.
+#
+# <name> is matched against the friendly name first — the primary key
+# (e.g. "direnv"), what 'wb tools list' shows in its left column and what
+# de-duplication/collision resolution in workbench_tools_collect operates
+# on. As a fallback only, if no friendly-name match is found and <name>
+# starts with "install-", it's retried once with that prefix stripped —
+# 'wb tools list' also prints the raw install-<name> function in its
+# right column, and that's the value someone most often copies by
+# mistake (ARCHITECTURE.md §12 D41). This never changes which tool wins
+# a collision; it just maps a second spelling onto the same lookup.
 workbench_tools_lookup() {
     local target="$1"
     local name abs_path func friendly
@@ -73,5 +83,12 @@ workbench_tools_lookup() {
         printf '%s|%s|%s\n' "${name}" "${abs_path}" "${func}"
         return 0
     done < <(workbench_tools_collect)
+
+    case "${target}" in
+        install-*)
+            workbench_tools_lookup "${target#install-}"
+            return $?
+            ;;
+    esac
     return 1
 }
