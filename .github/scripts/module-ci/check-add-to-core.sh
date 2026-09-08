@@ -75,9 +75,22 @@ else
     fail "wb status does not show '${MODULE_NAME}' tracking branch:${MODULE_BRANCH}: ${status_row}"
 fi
 
-# 4. Every deploy[] destination for this platform actually landed.
+# 4. Every deploy[] destination for this platform actually landed. Entries
+#    scoped to the other platform via platforms: are skipped, mirroring
+#    the engine's own filtering (lib/sync/engine.sh's workbench_deploy_module)
+#    -- otherwise a linux-only/macos-only entry would legitimately not
+#    land on the OS this job isn't running on, and get reported as a
+#    false FAIL.
 deploy_count="$(yq '.deploy // [] | length' "${MANIFEST}")"
 for ((i = 0; i < deploy_count; i++)); do
+    platforms="$(yq ".deploy[${i}].platforms // \"\"" "${MANIFEST}")"
+    if [[ -n "${platforms}" && "${platforms}" != "null" ]]; then
+        if [[ "$(uname -s)" == "Darwin" ]]; then
+            echo "${platforms}" | tr ',' '\n' | grep -qx macos || continue
+        else
+            echo "${platforms}" | tr ',' '\n' | grep -qx linux || continue
+        fi
+    fi
     dest="$(yq ".deploy[${i}].dest" "${MANIFEST}")"
     if [[ "$(uname -s)" == "Darwin" ]]; then
         macos_dest="$(yq ".deploy[${i}].dest_macos // \"\"" "${MANIFEST}")"

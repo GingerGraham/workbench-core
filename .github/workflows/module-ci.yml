@@ -127,7 +127,12 @@ jobs:
         shell: bash
         run: |
           OS="$(uname | tr '[:upper:]' '[:lower:]')"
-          curl -fsSL "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_${OS}_amd64" -o /tmp/yq
+          case "$(uname -m)" in
+            x86_64|amd64) ARCH=amd64 ;;
+            arm64|aarch64) ARCH=arm64 ;;
+            *) echo "Unrecognised architecture: $(uname -m)" >&2; exit 1 ;;
+          esac
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_${OS}_${ARCH}" -o /tmp/yq
           chmod +x /tmp/yq
           echo "/tmp" >> "$GITHUB_PATH"
 
