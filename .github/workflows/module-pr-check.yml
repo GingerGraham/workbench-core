@@ -1,0 +1,32 @@
+name: Module PR Check
+
+# Reusable workflow (ARCHITECTURE.md S12 D40) called by each module repo's
+# thin .github/workflows/pr-check.yml. Simplified from core's own
+# pr-check.yml: module repos carry no per-file
+# _workbench_register_script_version convention, so every commit on the PR
+# must be Conventional-Commit-formatted, full stop -- no per-file
+# "does this commit even matter" exemption.
+on:
+  workflow_call: {}
+
+jobs:
+  commit-format:
+    name: commit message format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout calling repo
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Checkout workbench-core (for the shared commit-format script)
+        uses: actions/checkout@v7
+        with:
+          repository: GingerGraham/workbench-core
+          path: _core
+
+      - name: Check commit message format
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: _core/.github/scripts/module-pr-check/check-commit-format.sh "${BASE_SHA}" "${HEAD_SHA}"

@@ -4,6 +4,18 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Reusable module CI/release workflows (ARCHITECTURE.md §12 D40):
+  `module-ci.yml` (shellcheck, manifest validation, each module's own
+  structural tests, and a new "add to core" check that runs real `wb add`/
+  `wb track --branch`/`wb update` against a module's own branch under
+  test), `module-pr-check.yml` (Conventional Commit gate), and
+  `module-release.yml`/`module-release-finalize.yml` (repo-level release
+  automation), each called by every ecosystem module repo's own thin
+  `.github/workflows/*.yml`. See `docs/module-authoring.md`'s "Testing
+  your manifest" section.
+
 ## [1.4.0] - 2026-09-08
 
 ### Added

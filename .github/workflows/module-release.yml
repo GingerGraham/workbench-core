@@ -1,0 +1,165 @@
+name: Module Release
+
+# Reusable workflow (ARCHITECTURE.md S12 D40) called by each module repo's
+# thin .github/workflows/release.yml. Same propose-PR-then-finalize shape
+# as core's own release.yml/release-finalize.yml (D27/D28) -- main's
+# branch ruleset requires a PR, so a direct-push bump is equally
+# unworkable on the module repos -- but repo-level version/tag only, no
+# per-file script-local bump (module repos carry no
+# _workbench_register_script_version surface).
+on:
+  workflow_call: {}
+
+concurrency:
+  group: module-release-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  propose:
+    name: propose release
+    # Never let the release PR's own squash-merge commit re-trigger this
+    # workflow's bump computation against itself.
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint release App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Checkout workbench-core (for the shared release scripts)
+        uses: actions/checkout@v7
+        with:
+          repository: GingerGraham/workbench-core
+          path: _core
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Compute bump
+        id: compute
+        run: |
+          overall_line="$(_core/.github/scripts/module-release/compute-bump.sh | tee bump-plan.txt)"
+          IFS='|' read -r _ old_version new_version severity reason <<< "${overall_line}"
+          echo "old_version=${old_version}" >> "$GITHUB_OUTPUT"
+          echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
+          echo "severity=${severity}" >> "$GITHUB_OUTPUT"
+          echo "reason=${reason}" >> "$GITHUB_OUTPUT"
+
+      - name: Apply bump (CHANGELOG.md only)
+        if: steps.compute.outputs.severity != 'none'
+        run: _core/.github/scripts/module-release/apply-bump.sh "$(cat bump-plan.txt)"
+
+      - name: Build release notes
+        if: steps.compute.outputs.severity != 'none'
+        env:
+          OLD_VERSION: ${{ steps.compute.outputs.old_version }}
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+          SEVERITY: ${{ steps.compute.outputs.severity }}
+        run: |
+          {
+            echo "**Version:** ${OLD_VERSION} -> ${NEW_VERSION} (${SEVERITY})"
+            echo
+            echo "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md) for the human-readable detail -- this PR's diff includes the heading rename."
+          } > release-notes.md
+
+      # main requires verified commit signatures -- a plain `git commit` is
+      # never signed regardless of which token pushes it, so the release
+      # commit is created via the createCommitOnBranch GraphQL mutation
+      # instead, exactly like core's own release.yml (D27).
+      - name: Create release branch and commit via API (verified signature)
+        if: steps.compute.outputs.severity != 'none'
+        uses: actions/github-script@v7
+        env:
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const fs = require('fs');
+            const { execSync } = require('child_process');
+
+            const newVersion = process.env.NEW_VERSION;
+            const branchName = `release/v${newVersion}`;
+            const baseSha = execSync('git rev-parse HEAD').toString().trim();
+
+            try {
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/heads/${branchName}`,
+                sha: baseSha,
+              });
+            } catch (err) {
+              if (err.status === 422 && /already exists/i.test(err.message)) {
+                core.info(`refs/heads/${branchName} already exists (stale from a previous run) -- resetting it to ${baseSha}`);
+                await github.rest.git.updateRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `heads/${branchName}`,
+                  sha: baseSha,
+                  force: true,
+                });
+              } else {
+                throw err;
+              }
+            }
+
+            const changedFiles = execSync('git diff --name-only')
+              .toString()
+              .trim()
+              .split('\n')
+              .filter(Boolean);
+
+            if (changedFiles.length === 0) {
+              core.setFailed(`apply-bump.sh reported a ${process.env.NEW_VERSION} bump but left no tracked-file changes -- refusing to create an empty release commit.`);
+              return;
+            }
+
+            const additions = changedFiles.map((path) => ({
+              path,
+              contents: fs.readFileSync(path).toString('base64'),
+            }));
+
+            const mutation = `
+              mutation ($input: CreateCommitOnBranchInput!) {
+                createCommitOnBranch(input: $input) {
+                  commit { oid }
+                }
+              }
+            `;
+
+            await github.graphql(mutation, {
+              input: {
+                branch: {
+                  repositoryNameWithOwner: `${context.repo.owner}/${context.repo.repo}`,
+                  branchName,
+                },
+                message: { headline: `chore(release): v${newVersion}` },
+                fileChanges: { additions },
+                expectedHeadOid: baseSha,
+              },
+            });
+
+      - name: Open release PR and enable auto-merge
+        if: steps.compute.outputs.severity != 'none'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+        run: |
+          PR_URL="$(gh pr create \
+            --base main \
+            --head "release/v${NEW_VERSION}" \
+            --title "chore(release): v${NEW_VERSION}" \
+            --body-file release-notes.md)"
+          gh pr merge --auto --squash "${PR_URL}"

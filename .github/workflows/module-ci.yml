@@ -1,0 +1,165 @@
+name: Module CI
+
+# Reusable workflow (ARCHITECTURE.md S12 D40) called by each of the eleven
+# Wave C module repos' own thin .github/workflows/ci.yml. Answers one
+# question only: "does this module, at this branch, add correctly to
+# workbench-core?" No cross-module integration, no TUI, no community
+# submission validation -- see D40's decisions-log entry for the full
+# scope statement.
+on:
+  workflow_call:
+    inputs:
+      module_name:
+        description: "catalog-style short name, e.g. 'git' (see workbench-core's lib/modules/modules.list)"
+        required: true
+        type: string
+      core_ref:
+        description: "workbench-core ref to test against. Empty (default) resolves to core's latest published GitHub Release tag; pass a branch/tag/sha to pin explicitly (e.g. to test against an in-flight core PR)."
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  resolve-core-ref:
+    name: resolve core_ref
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.resolve.outputs.ref }}
+    steps:
+      - name: Resolve core_ref (default: workbench-core's latest published release)
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_CORE_REF: ${{ inputs.core_ref }}
+        run: |
+          if [[ -n "${INPUT_CORE_REF}" ]]; then
+            echo "Using explicit core_ref: ${INPUT_CORE_REF}"
+            echo "ref=${INPUT_CORE_REF}" >> "$GITHUB_OUTPUT"
+          else
+            tag="$(gh api repos/GingerGraham/workbench-core/releases/latest --jq .tag_name)"
+            echo "No core_ref given -- resolved to latest published release: ${tag}"
+            echo "ref=${tag}" >> "$GITHUB_OUTPUT"
+          fi
+
+  lint:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run shellcheck over this module's own shell content
+        shell: bash
+        run: |
+          shopt -s nullglob globstar
+          files=(shell/**/*.sh hooks/*.sh)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No shell/**/*.sh or hooks/*.sh in this repo -- nothing to lint."
+            exit 0
+          fi
+          shellcheck "${files[@]}"
+
+  manifest-validate:
+    name: manifest validate
+    needs: resolve-core-ref
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Checkout workbench-core@${{ needs.resolve-core-ref.outputs.ref }}
+        uses: actions/checkout@v7
+        with:
+          repository: GingerGraham/workbench-core
+          ref: ${{ needs.resolve-core-ref.outputs.ref }}
+          path: _core
+      - name: Install yq
+        run: |
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64" -o /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+      - run: _core/lib/manifest/validate.sh .dotfiles-sync.yml
+
+  structural-tests:
+    name: structural tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run this module's own tests/check-*.sh, if any
+        shell: bash
+        run: |
+          shopt -s nullglob
+          suites=(tests/check-*.sh)
+          if [[ ${#suites[@]} -eq 0 ]]; then
+            echo "No tests/check-*.sh in this repo -- skipping."
+            exit 0
+          fi
+          failed=0
+          for s in "${suites[@]}"; do
+            echo "=== ${s} ==="
+            bash "${s}" || failed=1
+          done
+          exit "${failed}"
+
+  add-to-core:
+    name: add to core (${{ matrix.os }})
+    needs: resolve-core-ref
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout this module
+        uses: actions/checkout@v7
+        with:
+          path: _module
+
+      - name: Checkout workbench-core@${{ needs.resolve-core-ref.outputs.ref }}
+        uses: actions/checkout@v7
+        with:
+          repository: GingerGraham/workbench-core
+          ref: ${{ needs.resolve-core-ref.outputs.ref }}
+          path: _core
+
+      - name: Install yq
+        shell: bash
+        run: |
+          OS="$(uname | tr '[:upper:]' '[:lower:]')"
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_${OS}_amd64" -o /tmp/yq
+          chmod +x /tmp/yq
+          echo "/tmp" >> "$GITHUB_PATH"
+
+      - name: Resolve module ref under test
+        id: ref
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          REF_NAME: ${{ github.ref_name }}
+          HEAD_REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
+          HEAD_REPO_NAME: ${{ github.event.pull_request.head.repo.name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            { echo "branch=${HEAD_REF}"; echo "owner=${HEAD_REPO_OWNER}"; echo "repo=${HEAD_REPO_NAME}"; } >> "$GITHUB_OUTPUT"
+          else
+            { echo "branch=${REF_NAME}"; echo "owner=${REPOSITORY%%/*}"; echo "repo=${REPOSITORY##*/}"; } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run add-to-core check
+        env:
+          WB: ${{ github.workspace }}/_core/bin/wb
+          MODULE_NAME: ${{ inputs.module_name }}
+          MODULE_ROOT: ${{ github.workspace }}/_module
+          MODULE_URL: https://github.com/${{ steps.ref.outputs.owner }}/${{ steps.ref.outputs.repo }}.git
+          MODULE_BRANCH: ${{ steps.ref.outputs.branch }}
+        run: _core/.github/scripts/module-ci/check-add-to-core.sh | tee add-to-core-output.log
+        shell: bash
+
+      - name: Upload output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: add-to-core-${{ matrix.os }}
+          path: add-to-core-output.log
+          if-no-files-found: warn
