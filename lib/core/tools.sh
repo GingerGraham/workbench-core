@@ -69,26 +69,37 @@ ${friendly}|${name}"
 # (e.g. "direnv"), what 'wb tools list' shows in its left column and what
 # de-duplication/collision resolution in workbench_tools_collect operates
 # on. As a fallback only, if no friendly-name match is found and <name>
-# starts with "install-", it's retried once with that prefix stripped —
+# starts with "install-", that prefix-stripped spelling is also accepted —
 # 'wb tools list' also prints the raw install-<name> function in its
 # right column, and that's the value someone most often copies by
 # mistake (ARCHITECTURE.md §12 D41). This never changes which tool wins
 # a collision; it just maps a second spelling onto the same lookup.
+#
+# Both spellings are checked in a single pass over workbench_tools_collect
+# (rather than a second, recursive call) so a collision warning fires at
+# most once per lookup, and the fallback spelling is only ever returned
+# once the whole stream has been checked for an exact match.
 workbench_tools_lookup() {
     local target="$1"
-    local name abs_path func friendly
+    local fallback=""
+    case "${target}" in
+        install-*) fallback="${target#install-}" ;;
+    esac
 
+    local name abs_path func friendly fallback_hit=""
     while IFS='|' read -r name abs_path func friendly; do
-        [[ "${friendly}" == "${target}" ]] || continue
-        printf '%s|%s|%s\n' "${name}" "${abs_path}" "${func}"
-        return 0
+        if [[ "${friendly}" == "${target}" ]]; then
+            printf '%s|%s|%s\n' "${name}" "${abs_path}" "${func}"
+            return 0
+        fi
+        if [[ -n "${fallback}" && -z "${fallback_hit}" && "${friendly}" == "${fallback}" ]]; then
+            fallback_hit="${name}|${abs_path}|${func}"
+        fi
     done < <(workbench_tools_collect)
 
-    case "${target}" in
-        install-*)
-            workbench_tools_lookup "${target#install-}"
-            return $?
-            ;;
-    esac
+    if [[ -n "${fallback_hit}" ]]; then
+        printf '%s\n' "${fallback_hit}"
+        return 0
+    fi
     return 1
 }
