@@ -48,6 +48,14 @@ Commits:
   diff actually touches gets this commit's severity. This is the common
   case; reach for an explicit scope only when auto-detection would bump
   the wrong thing.
+- An explicit `scope` that is neither a registered file's exact path nor
+  `core` is **not** caught at PR time (`pr-check.yml` only checks
+  Conventional Commit grammar) and is **not** a no-op — `compute-bumps.sh`
+  logs a one-line warning and silently drops that commit's severity
+  entirely, permanently, rather than falling back to auto-detection. A
+  component-style scope that isn't an actual path (`tools`, `sync`, ...)
+  is the easy way to hit this — see ARCHITECTURE.md §12 D42, a real
+  incident. When unsure a scope resolves, omit it.
 - A commit that touches a registered file but whose `type` doesn't parse
   fails `pr-check.yml` at PR time — fix it with `git commit --amend` or an
   interactive rebase before merging. If one somehow gets through anyway
