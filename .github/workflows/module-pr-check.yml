@@ -7,11 +7,37 @@ name: Module PR Check
 # must be Conventional-Commit-formatted, full stop -- no per-file
 # "does this commit even matter" exemption.
 on:
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      core_ref:
+        description: "workbench-core ref to pull the shared commit-format script from. Empty (default) resolves to core's latest published GitHub Release tag."
+        required: false
+        type: string
+        default: ""
 
 jobs:
+  resolve-core-ref:
+    name: resolve core_ref
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.resolve.outputs.ref }}
+    steps:
+      - name: Resolve core_ref (default: workbench-core's latest published release)
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_CORE_REF: ${{ inputs.core_ref }}
+        run: |
+          if [[ -n "${INPUT_CORE_REF}" ]]; then
+            echo "ref=${INPUT_CORE_REF}" >> "$GITHUB_OUTPUT"
+          else
+            tag="$(gh api repos/GingerGraham/workbench-core/releases/latest --jq .tag_name)"
+            echo "ref=${tag}" >> "$GITHUB_OUTPUT"
+          fi
+
   commit-format:
     name: commit message format
+    needs: resolve-core-ref
     runs-on: ubuntu-latest
     steps:
       - name: Checkout calling repo
@@ -19,10 +45,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Checkout workbench-core (for the shared commit-format script)
+      - name: Checkout workbench-core@${{ needs.resolve-core-ref.outputs.ref }} (for the shared commit-format script)
         uses: actions/checkout@v7
         with:
           repository: GingerGraham/workbench-core
+          ref: ${{ needs.resolve-core-ref.outputs.ref }}
           path: _core
 
       - name: Check commit message format
