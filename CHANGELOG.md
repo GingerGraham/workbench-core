@@ -4,6 +4,18 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- `wb` is now also a shell function (defined by `lib/loader.sh`, in scope
+  in any shell that's sourced it) wrapping the real binary: `wb update`/
+  `apply`/`add`/`remove`/`track`/`dev`/`sync` now auto-reload
+  workbench-core in the *same* shell they were run from afterwards, so
+  freshly-registered functions/getters/aliases are callable immediately —
+  no more needing to open a new shell or run `source ~/.bashrc` by hand
+  after every change. New `wb reload` command re-sources on demand (e.g.
+  after the background scheduled-sync timer changed something). See
+  `ARCHITECTURE.md` §12 D39.
+
 ## [1.3.1] - 2026-09-07
 
 ### Added

@@ -37,6 +37,12 @@ Install it yourself with your distro's package manager, then re-run
   register (loudly, in the sync log) if its declared `core_api:` range
   doesn't include your `CORE_API_VERSION`
   (`~/.config/workbench/core/version`).
+- Registered, rendered, and listed correctly by `wb functions`, but still
+  not callable? As of ARCHITECTURE.md §12 D39, `wb update`/`apply`/`add`/
+  `remove`/`track`/`dev`/`sync` auto-reload the shell you ran them from, so
+  this is now rare — but it can still happen if the module was synced by
+  the background timer instead of a command you ran yourself. Run
+  `wb reload` (or open a new shell) to pick it up.
 
 ## A `wb update` isn't picking up a new release
 
