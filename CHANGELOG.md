@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-08
+
 ### Added
 
 - `wb` is now also a shell function (defined by `lib/loader.sh`, in scope
