@@ -83,12 +83,12 @@ fi
 #    false FAIL.
 deploy_count="$(yq '.deploy // [] | length' "${MANIFEST}")"
 for ((i = 0; i < deploy_count; i++)); do
-    platforms="$(yq ".deploy[${i}].platforms // \"\"" "${MANIFEST}")"
-    if [[ -n "${platforms}" && "${platforms}" != "null" ]]; then
+    platforms="$(yq ".deploy[${i}].platforms[]" "${MANIFEST}" 2>/dev/null)"
+    if [[ -n "${platforms}" ]]; then
         if [[ "$(uname -s)" == "Darwin" ]]; then
-            echo "${platforms}" | tr ',' '\n' | grep -qx macos || continue
+            echo "${platforms}" | grep -qx macos || continue
         else
-            echo "${platforms}" | tr ',' '\n' | grep -qx linux || continue
+            echo "${platforms}" | grep -qx linux || continue
         fi
     fi
     dest="$(yq ".deploy[${i}].dest" "${MANIFEST}")"
@@ -119,14 +119,16 @@ for ((i = 0; i < getter_count; i++)); do
 done
 
 # 6. Any register.installers[] file's install-<name> functions show up in
-#    `wb tools list`.
+#    `wb tools list`, grouped under this module's own name (_wb_cmd_tools_list,
+#    bin/wb) -- `wb tools list` always prints its header/"(none discovered)"
+#    line, so a bare non-empty check would pass even with nothing discovered.
 installer_count="$(yq '.register.installers // [] | length' "${MANIFEST}")"
 if [[ "${installer_count}" -gt 0 ]]; then
     tools_out="$("${WB}" tools list 2>&1)"
-    if [[ -n "${tools_out}" ]]; then
-        ok "wb tools list is non-empty with ${installer_count} installer file(s) registered"
+    if echo "${tools_out}" | grep -qx "  ${MODULE_NAME}:"; then
+        ok "wb tools list shows '${MODULE_NAME}' with ${installer_count} installer file(s) registered"
     else
-        fail "wb tools list is empty despite ${installer_count} installer file(s) registered"
+        fail "wb tools list does not show '${MODULE_NAME}' despite ${installer_count} installer file(s) registered"
     fi
 fi
 
