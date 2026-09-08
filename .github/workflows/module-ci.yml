@@ -70,9 +70,11 @@ jobs:
           ref: ${{ needs.resolve-core-ref.outputs.ref }}
           path: _core
       - name: Install yq
+        shell: bash
         run: |
-          curl -fsSL "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64" -o /usr/local/bin/yq
-          sudo chmod +x /usr/local/bin/yq
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64" -o /tmp/yq
+          chmod +x /tmp/yq
+          echo "/tmp" >> "$GITHUB_PATH"
       - run: _core/lib/manifest/validate.sh .dotfiles-sync.yml
 
   structural-tests:
