@@ -51,11 +51,22 @@ jobs:
         run: |
           shopt -s nullglob globstar
           files=(shell/**/*.sh hooks/*.sh)
-          if [[ ${#files[@]} -eq 0 ]]; then
-            echo "No shell/**/*.sh or hooks/*.sh in this repo -- nothing to lint."
+          # A module may legitimately ship a zsh-only file under shell/*.sh
+          # (workbench-shell does) -- shellcheck hard-errors (SC1071) on any
+          # non-sh/bash/dash/ksh shebang rather than skipping it, so those
+          # are excluded here rather than failing every module with one.
+          lint_files=()
+          for f in "${files[@]}"; do
+            case "$(head -n1 "${f}")" in
+              '#!'*zsh) continue ;;
+            esac
+            lint_files+=("${f}")
+          done
+          if [[ ${#lint_files[@]} -eq 0 ]]; then
+            echo "No shellcheck-compatible shell files in this repo -- nothing to lint."
             exit 0
           fi
-          shellcheck "${files[@]}"
+          shellcheck "${lint_files[@]}"
 
   manifest-validate:
     name: manifest validate
