@@ -17,7 +17,7 @@
 
 _wb_tools_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/tools.sh" "0.1.2" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/tools.sh" "1.0.0" || true
 
 # workbench_tools_collect
 # Emits one line per discovered installer, across every loadable
