@@ -4,6 +4,18 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Release pipeline (`release.yml`/`release-finalize.yml`/`module-release.yml`/
+  `module-release-finalize.yml`): `actions/create-github-app-token`'s
+  `app-id` input renamed to `client-id` (`app-id` is deprecated as of
+  v3.1.0, same major version already in use — no version bump needed).
+  The other reported warning, `actions/github-script`'s Node.js 20
+  deprecation, is already covered by Dependabot's own open PR #37
+  (`v7` → `v9`) — confirmed safe for these scripts (neither uses
+  `require('@actions/github')`, v9's only breaking change) rather than
+  duplicating that bump here.
+
 ## [1.5.0] - 2026-09-08
 
 ### Added
