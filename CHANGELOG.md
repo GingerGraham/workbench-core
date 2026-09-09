@@ -4,6 +4,18 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Release pipeline (`release.yml`/`release-finalize.yml`/`module-release.yml`/
+  `module-release-finalize.yml`): `actions/create-github-app-token`'s
+  `app-id` input renamed to `client-id` (`app-id` is deprecated as of
+  v3.1.0, same major version already in use — no version bump needed);
+  `actions/github-script` bumped `v7` → `v8` to drop the Node.js 20
+  deprecation warning (GitHub Actions runners stop supporting Node 20
+  entirely from June 2026). Neither release-commit script uses
+  `require('@actions/github')`, the only breaking change between v7 and
+  v9, so v8 (Node 24, no other behavioural change) is the minimal fix.
+
 ## [1.5.0] - 2026-09-08
 
 ### Added
