@@ -4,6 +4,16 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `commit-format` (both the module-PR check and core's own release check)
+  now exempts merge commits from Conventional Commit grammar. GitHub
+  itself writes a merge commit's message (e.g. "Merge branch 'main' into
+  <branch>") whenever a contributor clicks a PR's "Update branch" button
+  or resolves a conflict via GitHub's web merge editor — that text was
+  never something the contributor authored, so failing the check on it
+  only punished keeping a branch current with its base.
+
 ## [2.0.0] - 2026-09-09
 
 ### Changed

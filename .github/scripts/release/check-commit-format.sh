@@ -21,6 +21,19 @@ FAILED=0
 
 while IFS= read -r sha; do
     [[ -z "${sha}" ]] && continue
+
+    # Merge commits (2+ parents) are exempt: GitHub itself writes their
+    # message (e.g. "Merge branch 'main' into <branch>") whenever a
+    # contributor clicks the PR's "Update branch" button, or resolves a
+    # conflict via GitHub's web merge editor -- it's not text the
+    # contributor authored, so holding it to Conventional Commit grammar
+    # only punishes keeping a branch current with its base.
+    parent_count="$(git log -1 --format=%P "${sha}" | wc -w)"
+    if [[ "${parent_count}" -gt 1 ]]; then
+        echo "SKIP: ${sha:0:7} is a merge commit (${parent_count} parents) — exempt from Conventional Commit format."
+        continue
+    fi
+
     message="$(git log -1 --format=%B "${sha}")"
     header="$(head -1 <<< "${message}")"
 
