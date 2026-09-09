@@ -4,6 +4,20 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **`wb tools install`/`upgrade` redesign.** `wb tools install <name>|all`
+  now always requires an explicit target — no more bare invocation
+  silently running every discovered installer; `all` lists everything
+  first and asks for y/N confirmation. New `wb tools upgrade [<name>|all]`
+  only touches tools an optional `installed-<name>` predicate reports as
+  already installed — anything not installed is silently skipped,
+  anything unresponsive (no predicate, or one that errors) is never run
+  and reported once. `wb tools list --status` shows the same
+  installed/not-installed/unresponsive check per tool. **`wb tools
+  update` is removed**, not aliased — use `install`/`upgrade` instead.
+  See `ARCHITECTURE.md` §12 D43.
+
 ### Fixed
 
 - Release pipeline (`release.yml`/`release-finalize.yml`/`module-release.yml`/

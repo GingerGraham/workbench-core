@@ -77,8 +77,8 @@ denylist of its own.
 validation as `register.shell[].src`. Every top-level function in that file
 named `install-<name>` (a **hard requirement**, not just a suggestion — it's
 the only thing that makes your function discoverable at all) is picked up
-by `wb tools list`/`wb tools update` under the friendly name `<name>` (the
-`install-` prefix stripped):
+by `wb tools list`/`wb tools install`/`wb tools upgrade` under the friendly
+name `<name>` (the `install-` prefix stripped):
 
 ```yaml
 register:
@@ -94,15 +94,21 @@ install-terraform() {
 ```
 
 Core's job stops at discovering `install-<name>` functions and invoking the
-one you asked for (or all of them, for a bare `wb tools update`) — it does
-not know or guess how your tool is installed, checked, or updated, and it
-never will. **Idempotency and version-checking are entirely your
-responsibility as the module author.** `wb tools update` calls your
-function and reports whatever it prints/returns; it does not track
-installed versions, diff state, or skip calling your function because it
-thinks nothing changed. Write `install-<name>` the way you'd write any
-script meant to be run repeatedly and safely: check what's already
-installed, and no-op (or upgrade) accordingly.
+one you asked for — it does not know or guess how your tool is installed,
+checked, or updated, and it never will. Critically, core **never** runs
+your `install-<name>` function unless it was directly told to: `wb tools
+install <name>` runs exactly that one tool; `wb tools install all` lists
+every discovered tool and asks for a plain `y`/`yes` confirmation before
+running any of them; and `wb tools upgrade [<name>|all]` only ever touches
+a tool whose optional `installed-<name>` predicate (below) actually
+reports it as installed. There is no bare "run everything with no
+confirmation" path any more. **Idempotency and version-checking inside
+`install-<name>` are entirely your responsibility as the module author.**
+Whichever verb calls it, core just calls your function and reports
+whatever it prints/returns; it does not track installed versions or diff
+state on its own. Write `install-<name>` the way you'd write any script
+meant to be run repeatedly and safely: check what's already installed,
+and no-op (or upgrade) accordingly.
 
 If your `install-<name>` function needs to unpack a `.zip`-distributed
 release, `wb install`/`wb apply` will check for and report `unzip` as an
@@ -122,6 +128,55 @@ Two modules declaring the same friendly name (e.g. both defining
 tools` warns once and picks a winner by first-by-module-name-order —
 choose a more specific friendly name if you don't want to depend on
 alphabetical luck.
+
+The friendly names `all`, `list`, `install`, `upgrade`, and `status` are
+reserved for `wb tools`'s own subcommands/argument — an `install-all` or
+`install-status`, say, is excluded from discovery entirely, with a
+one-time warning, rather than silently shadowing (or colliding with) the
+verb itself. Pick a different name.
+
+## Reporting install status (optional but recommended)
+
+Declare `installed-<name>` in the **same file** as `install-<name>` (no
+separate manifest entry needed) to let `wb tools list --status` and `wb
+tools upgrade` know whether your tool is actually present:
+
+```sh
+# shell/installers.sh
+install-terraform() {
+    # ... your own idempotency/version-checking logic here ...
+}
+
+installed-terraform() {
+    command -v terraform &>/dev/null
+}
+```
+
+The contract is deliberately minimal: **exit 0 means installed, exit 1
+means not installed.** Anything else — you don't declare
+`installed-<name>` at all, or it returns some other exit code, or it
+errors — is treated as "unresponsive": `wb tools upgrade` will never run
+`install-<name>` for it, on the principle that a wrong guess in either
+direction is worse than an honest "don't know." If you don't implement
+this, your tool is simply always unresponsive to `upgrade` — it remains
+fully installable via `wb tools install <name>`, which never checks
+status at all.
+
+**If you declare `installed-<name>`, it must accurately reflect
+reality.** This is a stronger obligation than idempotency inside
+`install-<name>` itself: core treats whatever `installed-<name>` reports
+as ground truth and acts on it unattended — a predicate that always
+returns 0 regardless of actual state (or checks the wrong thing, or goes
+stale) means `wb tools upgrade` will silently run `install-<name>`
+believing it's a routine refresh of something already present, on every
+invocation, with no other check in the loop. A predicate you're not
+confident is genuinely correct should not be declared at all — the tool
+falls back to "unresponsive," which is the safe default this whole
+redesign exists to guarantee, not a degraded outcome.
+
+This predicate should be cheap and side-effect-free (typically a single
+`command -v`/file-existence check) — it may run once per tool on every
+`wb tools list --status` or `wb tools upgrade` invocation.
 
 ## The arch-normalization snippet
 
