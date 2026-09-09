@@ -88,7 +88,7 @@ jobs:
       # exactly like the web editor would.
       - name: Create release branch and commit via API (verified signature)
         if: steps.compute.outputs.severity != 'none'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           NEW_VERSION: ${{ steps.compute.outputs.new_version }}
         with:
