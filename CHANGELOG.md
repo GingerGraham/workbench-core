@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-09
+
 ### Changed
 
 - **`wb tools install`/`upgrade` redesign.** `wb tools install <name>|all`
