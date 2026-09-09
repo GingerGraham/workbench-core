@@ -207,6 +207,17 @@ else
     cat /tmp/wb-tools-registry-upgrade-gizmo.log
 fi
 
+# ── 7b. wb tools upgrade install-gizmo: the install-<name> fallback
+#     spelling must resolve to the SAME installed-gizmo predicate as the
+#     friendly name above, not a nonexistent installed-install-gizmo. ─────
+rm -f "${MARKER_ALPHA_GIZMO}"
+if _wb_cmd_tools upgrade install-gizmo >/tmp/wb-tools-registry-upgrade-install-gizmo.log 2>&1 && [[ -f "${MARKER_ALPHA_GIZMO}" ]]; then
+    ok "'wb tools upgrade install-gizmo' (fallback spelling) still resolves installed-gizmo and runs install-gizmo"
+else
+    fail "'wb tools upgrade install-gizmo' (fallback spelling) did not run install-gizmo — predicate name was likely derived from the raw target instead of the resolved function"
+    cat /tmp/wb-tools-registry-upgrade-install-gizmo.log
+fi
+
 rm -f "${MARKER_ALPHA_SPROCKET}"
 if _wb_cmd_tools upgrade sprocket >/tmp/wb-tools-registry-upgrade-sprocket.log 2>&1; then
     if [[ ! -f "${MARKER_ALPHA_SPROCKET}" ]]; then

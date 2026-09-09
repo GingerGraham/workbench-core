@@ -788,24 +788,33 @@ _wb_cmd_tools_upgrade() {
     local target="${1:-}"
 
     if [[ -n "${target}" && "${target}" != "all" ]]; then
-        local hit name abs_path func status
+        local hit name abs_path func friendly status
         hit="$(workbench_tools_lookup "${target}")" || {
             log_error "wb tools upgrade: no discovered installer named '${target}' — see 'wb tools list'"
             return 1
         }
         IFS='|' read -r name abs_path func <<< "${hit}"
-        status="$(_wb_tools_check_installed "${name}" "${abs_path}" "${func}" "${target}")"
+        # workbench_tools_lookup accepts both the friendly name and the
+        # install-<name> fallback spelling (ARCHITECTURE.md §12 D41), but
+        # only ever returns module|abs_path|func — the installed-<name>
+        # predicate is keyed on the friendly name, so it must be derived
+        # from func here rather than reusing the raw, possibly-fallback
+        # ${target}: passing "install-terraform" straight through would
+        # look for a nonexistent installed-install-terraform predicate
+        # and always report unresponsive.
+        friendly="${func#install-}"
+        status="$(_wb_tools_check_installed "${name}" "${abs_path}" "${func}" "${friendly}")"
         case "${status}" in
             installed)
-                _wb_tools_invoke "upgrade" "${name}" "${abs_path}" "${func}" "${target}"
+                _wb_tools_invoke "upgrade" "${name}" "${abs_path}" "${func}" "${friendly}"
                 return $?
                 ;;
             not-installed)
-                log_info "wb tools upgrade: ${target} (${name}): not installed — nothing to upgrade."
+                log_info "wb tools upgrade: ${friendly} (${name}): not installed — nothing to upgrade."
                 return 0
                 ;;
             *)
-                log_warn "wb tools upgrade: ${target} (${name}): status unresponsive — module doesn't implement installed-${target}, or the check failed. Skipped."
+                log_warn "wb tools upgrade: ${friendly} (${name}): status unresponsive — module doesn't implement installed-${friendly}, or the check failed. Skipped."
                 return 0
                 ;;
         esac
