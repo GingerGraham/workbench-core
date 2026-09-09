@@ -17,7 +17,7 @@
 
 _wb_tools_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/tools.sh" "0.1.1" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/tools.sh" "0.1.2" || true
 
 # workbench_tools_collect
 # Emits one line per discovered installer, across every loadable
@@ -30,6 +30,11 @@ command -v _workbench_register_script_version &>/dev/null && _workbench_register
 # so "first" here means "first alphabetically by module name," the same
 # tie-break convention the loader's tier-sourcing already uses. Each
 # collision is warned about exactly once.
+#
+# A friendly name matching a reserved wb-tools word (all, list, install,
+# upgrade, status — ARCHITECTURE.md §12 D43) is excluded from discovery
+# entirely, also with a one-time warning, before collision resolution
+# even runs.
 #
 # Tracks what's already been seen as a newline-delimited "friendly|owner"
 # string rather than a bash array — friendly names are restricted to
@@ -47,6 +52,13 @@ workbench_tools_collect() {
 
         while IFS='|' read -r abs_path func friendly; do
             [[ -z "${friendly}" ]] && continue
+
+            case "${friendly}" in
+                all|list|install|upgrade|status)
+                    log_warn "wb tools: '${name}' declares install-${friendly}, but '${friendly}' is a reserved wb tools word and can never be a discoverable friendly name — rename install-${friendly} to something else."
+                    continue
+                    ;;
+            esac
 
             already="$(printf '%s\n' "${seen}" | grep "^${friendly}|" | head -n 1 | cut -d'|' -f2)"
             if [[ -n "${already}" ]]; then
