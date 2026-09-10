@@ -8,7 +8,7 @@
 # (if any) a module publishes.
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/info.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/info.sh" "0.2.0" || true
 
 # workbench_module_docs_path <name>
 # Prints the absolute path of whichever of HELP.md/README.md exists at

@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-09-10
+
 ### Added
 
 - **`wb module info <name>` / `wb module docs <name>`.** `info` shows
