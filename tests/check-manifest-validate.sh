@@ -134,9 +134,12 @@ else
 fi
 
 # ── Fixture 6: unsupported version — must FAIL ──────────────────────────────
+# version: 3 (not version: 2 — that's now a supported schema version, just
+# the wrong one for this filename; see fixture 10 below for that case) so
+# this still exercises the "no such schema version at all" gate on its own.
 mkdir -p "${WORK}/badversion"
 cat > "${WORK}/badversion/.dotfiles-sync.yml" <<'EOF'
-version: 2
+version: 3
 deploy:
   - src: shell/
     dest: ~/.config/workbench-badversion-test/
@@ -144,9 +147,9 @@ EOF
 mkdir -p "${WORK}/badversion/shell"
 touch "${WORK}/badversion/shell/x.sh"
 if "${VALIDATE}" "${WORK}/badversion/.dotfiles-sync.yml" >/tmp/wb-validate-badversion.log 2>&1; then
-    fail "a version: 2 manifest was accepted — schema version gate not enforced"
+    fail "a version: 3 manifest was accepted — schema version gate not enforced"
 else
-    ok "a version: 2 manifest is rejected — schema version gate enforced"
+    ok "a version: 3 manifest is rejected — schema version gate enforced"
 fi
 # shellcheck disable=SC2015
 grep -q "version must be one of" /tmp/wb-validate-badversion.log && ok "rejects unsupported version with the expected message" || fail "unsupported-version rejection message missing"
