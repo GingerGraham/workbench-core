@@ -1,14 +1,18 @@
-# `.dotfiles-sync.yml` — sync manifest spec
+# The workbench-core manifest spec
 
-This is the authoritative contract for `.dotfiles-sync.yml`. If you are
+This is the authoritative contract for a workbench-core manifest. If you are
 authoring a module or an independent tracked tool, everything you need is in
 this file.
 
-The filename and `version: 1` semantics are permanent — this keeps existing
-`dotfiles`-era manifests working unmodified (ARCHITECTURE.md §5.2/§5.4). All
-of `core_api`/`sync`/`register` below are new, optional, namespaced keys that
-only `workbench-core` looks for; a manifest with none of them behaves
-exactly as it always has.
+`.dotfiles-sync.yml`'s filename and `version: 1` semantics are permanent —
+this keeps existing `dotfiles`-era manifests working unmodified. It is no
+longer the *only* permanent name, though: `workbench.yml` / `workbench.yaml`
+/ `wb.yml` / `wb.yaml`, `version: 2`, is a parallel, equally-supported
+spelling with the identical field set — see
+[Manifest filenames & discovery](#manifest-filenames--discovery) below and
+ARCHITECTURE.md §12 D46. All of `core_api`/`sync`/`register` below are new,
+optional, namespaced keys that only `workbench-core` looks for; a manifest
+with none of them behaves exactly as it always has.
 
 If this file and `lib/manifest/validate.sh` (the developer-time validator)
 or `lib/manifest/parse.sh` (the hot-path reader) ever disagree, **this file
@@ -16,6 +20,7 @@ wins** — both cite the relevant section here in their own error output.
 
 ## Table of contents
 
+- [Manifest filenames & discovery](#manifest-filenames--discovery)
 - [Quick start](#quick-start)
 - [Schema version 1 — unchanged fields](#schema-version-1--unchanged-fields)
 - [`core_api`](#core_api)
@@ -31,13 +36,44 @@ wins** — both cite the relevant section here in their own error output.
 - [The compatibility boundary — what would actually be breaking](#the-compatibility-boundary)
 - [Validating your manifest](#validating-your-manifest)
 
+## Manifest filenames & discovery
+
+`workbench-core` discovers a module's manifest by checking, in this order,
+in the module's repo root:
+
+1. `workbench.yml`
+2. `workbench.yaml`
+3. `wb.yml`
+4. `wb.yaml`
+5. `.dotfiles-sync.yml`
+
+Only the first match found is read — manifests are never merged across
+filenames. Filename and `version:` are a bound pair: any of the first four
+names **must** declare `version: 2`; `.dotfiles-sync.yml` **must** declare
+`version: 1`. Either mismatch is a loud validation/sync-refusal error, not a
+silent correction.
+
+Because `wb.yml`/`wb.yaml` are generic enough to plausibly be some other
+tool's own config file, a candidate with any of the first four names must
+contain a top-level `version:` key to be accepted as a workbench manifest at
+all — one with no `version:` key is silently treated as not ours, and
+discovery moves on to the next candidate rather than erroring on a
+stranger's file. `.dotfiles-sync.yml` is exempt from this sniff-check and is
+always trusted unconditionally, as it always has been.
+
+There is no deprecation timeline for `.dotfiles-sync.yml` — it may remain a
+fully supported name indefinitely. `workbench.yml`/`version: 2` is simply
+the name this spec's own examples lead with for new or migrating repos. See
+ARCHITECTURE.md §12 D46 for the full decision.
+
 ## Quick start
 
-A minimal module manifest — deploy only, no shell registration:
+A minimal module manifest — deploy only, no shell registration. This is the
+form new and migrating repos should lead with:
 
 ```yaml
-# .dotfiles-sync.yml — schema version 1
-version: 1
+# workbench.yml — schema version 2
+version: 2
 branch: main
 
 deploy:
@@ -49,7 +85,8 @@ deploy:
 A module that also registers shell functions and a getter:
 
 ```yaml
-version: 1
+# workbench.yml — schema version 2
+version: 2
 branch: main
 
 deploy:
@@ -76,8 +113,28 @@ register:
       label: "AWS config helpers"
 ```
 
-No `.dotfiles-sync.yml` at all is also valid — a clone-only mirror that
-deploys nothing.
+The legacy/reference form — identical fields, `.dotfiles-sync.yml`,
+`version: 1` — still works exactly as it always has:
+
+```yaml
+# .dotfiles-sync.yml — schema version 1
+version: 1
+branch: main
+
+deploy:
+  - src: shell/
+    dest: ~/.local/share/workbench/modules/awsconfd/src/
+    mode: copy
+
+core_api: ">=1.0 <2.0"
+register:
+  shell:
+    - src: shell/aws.sh
+      tier: tools
+```
+
+No manifest at all is also valid — a clone-only mirror that deploys
+nothing.
 
 ## Schema version 1 — unchanged fields
 
@@ -277,15 +334,19 @@ exposed to a running hook) and a reference hook skeleton.
 The additive approach above covers everything currently in scope. A genuine
 break would only be needed for something like changing `dest` validation
 semantics incompatibly, making `register:` mandatory, or supporting multiple
-manifests per repo. If that ever becomes necessary, the mechanism is
-`version: 2`, not a new filename — see ARCHITECTURE.md §5.4. Nothing today
-requires this.
+manifests per repo. `version: 2` is now spoken for by the filename change
+above (ARCHITECTURE.md §12 D46), so a future genuine break would need
+`version: 3` — see ARCHITECTURE.md §5.4. Nothing today requires this.
 
 ## Validating your manifest
 
 ```sh
-lib/manifest/validate.sh path/to/.dotfiles-sync.yml
+lib/manifest/validate.sh [path/to/manifest]
 ```
+
+With no path, the validator discovers a manifest in the current directory
+using the same precedence as the sync engine (see
+[Manifest filenames & discovery](#manifest-filenames--discovery) above).
 
 Requires [mikefarah/yq v4](https://github.com/mikefarah/yq#install) — a
 developer-time dependency only; nothing on the hot/timer sync path depends

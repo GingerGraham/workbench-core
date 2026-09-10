@@ -131,6 +131,51 @@ EOF
 [[ -z "$(workbench_manifest_hook_post_deploy "${LEGACY}")" ]] \
     && ok "legacy manifest: no hook, not an error" || fail "legacy manifest: unexpected hook output"
 
+# ── Manifest filename resolution & version pairing (ARCHITECTURE.md §12 D46) ─
+
+# shellcheck disable=SC2015
+[[ "$(workbench_manifest_expected_version .dotfiles-sync.yml)" == "1" ]] \
+    && ok "expected version for .dotfiles-sync.yml is 1" || fail "expected version for .dotfiles-sync.yml wrong"
+# shellcheck disable=SC2015
+[[ "$(workbench_manifest_expected_version workbench.yml)" == "2" ]] \
+    && ok "expected version for workbench.yml is 2" || fail "expected version for workbench.yml wrong"
+# shellcheck disable=SC2015
+[[ "$(workbench_manifest_expected_version wb.yaml)" == "2" ]] \
+    && ok "expected version for wb.yaml is 2" || fail "expected version for wb.yaml wrong"
+
+RESOLVEDIR="${WORK}/resolve"
+mkdir -p "${RESOLVEDIR}"
+
+# No manifest at all — resolves to nothing.
+if workbench_resolve_manifest_path "${RESOLVEDIR}" >/tmp/wb-parse-resolve-none.log 2>&1; then
+    fail "workbench_resolve_manifest_path resolved something in an empty directory"
+else
+    ok "workbench_resolve_manifest_path finds nothing in a manifest-less directory"
+fi
+
+# Only .dotfiles-sync.yml present — resolves to it.
+echo "version: 1" > "${RESOLVEDIR}/.dotfiles-sync.yml"
+# shellcheck disable=SC2015
+[[ "$(workbench_resolve_manifest_path "${RESOLVEDIR}")" == "${RESOLVEDIR}/.dotfiles-sync.yml" ]] \
+    && ok "resolves .dotfiles-sync.yml when it's the only candidate present" || fail "did not resolve .dotfiles-sync.yml"
+
+# workbench.yml with a version: key takes precedence over .dotfiles-sync.yml.
+echo "version: 2" > "${RESOLVEDIR}/workbench.yml"
+# shellcheck disable=SC2015
+[[ "$(workbench_resolve_manifest_path "${RESOLVEDIR}")" == "${RESOLVEDIR}/workbench.yml" ]] \
+    && ok "workbench.yml takes precedence over .dotfiles-sync.yml when both are present" || fail "precedence order wrong"
+rm -f "${RESOLVEDIR}/workbench.yml"
+
+# A wb.yml with no version: key is skipped (not ours) — falls through to
+# .dotfiles-sync.yml, never erroring on the stranger's file.
+cat > "${RESOLVEDIR}/wb.yml" <<'EOF'
+some_other_tools_config: true
+EOF
+# shellcheck disable=SC2015
+[[ "$(workbench_resolve_manifest_path "${RESOLVEDIR}")" == "${RESOLVEDIR}/.dotfiles-sync.yml" ]] \
+    && ok "a wb.yml with no version: key is skipped as not-ours, falls through to .dotfiles-sync.yml" || fail "unrelated wb.yml was not skipped"
+rm -f "${RESOLVEDIR}/wb.yml" "${RESOLVEDIR}/.dotfiles-sync.yml"
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."

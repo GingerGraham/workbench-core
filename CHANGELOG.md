@@ -4,6 +4,17 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Manifest discovery now also checks `workbench.yml`/`workbench.yaml`/
+  `wb.yml`/`wb.yaml`** (`version: 2`) ahead of `.dotfiles-sync.yml`
+  (`version: 1`, unchanged) — a parallel, workbench-focused manifest
+  filename carrying the identical field set. Filename and `version:` are
+  a bound pair, enforced by both the developer-time validator and the
+  sync engine's own refusal gate. No breaking change for existing repos
+  — `.dotfiles-sync.yml`/`version: 1` continues to work exactly as it
+  always has, with no deprecation timeline. See ARCHITECTURE.md §12 D46.
+
 ## [2.2.0] - 2026-09-10
 
 ### Added

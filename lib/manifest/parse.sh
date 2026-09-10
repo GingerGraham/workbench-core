@@ -26,8 +26,8 @@ command -v _workbench_register_script_version &>/dev/null && _workbench_register
 # _WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED — that script runs standalone
 # without this file loaded; this constant is the hot-path's own answer to
 # "what do I actually know how to process," checked live at sync time
-# rather than at manifest-authoring time. See ARCHITECTURE.md §12 D30.
-_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED="1"
+# rather than at manifest-authoring time. See ARCHITECTURE.md §12 D30/D46.
+_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED="1 2"
 
 # _wb_manifest_schema_supported <version>
 # True iff <version> (a manifest's own top-level `version:` scalar) is one
@@ -37,6 +37,50 @@ _WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED="1"
 _wb_manifest_schema_supported() {
     local version="$1"
     [[ " ${_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED} " == *" ${version} "* ]]
+}
+
+# The manifest filenames this running core will discover, in the order
+# they are checked. .dotfiles-sync.yml is always last and is never
+# sniff-checked below — it has been the trusted, permanent name since
+# before this function existed (ARCHITECTURE.md §5.2). See §12 D46.
+_WB_MANIFEST_CANDIDATE_NAMES="workbench.yml workbench.yaml wb.yml wb.yaml .dotfiles-sync.yml"
+
+# workbench_resolve_manifest_path <dir>
+# Prints the path to the manifest this module uses, or nothing (exit 1)
+# if none is present. Checks _WB_MANIFEST_CANDIDATE_NAMES in order. For
+# any candidate other than .dotfiles-sync.yml, the file must contain a
+# top-level `version:` key to be accepted — a workbench.yml/wb.yml with
+# no recognisable version: is treated as belonging to something else
+# entirely (D46) and skipped, not errored on; a *wrong* version value
+# for a filename that does declare one becomes a loud error downstream
+# (lib/manifest/validate.sh, or the engine's own version gate), never
+# silently skipped.
+workbench_resolve_manifest_path() {
+    local dir="$1" name candidate version
+    for name in ${_WB_MANIFEST_CANDIDATE_NAMES}; do
+        candidate="${dir%/}/${name}"
+        [[ -f "${candidate}" ]] || continue
+        if [[ "${name}" == ".dotfiles-sync.yml" ]]; then
+            printf '%s\n' "${candidate}"
+            return 0
+        fi
+        version="$(workbench_manifest_scalar version "${candidate}")"
+        [[ -n "${version}" ]] && { printf '%s\n' "${candidate}"; return 0; }
+    done
+    return 1
+}
+
+# workbench_manifest_expected_version <path>
+# The version: value the filename at <path> is required to declare — 1
+# for .dotfiles-sync.yml (permanent), 2 for any of the new candidate
+# names. Bash-3.2-safe basename dispatch, matching the case-based
+# portability idiom used elsewhere rather than an associative array.
+workbench_manifest_expected_version() {
+    case "$(basename -- "$1")" in
+        .dotfiles-sync.yml) echo 1 ;;
+        workbench.yml|workbench.yaml|wb.yml|wb.yaml) echo 2 ;;
+        *) return 1 ;;
+    esac
 }
 
 # workbench_manifest_scalar <key> <file>

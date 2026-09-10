@@ -134,9 +134,12 @@ else
 fi
 
 # ── Fixture 6: unsupported version — must FAIL ──────────────────────────────
+# version: 3 (not version: 2 — that's now a supported schema version, just
+# the wrong one for this filename; see fixture 10 below for that case) so
+# this still exercises the "no such schema version at all" gate on its own.
 mkdir -p "${WORK}/badversion"
 cat > "${WORK}/badversion/.dotfiles-sync.yml" <<'EOF'
-version: 2
+version: 3
 deploy:
   - src: shell/
     dest: ~/.config/workbench-badversion-test/
@@ -144,12 +147,157 @@ EOF
 mkdir -p "${WORK}/badversion/shell"
 touch "${WORK}/badversion/shell/x.sh"
 if "${VALIDATE}" "${WORK}/badversion/.dotfiles-sync.yml" >/tmp/wb-validate-badversion.log 2>&1; then
-    fail "a version: 2 manifest was accepted — schema version gate not enforced"
+    fail "a version: 3 manifest was accepted — schema version gate not enforced"
 else
-    ok "a version: 2 manifest is rejected — schema version gate enforced"
+    ok "a version: 3 manifest is rejected — schema version gate enforced"
 fi
 # shellcheck disable=SC2015
 grep -q "version must be one of" /tmp/wb-validate-badversion.log && ok "rejects unsupported version with the expected message" || fail "unsupported-version rejection message missing"
+
+# ── Fixture 7: workbench.yml/version: 2 — must PASS, identical to fixture 1 ─
+
+mkdir -p "${WORK}/newname/shell" "${WORK}/newname/bin" "${WORK}/newname/hooks"
+touch "${WORK}/newname/shell/aws.sh" "${WORK}/newname/shell/aws-lazy.sh" "${WORK}/newname/shell/installers.sh"
+echo '#!/bin/sh' > "${WORK}/newname/bin/aws-helper"
+echo '#!/bin/sh' > "${WORK}/newname/hooks/post-deploy.sh"
+cat > "${WORK}/newname/workbench.yml" <<'EOF'
+version: 2
+branch: main
+deploy:
+  - src: shell/
+    dest: ~/.local/share/workbench/modules/awsconfd/src/
+    mode: copy
+core_api: ">=1.0 <2.0"
+sync:
+  enabled: true
+register:
+  shell:
+    - src: shell/aws.sh
+      tier: tools
+    - src: shell/aws-lazy.sh
+  installers:
+    - src: shell/installers.sh
+  getters:
+    - name: aws
+      function: get-aws-functions
+      label: "AWS config helpers"
+hooks:
+  post_deploy:
+    command: ["hooks/post-deploy.sh"]
+    run_on: changed
+    timeout: 60
+EOF
+
+if "${VALIDATE}" "${WORK}/newname/workbench.yml" >/tmp/wb-validate-newname.log 2>&1; then
+    ok "workbench.yml/version: 2 (otherwise identical to fixture 1) validates cleanly"
+else
+    fail "workbench.yml/version: 2 was rejected — see /tmp/wb-validate-newname.log"
+    cat /tmp/wb-validate-newname.log
+fi
+
+# ── Fixture 8: wb.yml/version: 2 — must PASS, confirms the second name works ─
+
+mkdir -p "${WORK}/wbname"
+cat > "${WORK}/wbname/wb.yml" <<'EOF'
+version: 2
+branch: main
+deploy:
+  - src: shell/
+    dest: ~/.config/workbench-wbname-test/
+EOF
+mkdir -p "${WORK}/wbname/shell"
+touch "${WORK}/wbname/shell/x.sh"
+if "${VALIDATE}" "${WORK}/wbname/wb.yml" >/tmp/wb-validate-wbname.log 2>&1; then
+    ok "wb.yml/version: 2 validates cleanly (second candidate name works identically)"
+else
+    fail "wb.yml/version: 2 was rejected — see /tmp/wb-validate-wbname.log"
+    cat /tmp/wb-validate-wbname.log
+fi
+
+# ── Fixture 9: workbench.yml/version: 1 — must FAIL, filename/version mismatch
+
+mkdir -p "${WORK}/mismatch1"
+cat > "${WORK}/mismatch1/workbench.yml" <<'EOF'
+version: 1
+deploy:
+  - src: shell/
+    dest: ~/.config/workbench-mismatch1-test/
+EOF
+mkdir -p "${WORK}/mismatch1/shell"
+touch "${WORK}/mismatch1/shell/x.sh"
+if "${VALIDATE}" "${WORK}/mismatch1/workbench.yml" >/tmp/wb-validate-mismatch1.log 2>&1; then
+    fail "workbench.yml/version: 1 was accepted — filename/version pairing not enforced"
+else
+    ok "workbench.yml/version: 1 is rejected — filename/version pairing enforced"
+fi
+# shellcheck disable=SC2015
+grep -q "must declare version: 2" /tmp/wb-validate-mismatch1.log && ok "rejects the mismatch with the expected message" || fail "filename/version mismatch message missing"
+
+# ── Fixture 10: .dotfiles-sync.yml/version: 2 — must FAIL, mirrors the ───────
+#    engine-level test in tests/check-sync-engine-isolation.sh at the
+#    validator level.
+
+mkdir -p "${WORK}/mismatch2"
+cat > "${WORK}/mismatch2/.dotfiles-sync.yml" <<'EOF'
+version: 2
+deploy:
+  - src: shell/
+    dest: ~/.config/workbench-mismatch2-test/
+EOF
+mkdir -p "${WORK}/mismatch2/shell"
+touch "${WORK}/mismatch2/shell/x.sh"
+if "${VALIDATE}" "${WORK}/mismatch2/.dotfiles-sync.yml" >/tmp/wb-validate-mismatch2.log 2>&1; then
+    fail ".dotfiles-sync.yml/version: 2 was accepted — filename/version pairing not enforced"
+else
+    ok ".dotfiles-sync.yml/version: 2 is rejected — filename/version pairing enforced"
+fi
+# shellcheck disable=SC2015
+grep -q "must declare version: 1" /tmp/wb-validate-mismatch2.log && ok "rejects the mismatch with the expected message" || fail "filename/version mismatch message missing"
+
+# ── Fixture 11: an unrelated wb.yml with no version: alongside a valid ──────
+#    .dotfiles-sync.yml — no-arg discovery must validate the latter, not
+#    error about the unrelated wb.yml.
+
+mkdir -p "${WORK}/discovery/shell"
+touch "${WORK}/discovery/shell/x.sh"
+cat > "${WORK}/discovery/wb.yml" <<'EOF'
+some_other_tools_config: true
+unrelated: yes
+EOF
+cat > "${WORK}/discovery/.dotfiles-sync.yml" <<'EOF'
+version: 1
+deploy:
+  - src: shell/
+    dest: ~/.config/workbench-discovery-test/
+EOF
+if ( cd "${WORK}/discovery" && "${VALIDATE}" >/tmp/wb-validate-discovery.log 2>&1 ); then
+    ok "no-arg discovery skips an unrelated wb.yml (no version:) and validates .dotfiles-sync.yml instead"
+else
+    fail "no-arg discovery did not validate the valid .dotfiles-sync.yml alongside an unrelated wb.yml — see /tmp/wb-validate-discovery.log"
+    cat /tmp/wb-validate-discovery.log
+fi
+
+# ── Fixture 12: an explicit path argument to a filename outside the five ────
+#    recognised names bypasses discovery (per usage()) and must validate on
+#    its version: value alone — the filename/version pairing check must not
+#    fire for a filename workbench_manifest_expected_version doesn't
+#    recognise (caught in review: was producing a blank-version "must
+#    declare version: " error for any such file).
+
+mkdir -p "${WORK}/customname/shell"
+touch "${WORK}/customname/shell/x.sh"
+cat > "${WORK}/customname/custom.yml" <<'EOF'
+version: 1
+deploy:
+  - src: shell/
+    dest: ~/.config/workbench-customname-test/
+EOF
+if "${VALIDATE}" "${WORK}/customname/custom.yml" >/tmp/wb-validate-customname.log 2>&1; then
+    ok "an explicit path to an unrecognised filename (custom.yml) validates on version: alone, no filename/version pairing error"
+else
+    fail "an explicit path to an unrecognised filename was incorrectly rejected by the filename/version pairing check — see /tmp/wb-validate-customname.log"
+    cat /tmp/wb-validate-customname.log
+fi
 
 echo
 if [[ "${FAILED}" -eq 0 ]]; then

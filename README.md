@@ -157,6 +157,8 @@ A few of the load-bearing decisions, in brief (full rationale in
 - **No persistent working trees.** Production tracking never leaves an
   incrementally-`git pull`-ed checkout on disk, for any module, under
   any tracking mode.
-- **Additive manifest evolution.** `.dotfiles-sync.yml version: 1` stays
-  backward-compatible; a genuine break requires `version: 2`, not a new
-  filename.
+- **Additive manifest evolution.** `.dotfiles-sync.yml version: 1` is
+  permanent, unchanged, zero behavioural difference. `version: 2` —
+  `workbench.yml`/`workbench.yaml`/`wb.yml`/`wb.yaml` — is the same,
+  already-additive field set under a workbench-focused name; new or
+  migrating repos should prefer it (ARCHITECTURE.md §12 D46).

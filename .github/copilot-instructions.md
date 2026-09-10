@@ -46,10 +46,11 @@ than silently reinterpreting one of these away:
 - **One generalised sync/install engine.** Core is "module zero," not a
   special case; a new bundle or capability is sugar over the engine,
   never a hardcoded branch inside it.
-- **Manifest changes stay additive** — `.dotfiles-sync.yml version: 1`
-  stays backward-compatible unless `ARCHITECTURE.md` §5.4's bar for a
-  genuine break is met, in which case it's `version: 2`, not a silently
-  reinterpreted field.
+- **Manifest changes stay additive** — `.dotfiles-sync.yml version: 1` is
+  permanent and unchanged. `version: 2` (`workbench.yml`/`workbench.yaml`/
+  `wb.yml`/`wb.yaml`) is the preferred name for new/migrating repos,
+  carrying the identical field set — filename and version are a bound
+  pair; see `ARCHITECTURE.md` §12 D46.
 - **`dotfiles` (the original monolith) is frozen at `v1.10.0`** — no
   feature work or refactors there; it auto-deploys unattended via a
   live timer on a real machine. `workbench-precursor` is a

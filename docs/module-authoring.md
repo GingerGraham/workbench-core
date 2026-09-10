@@ -19,19 +19,22 @@ and shell loader.
 
 ## Do you need this at all?
 
-No — a repo with no `.dotfiles-sync.yml` at all is a valid clone-only
-mirror. You only need a manifest if you want `workbench-core` to deploy
-files, register shell functions, or run a hook for you.
+No — a repo with no manifest at all is a valid clone-only mirror. You only
+need a manifest if you want `workbench-core` to deploy files, register
+shell functions, or run a hook for you.
 
 ## The manifest
 
-See `contracts/manifest-spec.md` for the full field reference. The short
-version: add `.dotfiles-sync.yml` to your repo root, declare `deploy:`
-entries for anything that should land on disk, and — if you want shell
-integration — `core_api:` plus `register:`.
+See `contracts/manifest-spec.md` for the full field reference, including
+which filenames are discovered and in what order. The short version: add
+`workbench.yml` (`version: 2`) to your repo root for a new or migrating
+module — `.dotfiles-sync.yml` (`version: 1`) still works identically as the
+legacy name — declare `deploy:` entries for anything that should land on
+disk, and — if you want shell integration — `core_api:` plus `register:`.
 
 ```yaml
-version: 1
+# workbench.yml
+version: 2
 branch: main
 core_api: ">=1.0 <2.0"
 register:
@@ -284,7 +287,7 @@ directory — there isn't one, and there isn't meant to be.
 ## Testing your manifest
 
 ```sh
-lib/manifest/validate.sh path/to/.dotfiles-sync.yml
+lib/manifest/validate.sh [path/to/manifest]
 ```
 
 Requires [mikefarah/yq v4](https://github.com/mikefarah/yq#install) (a

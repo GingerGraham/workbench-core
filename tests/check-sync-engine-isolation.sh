@@ -233,7 +233,7 @@ else
     fail "badversion: workbench_sync_module returned success for an unsupported manifest version"
 fi
 # shellcheck disable=SC2015
-grep -q "this core only supports schema version" /tmp/wb-sync-badversion.log && ok "badversion: refusal logged the expected message" || fail "badversion: expected refusal message not logged"
+grep -q "expected 1 for that filename" /tmp/wb-sync-badversion.log && ok "badversion: refusal logged the expected message" || fail "badversion: expected refusal message not logged"
 if [[ ! -f "$(workbench_module_dir badversion)/register.list" ]]; then
     ok "badversion: register.list was not written"
 else
@@ -358,6 +358,86 @@ if [[ ! -e "${HOME}/.local/share/wb-test/noversion.sh" ]]; then
     ok "noversion: deploy destination was not touched"
 else
     fail "noversion: deploy destination was created despite the missing version:"
+fi
+
+# ── Manifest filename/version pairing (ARCHITECTURE.md §12 D46) ────────────
+# A module using the new workbench.yml name at version: 2 must sync exactly
+# like a .dotfiles-sync.yml/version: 1 module does — mirrors the "first
+# sync (version: 1) deployed successfully" assertion above, for the new
+# name.
+NEWNAMESRC="${WORK}/newnamesrc"
+NEWNAMEBARE="${WORK}/newnamesrc-bare.git"
+mkdir -p "${NEWNAMESRC}"
+git init -q --bare "${NEWNAMEBARE}"
+git clone -q "${NEWNAMEBARE}" "${NEWNAMESRC}"
+(
+    cd "${NEWNAMESRC}"
+    git config user.email t@t.com
+    git config user.name Test
+    mkdir -p shell
+    echo 'get-newname-functions() { :; }' > shell/newname.sh
+    cat > workbench.yml <<'EOF'
+version: 2
+branch: main
+deploy:
+  - src: shell/newname.sh
+    dest: ~/.local/share/wb-test/newname.sh
+    mode: link
+EOF
+    git add -A && git commit -q -m "v1 - workbench.yml/version: 2"
+    git branch -M main
+    git push -q origin main
+    git tag v1.0.0
+    git push -q origin v1.0.0
+)
+setup_module newname latest "${NEWNAMEBARE}"
+workbench_sync_module newname >/tmp/wb-sync-newname.log 2>&1
+if [[ -f "${HOME}/.local/share/wb-test/newname.sh" ]] && [[ -n "$(workbench_module_conf_get newname RESOLVED_SHA "")" ]]; then
+    ok "newname: first sync (workbench.yml, version: 2) deployed successfully"
+else
+    fail "newname: first sync (workbench.yml, version: 2) did not deploy as expected"
+    cat /tmp/wb-sync-newname.log
+fi
+
+# The inverse pairing — workbench.yml declaring version: 1 — must be
+# refused exactly like .dotfiles-sync.yml/version: 2 is above.
+MISMATCHSRC="${WORK}/mismatchsrc"
+MISMATCHBARE="${WORK}/mismatchsrc-bare.git"
+mkdir -p "${MISMATCHSRC}"
+git init -q --bare "${MISMATCHBARE}"
+git clone -q "${MISMATCHBARE}" "${MISMATCHSRC}"
+(
+    cd "${MISMATCHSRC}"
+    git config user.email t@t.com
+    git config user.name Test
+    mkdir -p shell
+    echo 'get-mismatch-functions() { :; }' > shell/mismatch.sh
+    cat > workbench.yml <<'EOF'
+version: 1
+branch: main
+deploy:
+  - src: shell/mismatch.sh
+    dest: ~/.local/share/wb-test/mismatch.sh
+    mode: link
+EOF
+    git add -A && git commit -q -m "v1 - workbench.yml declaring the wrong version"
+    git branch -M main
+    git push -q origin main
+    git tag v1.0.0
+    git push -q origin v1.0.0
+)
+setup_module mismatch latest "${MISMATCHBARE}"
+mismatch_rc=0
+workbench_sync_module mismatch >/tmp/wb-sync-mismatch.log 2>&1 || mismatch_rc=$?
+if [[ "${mismatch_rc}" -ne 0 ]]; then
+    ok "mismatch: workbench.yml/version: 1 is refused the same way .dotfiles-sync.yml/version: 2 is (non-zero)"
+else
+    fail "mismatch: workbench.yml/version: 1 was accepted — filename/version pairing not enforced by the engine"
+fi
+if [[ ! -e "${HOME}/.local/share/wb-test/mismatch.sh" ]]; then
+    ok "mismatch: deploy destination was not touched"
+else
+    fail "mismatch: deploy destination was created despite the filename/version mismatch"
 fi
 
 # A genuinely new upstream change for "core" again, so this run has real

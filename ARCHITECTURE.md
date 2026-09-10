@@ -149,17 +149,26 @@ manifest-driven module can ever land shell code anywhere the loader or
 `get-functions` by oversight; they're structurally unreachable under the
 current contract. This is the gap `register:` closes.
 
-### 5.2 Schema — additive, same filename
+### 5.2 Schema — additive, two supported filenames
 
-Keep `.dotfiles-sync.yml` as the filename and `version: 1` as the sync/deploy
-identifier, permanently. Add new, namespaced, optional top-level keys that
-only `workbench-core` looks for. A legacy `dotfiles` machine reading the same
-file behaves exactly as it does today — `version: 1` manifests are already
-required to tolerate unknown top-level keys per the existing spec ("Unknown
-top-level keys... are ignored, not fatal"). This means **existing module
-repos need zero changes to keep working**, and Graham's own `awsconfd`
-manifest can gain the new keys without breaking any machine still on
-`dotfiles`.
+`.dotfiles-sync.yml` stays the filename and `version: 1` the sync/deploy
+identifier for it, permanently, exactly as originally documented here — a
+legacy `dotfiles` machine reading it behaves exactly as it does today, and
+`version: 1` manifests are already required to tolerate unknown top-level
+keys per the existing spec ("Unknown top-level keys... are ignored, not
+fatal"). This means **existing module repos need zero changes to keep
+working**, and Graham's own `awsconfd` manifest can gain the new keys
+without breaking any machine still on `dotfiles`.
+
+`workbench-core` also discovers a second, parallel spelling —
+`workbench.yml` / `workbench.yaml` / `wb.yml` / `wb.yaml`, checked in that
+order ahead of `.dotfiles-sync.yml` — which must declare `version: 2` and
+carries the identical, already-additive field set below. Filename and
+`version:` are a bound pair, enforced both at the developer-time validator
+and at the sync engine's own D30 refusal gate. This reopens what this
+section originally said ("same filename, permanently") — see §12 D46 for
+the full decision and rationale, including why legacy compatibility was
+never actually at stake.
 
 ```yaml
 # .dotfiles-sync.yml — unchanged version, additive keys
@@ -217,14 +226,16 @@ Unknown keys under `register:` are ignored, not fatal — same forward-compatibi
 The additive approach above covers everything currently in scope. A genuine
 break would only be needed for something like: changing `dest` validation
 semantics incompatibly, making `register:` *mandatory*, or supporting
-multiple manifests per repo. If any of that becomes necessary, the
-mechanism is **`version: 2`**, not a new filename — `workbench-core` treats
-`version: 2` as "legacy-compatibility is explicitly opted out of" for that
-repo, and the existing `dotfiles` validator's own `version must be 1` check
-correctly starts rejecting it. That's the right boundary: a `version: 2`
-manifest is a deliberate statement that a repo no longer supports being
-synced by legacy `dotfiles`. Nothing in the current plan requires this —
-flagged here only so the escape hatch is defined before it's needed.
+multiple manifests per repo. `version: 2` is now spoken for by §5.2/§12
+D46's filename change, so a **future** genuine schema break needs
+`version: 3` (or whatever the next integer is at that time) — and, per D46's
+own precedent, that decision must explicitly say whether the break also
+pairs with a new filename or stays on the existing `workbench.yml`-family
+names, rather than assuming either. `workbench-core` treats a manifest
+declaring a version its running core doesn't support as "this repo isn't
+syncable by this core," and refuses to sync it loudly rather than guessing.
+Nothing in the current plan requires this — flagged here only so the escape
+hatch is defined before it's needed.
 
 ---
 
@@ -693,6 +704,7 @@ interest when Wave D arrives.
 | D43 | `wb tools install`/`upgrade` split — bare "converge everything" was the wrong model for tools (real host debugging session) | Confirmed design flaw, not a bug in the mechanism D23 built: bare `wb tools update` (and its D41 `install` alias) ran every discovered `install-<n>` function across every loaded module with zero notion of "did the user actually want this tool" — found on a real host where a deliberate, targeted `install-starship` was silently followed, in the same bare invocation, by `install-oh-my-posh`, which then won `workbench-shell`'s prompt-engine election over `starship` purely by load order (that omp.sh-beats-starship-by-load-order election bug is real but belongs to `workbench-shell`, not this repo — deliberately deferred, not fixed here). D23's "converge everything" model is safe for *modules* (`wb update` with no target), since a module is already an explicit opt-in via `wb add`; applying the same model to *tools* — auto-discovered by introspecting installer files, with real side-effecting installs behind each function — was the actual mistake, not anything about the discovery/invocation mechanism itself. Fixed by splitting the single update/install path into two distinct verbs: `wb tools install <n>\|all` now always requires an explicit target (a bare `wb tools install` is a usage error) — `all` lists every discovered tool and requires a plain-stdin `y`/`Y`/`yes`/`YES` confirmation (matching `lib/modules/dev.sh`'s existing plain-`read -r` precedent, not `_read_prompt`'s `/dev/tty` read, since this is a top-level interactive command a human runs directly) before running anything, and anything else — including EOF — aborts with nothing run. A new `wb tools upgrade [<n>\|all]` only ever runs `install-<n>` for a tool whose optional `installed-<n>` predicate — declared in the same already-registered `register.installers[].src` file `install-<n>` lives in, discovered live by sourcing that file on demand exactly like `install-<n>` itself, and never persisted to `installers.list`/bumping `STATE_SCHEMA_VERSION` — reports it as actually installed (exit 0). A predicate reporting exit 1 ("not installed") is dropped from consideration silently; a tool with no predicate declared at all, or one that returns anything other than a clean 0/1, is "unresponsive" — never run, counted, and reported once, since a wrong guess in either direction (skipping something actually present, or installing something that isn't) is worse than an honest "don't know." `wb tools upgrade <n>` applies the same three-way check to a single tool and treats not-installed/unresponsive as a no-op, never an error — only a genuine `install-<n>` failure is. `wb tools list --status` reuses the identical check to annotate each discovered tool's status without invoking anything. `wb tools update` is **dropped outright**, not kept as a deprecated alias — usage was low enough, and the breakage from a hard error pointing at `install`/`upgrade` negligible enough, that carrying it forward as a silent alias for either new verb would just reintroduce ambiguity about which behaviour it means. `all`, `list`, `install`, `upgrade`, and `status` are now reserved friendly-tool-names, excluded from discovery by `workbench_tools_collect` (with a one-time warning) the same way a cross-module collision already is — a module declaring `install-all` would otherwise be indistinguishable from the verb. |
 | D44 | `wb` shell completions (bash/zsh) — Phase 1 scope | Completions for `wb` itself live in `workbench-core`'s own manifest (`register.shell[]`, `tier: tools`), not a separate module — the same "completions live with the tool's owning module" pattern already established by `workbench-git`'s `gh.sh`/`glab.sh` and `workbench-devtools`'s `uv.sh`/`terraform.sh`; `wb` is core's own tool. A new `wb completion bash\|zsh` subcommand (`lib/core/completion.sh`) generates the script by introspecting `bin/wb`'s own dispatch case as plain text — `_extract_function_names`'s technique, never sourced — rather than hand-maintaining a parallel command list, so the completion set structurally cannot drift from what `wb` actually dispatches on. Wired into the shell via `shell/completions/wb.sh`, a version-stamped cache keyed on `_workbench_release_version`, following `gh.sh`/`uv.sh`'s existing cache pattern exactly. Phase 1 scope is top-level subcommand completion only — no argument-level completion of module/tool/bundle names, which is a deliberate, separate follow-up decision once this mechanism is proven (same "prove on one thing before batching" pattern as the module CI rollout, D40). Zsh's completion system (`compdef`) may not be initialised on a core-only install with no `workbench-shell`; `shell/completions/wb.sh` defensively runs `compinit -C` itself, guarded on `compdef` not already existing, so it's a no-op when `workbench-shell`'s own `zsh.sh` (or the user's own `.zshrc`) has already done it. |
 | D45 | `wb module info`/`wb module docs` — module-published metadata surface | New `wb module` command group with two read-only subcommands. `info <n>` is built mostly from facts core already tracks unconditionally (`sync.conf`'s `REPO_URL`/`PRIVATE`/`TRACK_MODE`/`TRACK_REF`/`RESOLVED_SHA`/`SYNC_ENABLED`/`REGISTERED`, plus the manifest's existing `core_api` scalar) — the only genuinely new, author-supplied field is an optional one-line `info.description` (new `workbench_manifest_info_description()`, `lib/manifest/parse.sh`, same nested-scalar-under-a-block shape `workbench_manifest_sync_enabled()` already established). Deliberately NOT gated behind `core_api` the way `register:` is: `core_api` exists to protect a module's declared shell/tool/getter registrations from running against an incompatible Core API surface — `info:` has no functional consequence on anything the engine does, so there is nothing to gate. `docs <n>` is file-based, not manifest-based — long-form documentation doesn't belong in a YAML scalar read by the deliberately narrow hot-path awk parser (`lib/manifest/parse.sh`'s own header: "not a general YAML parser") — resolved by a fixed, convention-only lookup (`workbench_module_docs_path()`, new `lib/modules/info.sh`) that checks exactly `HELP.md` then `README.md` at the module's `current/` root, no further fallback chain and no manifest field to declare an alternate path. Both commands work uniformly across every tracking mode and visibility (public/tarball, private/branch shallow-clone-and-discard) because both read from `current/`, which is always a real, persisted, `.git`-stripped snapshot regardless of fetch mechanism (D12/D14) — no special-casing needed. Named `docs`, not `help`, specifically to avoid colliding with the CLI's own existing `wb help <command>`/`wb <command> --help` meaning (this CLI's own usage text, not a module's self-description) — `_wb_help_module` calls the distinction out explicitly rather than relying on the name alone. An unpublished field is never an error: both print a plain, non-blaming "not published yet" line pointing back at the module's own repository (already known from `REPO_URL`, independent of anything the module chose to publish) rather than treating a quiet module as a lesser citizen. |
+| D46 | Manifest filename — `workbench.yml`/`workbench.yaml`/`wb.yml`/`wb.yaml` as a parallel, version-2 spelling of the manifest, `.dotfiles-sync.yml` unchanged (raised in chat, reopening §5.2/§5.4's "same filename, permanently") | Supersedes the "not a new filename" framing in §5.4, not the compatibility guarantee behind it: `.dotfiles-sync.yml` stays exactly as documented, version 1 only, forever, with zero behavioural change — the `dotfiles` install (frozen at v1.10.0, still live via its unattended timer per the non-negotiables) only ever reads that literal name and never will, so legacy compatibility was never actually at stake. What changes: `version: 2` — previously reserved by §5.4 as a same-filename escape hatch for a genuine schema break — is repurposed as the flag for a *new* filename carrying the identical, already-additive field set (`core_api`/`sync`/`register`, unchanged), discovered as `workbench.yml`, `workbench.yaml`, `wb.yml`, or `wb.yaml` in that precedence order, ahead of `.dotfiles-sync.yml`. Filename and version are now a bound pair, enforced both at the developer-time validator and at the sync engine's own D30 refusal gate: `.dotfiles-sync.yml` must declare `version: 1`, any of the four new names must declare `version: 2` — either mismatch refuses the sync and leaves the previous snapshot live, exactly as an unsupported version already did. Because `wb.yml`/`wb.yaml` are generic enough to plausibly collide with an unrelated tool's own config file, discovery for any of the four new names requires the candidate to declare *some* top-level `version:` key before it's treated as a workbench manifest at all — one with no such key is silently treated as not-ours and discovery moves on to the next candidate, never erroring on a stranger's file; `.dotfiles-sync.yml` is exempt from this sniff-check and stays unconditionally trusted, as it always has been. No forced migration and no deprecation timeline for `.dotfiles-sync.yml` — possibly none, ever, left open deliberately. `workbench.yml`/`version: 2` is now what documentation and quick-start examples lead with for new or migrating repos. `workbench-core`'s own manifest is deliberately left on the legacy name for this change — prove the mechanism on a module first (see `contracts/core-api.md`'s reference example, left untouched). Beyond `lib/manifest/parse.sh`/`lib/sync/engine.sh`/`lib/manifest/validate.sh`, three `bin/wb` call sites that read a module's manifest directly rather than through the engine's helpers (`wb status`'s register.list check, `wb functions`' getter listing, `wb module info`'s core_api/description) were also switched to the same resolver, so those commands don't silently go blind for a module on one of the four new names. |
 
 ---
 

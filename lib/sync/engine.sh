@@ -182,9 +182,10 @@ workbench_deploy_link_file() {
 
 workbench_deploy_module() {
     local name="$1"
-    local current_dir src dest dest_macos mode force platforms
+    local current_dir src dest dest_macos mode force platforms manifest
     current_dir="$(workbench_module_current_dir "${name}")"
     [[ -d "${current_dir}" ]] || { log_warn "workbench_deploy_module: ${name}: no current snapshot yet"; return 1; }
+    manifest="$(workbench_resolve_manifest_path "${current_dir}")"
 
     while IFS='|' read -r src dest dest_macos mode force platforms; do
         [[ -z "${src}" ]] && continue
@@ -219,7 +220,7 @@ workbench_deploy_module() {
         else
             log_warn "workbench_deploy_module: ${name}: deploy src not found: ${abs_src}"
         fi
-    done < <(workbench_manifest_deploy_entries "${current_dir}/.dotfiles-sync.yml")
+    done < <(workbench_manifest_deploy_entries "${manifest}")
 }
 
 # ── register.list / deploy.list rendering ─────────────────────────────────────
@@ -233,7 +234,7 @@ workbench_render_register_list() {
     local name="$1"
     local current_dir manifest reglist src tier
     current_dir="$(workbench_module_current_dir "${name}")"
-    manifest="${current_dir}/.dotfiles-sync.yml"
+    manifest="$(workbench_resolve_manifest_path "${current_dir}")"
     reglist="$(workbench_module_dir "${name}")/register.list"
 
     : > "${reglist}"
@@ -277,7 +278,7 @@ workbench_render_installers_list() {
     local name="$1"
     local current_dir manifest instlist src abs_path func_name
     current_dir="$(workbench_module_current_dir "${name}")"
-    manifest="${current_dir}/.dotfiles-sync.yml"
+    manifest="$(workbench_resolve_manifest_path "${current_dir}")"
     instlist="$(workbench_module_dir "${name}")/installers.list"
 
     : > "${instlist}"
@@ -329,7 +330,7 @@ workbench_run_post_deploy_hook() {
     allow_hooks="$(workbench_module_conf_get "${name}" ALLOW_HOOKS false)"
     [[ "${allow_hooks}" == "true" ]] || return 0
 
-    hook_line="$(workbench_manifest_hook_post_deploy "${current_dir}/.dotfiles-sync.yml")"
+    hook_line="$(workbench_manifest_hook_post_deploy "$(workbench_resolve_manifest_path "${current_dir}")")"
     [[ -z "${hook_line}" ]] && return 0
 
     local -a fields argv
@@ -450,12 +451,13 @@ workbench_sync_module() {
     # (RESOLVED_SHA is never advanced past it), unlike the core_api gate's
     # once-per-change frequency — going quiet on a module stuck on an
     # unsupported version would be a worse silence than a repeated log line.
-    local new_manifest manifest_version
-    new_manifest="${new_snapshot}/.dotfiles-sync.yml"
-    if [[ -f "${new_manifest}" ]]; then
+    local new_manifest manifest_version expected_version
+    new_manifest="$(workbench_resolve_manifest_path "${new_snapshot}")"
+    if [[ -n "${new_manifest}" ]]; then
         manifest_version="$(workbench_manifest_scalar version "${new_manifest}")"
-        if ! _wb_manifest_schema_supported "${manifest_version}"; then
-            log_error "${name}: declares version '${manifest_version:-<missing>}', this core only supports schema version(s) ${_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED} — refusing to sync (previous snapshot, if any, stays current)"
+        expected_version="$(workbench_manifest_expected_version "${new_manifest}")"
+        if ! _wb_manifest_schema_supported "${manifest_version}" || [[ "${manifest_version}" != "${expected_version}" ]]; then
+            log_error "${name}: $(basename -- "${new_manifest}") declares version '${manifest_version:-<missing>}', expected ${expected_version} for that filename — refusing to sync (previous snapshot, if any, stays current)"
             return 1
         fi
     fi

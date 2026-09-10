@@ -44,9 +44,10 @@ framed:
   module hitting a hardcoded branch to skip it, is the wrong shape —
   extend the engine so core is just the first caller.
 - **Manifest changes stay additive.** `.dotfiles-sync.yml version: 1`
-  must stay backward-compatible. A genuine break needs `version: 2` per
-  `ARCHITECTURE.md` §5.4 — not a silent reinterpretation of an existing
-  field.
+  must stay backward-compatible, forever. `version: 2` —
+  `workbench.yml`/`workbench.yaml`/`wb.yml`/`wb.yaml` — is the preferred
+  name for new/migrating repos, same field set; see `ARCHITECTURE.md`
+  §12 D46.
 - No Windows/PowerShell support — out of scope by design.
 
 ## Dev setup
