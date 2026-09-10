@@ -3,6 +3,13 @@ name: PR Check
 on:
   pull_request:
     branches: [main]
+    # `edited` is required alongside the defaults (opened/synchronize/
+    # reopened) so the "PR title format" job below re-runs when only the
+    # title changes — without it, a title edited after the check last ran
+    # (in either direction: fixed post-open, or broken pre-merge after
+    # passing) leaves a stale result instead of re-validating what will
+    # actually become the squash commit's subject (ARCHITECTURE.md §12 D47).
+    types: [opened, edited, synchronize, reopened]
 
 jobs:
   commit-format:
