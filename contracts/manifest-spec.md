@@ -20,6 +20,7 @@ wins** — both cite the relevant section here in their own error output.
 - [Schema version 1 — unchanged fields](#schema-version-1--unchanged-fields)
 - [`core_api`](#core_api)
 - [`sync.enabled`](#syncenabled)
+- [`info`](#info)
 - [`register:`](#register)
   - [`register.shell[]`](#registershell)
   - [`register.installers[]`](#registerinstallers)
@@ -59,6 +60,9 @@ deploy:
 core_api: ">=1.0 <2.0"
 sync:
   enabled: true
+
+info:
+  description: "AWS config helpers and credential rotation"
 
 register:
   shell:
@@ -107,6 +111,28 @@ sync:
 The manifest-declared default for whether this module auto-syncs on the
 timer. Machine-side state (`sync.conf`) can independently override this per
 machine — see [tracking-spec.md](tracking-spec.md) §Toggles.
+
+## `info`
+
+```yaml
+info:
+  description: "One-line summary of what this module does"
+```
+
+Free-text, author-supplied metadata surfaced by `wb module info <name>`
+(see `docs/module-authoring.md`). Unlike `register:`, `info:` has no
+functional effect on sync, deploy, or the loader — it's display-only, so
+it's read regardless of whether `core_api` is declared. `description` is
+optional; a module that omits it still gets a full `wb module info`
+output built entirely from what core already tracks (repository,
+tracking state, registration) — omitting it just means that one line
+reads as not yet published, not as an error.
+
+Keep `description` to one line — anything longer belongs in a `HELP.md`
+or `README.md` at the repo root, shown in full by `wb module docs
+<name>`. That lookup is convention-only, not a manifest field: `HELP.md`
+is tried first, falling back to `README.md`; neither present is reported
+as "not published," not an error.
 
 ## `register:`
 
@@ -194,6 +220,7 @@ forward-compatibility posture as the rest of this spec.
 | `deploy[].platforms` | no | (all) | List containing only `linux`/`macos`. |
 | `core_api` | no | — | Semver range this module targets. Absent = `register:` ignored. |
 | `sync.enabled` | no | `true` | Module-level default; machine state can override. |
+| `info.description` | no | — | Free text, shown by `wb module info`. No functional effect — read regardless of whether `core_api` is declared. |
 | `register.shell[].src` | yes, per entry | — | Validated like `deploy[].src`. |
 | `register.shell[].tier` | no | `tools` | Loader tier. |
 | `register.shell[].dest` | — | — | **Not permitted.** Engine-computed only. |

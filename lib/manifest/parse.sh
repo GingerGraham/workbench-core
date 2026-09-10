@@ -19,7 +19,7 @@
 
 _wb_manifest_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/manifest/parse.sh" "0.2.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/manifest/parse.sh" "0.3.0" || true
 
 # The manifest schema version(s) this running core knows how to sync.
 # Independent of lib/manifest/validate.sh's own
@@ -72,6 +72,34 @@ workbench_manifest_sync_enabled() {
     ' "${file}")"
     val="$(printf '%s' "${val}" | tr -d '"'"'"'' | sed -E 's/[[:space:]]+$//')"
     printf '%s\n' "${val:-true}"
+}
+
+# workbench_manifest_info_description <file>
+# Reads info.description — a nested scalar under a top-level `info:`
+# block, same shape as sync.enabled. Unlike sync.enabled there is no
+# default: an absent block, an absent field, or an absent manifest all
+# just print nothing — callers (bin/wb's _wb_cmd_module_info) treat "no
+# output" uniformly as "not published," not as an error.
+workbench_manifest_info_description() {
+    local file="$1"
+    [[ -f "${file}" ]] || return 0
+    awk '
+        function clean(s) {
+            sub(/[[:space:]]+#.*$/, "", s)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+            gsub(/^"|"$/, "", s)
+            gsub(/^'"'"'|'"'"'$/, "", s)
+            return s
+        }
+        /^info:[[:space:]]*$/ { in_block = 1; next }
+        in_block && /^[A-Za-z]/ { in_block = 0 }
+        in_block && /^[[:space:]]+description:/ {
+            line = $0
+            sub(/^[[:space:]]+description:[[:space:]]*/, "", line)
+            print clean(line)
+            exit
+        }
+    ' "${file}"
 }
 
 # workbench_manifest_deploy_entries <file>
