@@ -228,12 +228,19 @@ _is_safe_dest() {
 # ── version ──────────────────────────────────────────────────────────────────
 
 _version=$(yq eval '.version' "${MANIFEST}")
+_expected_version="$(workbench_manifest_expected_version "${MANIFEST}")"
 if [[ -z "${_version}" || "${_version}" == "null" ]]; then
     err "version is required (contracts/manifest-spec.md §Field reference)."
 elif [[ " ${_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED} " != *" ${_version} "* ]]; then
     err "version must be one of: ${_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED} — found '${_version}' (contracts/manifest-spec.md §Schema version 1)."
-elif [[ "${_version}" != "$(workbench_manifest_expected_version "${MANIFEST}")" ]]; then
-    err "$(basename -- "${MANIFEST}") must declare version: $(workbench_manifest_expected_version "${MANIFEST}") — found '${_version}' (ARCHITECTURE.md §12 D46)."
+elif [[ -n "${_expected_version}" && "${_version}" != "${_expected_version}" ]]; then
+    # Filename/version pairing only applies to the five recognised manifest
+    # names — workbench_manifest_expected_version returns nothing (exit 1)
+    # for any other basename, which happens whenever an explicit path
+    # argument bypasses discovery (see the usage note above) and points at
+    # a differently-named file. Such a file still validates on its
+    # version: value alone, exactly as before this pairing check existed.
+    err "$(basename -- "${MANIFEST}") must declare version: ${_expected_version} — found '${_version}' (ARCHITECTURE.md §12 D46)."
 fi
 
 # ── deploy[] ─────────────────────────────────────────────────────────────────

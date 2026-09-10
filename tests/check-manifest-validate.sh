@@ -277,6 +277,28 @@ else
     cat /tmp/wb-validate-discovery.log
 fi
 
+# ── Fixture 12: an explicit path argument to a filename outside the five ────
+#    recognised names bypasses discovery (per usage()) and must validate on
+#    its version: value alone — the filename/version pairing check must not
+#    fire for a filename workbench_manifest_expected_version doesn't
+#    recognise (caught in review: was producing a blank-version "must
+#    declare version: " error for any such file).
+
+mkdir -p "${WORK}/customname/shell"
+touch "${WORK}/customname/shell/x.sh"
+cat > "${WORK}/customname/custom.yml" <<'EOF'
+version: 1
+deploy:
+  - src: shell/
+    dest: ~/.config/workbench-customname-test/
+EOF
+if "${VALIDATE}" "${WORK}/customname/custom.yml" >/tmp/wb-validate-customname.log 2>&1; then
+    ok "an explicit path to an unrecognised filename (custom.yml) validates on version: alone, no filename/version pairing error"
+else
+    fail "an explicit path to an unrecognised filename was incorrectly rejected by the filename/version pairing check — see /tmp/wb-validate-customname.log"
+    cat /tmp/wb-validate-customname.log
+fi
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."
