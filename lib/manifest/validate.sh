@@ -41,7 +41,7 @@ warn() { echo "[WARN]  $*" >&2; WARNINGS=$((WARNINGS + 1)); }
 info() { echo "[INFO]  $*"; }
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/manifest/validate.sh" "0.2.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/manifest/validate.sh" "0.3.0" || true
 
 usage() {
     cat << EOF
@@ -70,6 +70,8 @@ New checks (register:, additive per ARCHITECTURE.md §5):
   - core_api, when given, is a non-empty string (a semver range consumed by
     the Core API gate — not deeply validated here, just checked non-empty)
   - sync.enabled, when given, is true or false
+  - info.description, when given, is reported informationally (free text,
+    no format constraint — read regardless of whether core_api is declared)
   - register.shell[].src is required and a safe relative path; register.
     shell[].dest is REJECTED if present — destinations for registered shell
     content are always engine-computed, never author-specified
@@ -264,6 +266,11 @@ if [[ -n "${_sync_enabled}" && "${_sync_enabled}" != "null" ]]; then
     if [[ "${_sync_enabled}" != "true" && "${_sync_enabled}" != "false" ]]; then
         err "sync.enabled, when given, must be true or false — found '${_sync_enabled}'."
     fi
+fi
+
+_info_description=$(yq eval '.info.description' "${MANIFEST}")
+if [[ -n "${_info_description}" && "${_info_description}" != "null" ]]; then
+    info "info.description: ${_info_description}"
 fi
 
 # ── register: (new, additive) ────────────────────────────────────────────────

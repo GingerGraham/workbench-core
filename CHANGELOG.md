@@ -4,6 +4,19 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`wb module info <name>` / `wb module docs <name>`.** `info` shows
+  what core already tracks about a registered module (repository,
+  visibility, tracking mode/ref, resolved SHA, `core_api` floor,
+  registration/sync-enabled state) plus an optional one-line
+  `info.description` a module's manifest can publish. `docs` prints a
+  module's `HELP.md`, falling back to `README.md`, read straight from
+  its synced snapshot — no manifest field, convention only. Neither
+  requires `core_api` (no functional effect on sync/deploy/the loader).
+  A module that publishes neither still gets full, useful `info` output
+  and a friendly pointer back to its own repository from `docs`.
+
 ## [2.1.0] - 2026-09-10
 
 ### Added

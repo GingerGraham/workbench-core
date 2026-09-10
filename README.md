@@ -41,8 +41,8 @@ anything `wb` already knows.
   own namespace. Full reference:
   [`contracts/manifest-spec.md`](contracts/manifest-spec.md).
 - **The `wb` CLI** — `install`/`apply`/`add`/`remove`/`track`/`dev`/
-  `sync`/`update`/`status`/`functions`/`tools`/`version`/`completion`/
-  `help`. See
+  `sync`/`update`/`status`/`functions`/`tools`/`module`/`version`/
+  `completion`/`help`. See
   [Everyday use](#everyday-use) below, or run `wb help` for the live,
   grouped reference.
 

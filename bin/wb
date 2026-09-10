@@ -43,7 +43,7 @@ for _wb_f in \
     core/tools.sh \
     ssh/bootstrap.sh \
     sync/scheduler.sh \
-    modules/catalog.sh modules/add.sh modules/remove.sh modules/track.sh modules/dev.sh modules/sync-toggle.sh \
+    modules/catalog.sh modules/add.sh modules/remove.sh modules/track.sh modules/dev.sh modules/sync-toggle.sh modules/info.sh \
     ; do
     # shellcheck disable=SC1090
     source "${LIB}/${_wb_f}"
@@ -56,7 +56,7 @@ unset _wb_f
 # `command -v _workbench_register_script_version &>/dev/null &&` for when
 # it's sourced standalone elsewhere — actually fires during this pass.
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "bin/wb" "1.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "bin/wb" "1.2.0" || true
 
 _wb_usage() {
     cat <<'EOF'
@@ -110,6 +110,12 @@ MANAGING MODULES
                                Turn a module's background auto-sync on/off —
                                independent of WHAT it tracks (that's
                                'track'/'dev'). No name = core.
+  module info <name> | docs <name>
+                               What a module publishes about itself — info
+                               (repo, tracking, an optional description) or
+                               docs (its HELP.md/README.md in full). Not the
+                               same as 'wb help <command>' — that's this
+                               CLI's own usage text.
 
 ADVANCED / INTERNAL
   sync run-if-due              Used by the background timer; a no-op unless
@@ -881,6 +887,116 @@ _wb_cmd_tools() {
     esac
 }
 
+# ── module info / docs (ARCHITECTURE.md §12 D45) ───────────────────────────
+# Read-only, module-published metadata — distinct from 'wb status' (sync/
+# tracking state core tracks regardless of what a module publishes) and
+# from 'wb help <command>' (this CLI's own usage text, not a module's
+# self-description).
+_wb_cmd_module_info() {
+    local name="${1:-}"
+    if [[ -z "${name}" ]]; then
+        log_error "wb module info: usage: wb module info <name>"
+        return 2
+    fi
+    if ! workbench_is_registered "${name}"; then
+        log_error "wb module info: '${name}' is not registered — run 'wb add ${name}' first"
+        return 1
+    fi
+
+    local current_dir manifest
+    current_dir="$(workbench_module_current_dir "${name}")"
+    manifest="${current_dir}/.dotfiles-sync.yml"
+    if [[ ! -d "${current_dir}" ]]; then
+        log_error "wb module info: '${name}' is registered but has never been synced — run 'wb update ${name}' first"
+        return 1
+    fi
+
+    local repo_url private_flag visibility mode ref sha enabled registered core_api description
+
+    repo_url="$(workbench_module_conf_get "${name}" REPO_URL "")"
+    private_flag="$(workbench_module_conf_get "${name}" PRIVATE false)"
+    visibility="public"
+    [[ "${private_flag}" == "true" ]] && visibility="private"
+
+    mode="$(workbench_module_conf_get "${name}" TRACK_MODE latest)"
+    ref="$(workbench_module_conf_get "${name}" TRACK_REF "")"
+    sha="$(workbench_module_conf_get "${name}" RESOLVED_SHA "")"
+    enabled="$(workbench_module_conf_get "${name}" SYNC_ENABLED true)"
+    registered="$(workbench_module_conf_get "${name}" REGISTERED true)"
+    core_api="$(workbench_manifest_scalar core_api "${manifest}")"
+    description="$(workbench_manifest_info_description "${manifest}")"
+
+    echo
+    echo "Module: ${name}"
+    printf '  %-15s %s (%s)\n' "Repository:" "${repo_url:-unknown}" "${visibility}"
+    if [[ -n "${description}" ]]; then
+        printf '  %-15s %s\n' "Description:" "${description}"
+    else
+        printf '  %-15s %s\n' "Description:" "not published yet — see the repository above for more"
+    fi
+    if [[ -n "${ref}" ]]; then
+        printf '  %-15s %s (%s)\n' "Tracking:" "${mode}" "${ref}"
+    else
+        printf '  %-15s %s\n' "Tracking:" "${mode}"
+    fi
+    printf '  %-15s %s\n' "Resolved SHA:" "${sha:-none yet}"
+    printf '  %-15s %s\n' "Core API:" "${core_api:-not declared}"
+    printf '  %-15s %s\n' "Registered:" "${registered}"
+    printf '  %-15s %s\n' "Sync enabled:" "${enabled}"
+    echo
+    echo "Run 'wb module docs ${name}' for any further documentation this module publishes."
+    echo
+}
+
+_wb_cmd_module_docs() {
+    local name="${1:-}"
+    if [[ -z "${name}" ]]; then
+        log_error "wb module docs: usage: wb module docs <name>"
+        return 2
+    fi
+    if ! workbench_is_registered "${name}"; then
+        log_error "wb module docs: '${name}' is not registered — run 'wb add ${name}' first"
+        return 1
+    fi
+
+    local current_dir
+    current_dir="$(workbench_module_current_dir "${name}")"
+    if [[ ! -d "${current_dir}" ]]; then
+        log_error "wb module docs: '${name}' is registered but has never been synced — run 'wb update ${name}' first"
+        return 1
+    fi
+
+    local docs_file
+    if docs_file="$(workbench_module_docs_path "${name}")"; then
+        echo
+        echo "== ${name}: $(basename "${docs_file}") =="
+        echo
+        cat "${docs_file}"
+        echo
+        return 0
+    fi
+
+    local repo_url
+    repo_url="$(workbench_module_conf_get "${name}" REPO_URL "")"
+    echo
+    echo "'${name}' hasn't published additional documentation yet."
+    [[ -n "${repo_url}" ]] && echo "See ${repo_url} for more."
+    echo
+}
+
+_wb_cmd_module() {
+    local sub="${1:-}"
+    [[ $# -gt 0 ]] && shift
+    case "${sub}" in
+        info) _wb_cmd_module_info "$@" ;;
+        docs) _wb_cmd_module_docs "$@" ;;
+        *)
+            log_error "wb module: usage: wb module info <name> | wb module docs <name>"
+            return 2
+            ;;
+    esac
+}
+
 # ── help / per-command detail ───────────────────────────────────────────────
 # Each function below is one command's detail page: syntax line, one
 # paragraph of description, flags/args, and — for the commands people
@@ -1165,6 +1281,29 @@ a module ships. Neither implies the other.
 EOF
 }
 
+_wb_help_module() {
+    cat <<'EOF'
+Usage: wb module info <name>  |  wb module docs <name>
+
+Module-published information — distinct from 'wb status' (sync/tracking
+state core already knows regardless of what a module publishes) and from
+'wb help <command>' (this CLI's own usage text, not anything about a
+module).
+
+  info <name>   Repository, tracking, and registration facts core already
+                 tracks, plus an optional one-line description
+                 (info.description in the module's manifest) if the
+                 module publishes one.
+  docs <name>   The module's HELP.md, falling back to README.md, read
+                 straight from its synced snapshot — nothing else is
+                 checked. Neither present prints a pointer to the
+                 module's repository instead.
+
+Both require <name> to already be registered ('wb add <name>' first) and
+synced at least once ('wb update <name>' if 'wb add' hasn't run yet).
+EOF
+}
+
 _wb_help_version() {
     cat <<'EOF'
 Usage: wb version
@@ -1229,6 +1368,7 @@ _wb_cmd_help() {
         update)     _wb_help_update ;;
         functions)  _wb_help_functions ;;
         tools)      _wb_help_tools ;;
+        module)     _wb_help_module ;;
         install)    _wb_help_install ;;
         apply)      _wb_help_apply ;;
         add)        _wb_help_add ;;
@@ -1276,6 +1416,7 @@ case "${_wb_cmd}" in
     status)     _wb_cmd_status "$@" ;;
     functions)  _wb_cmd_functions "$@" ;;
     tools)      _wb_cmd_tools "$@" ;;
+    module)     _wb_cmd_module "$@" ;;
     version)    _wb_cmd_version "$@" ;;
     completion) _wb_cmd_completion "$@" ;;
     help)       _wb_cmd_help "$@" ;;

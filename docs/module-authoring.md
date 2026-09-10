@@ -11,6 +11,7 @@ and shell loader.
 - [The tag format contract](#the-tag-format-contract)
 - [Registering shell content](#registering-shell-content)
 - [Declaring installers (`wb tools`)](#declaring-installers-wb-tools)
+- [Publishing module info & docs (optional but recommended)](#publishing-module-info--docs-optional-but-recommended)
 - [The arch-normalization snippet](#the-arch-normalization-snippet)
 - [Hooks](#hooks)
 - [Dev-mode disk duplication (read this before filing a "bug")](#dev-mode-disk-duplication)
@@ -177,6 +178,37 @@ redesign exists to guarantee, not a degraded outcome.
 This predicate should be cheap and side-effect-free (typically a single
 `command -v`/file-existence check) — it may run once per tool on every
 `wb tools list --status` or `wb tools upgrade` invocation.
+
+## Publishing module info & docs (optional but recommended)
+
+`wb module info <name>` and `wb module docs <name>` let a user look up
+what your module is and what it does without leaving the shell. Neither
+requires `core_api:` — they're read-only and have no effect on sync,
+deploy, or the loader, so they work even on the simplest deploy-only
+manifest.
+
+**`info`** — add a one-line `info.description` to your manifest:
+
+```yaml
+info:
+  description: "Git configuration, aliases, and credential helpers"
+```
+
+Everything else `wb module info` shows (repository, visibility, tracking
+mode, resolved commit, registration state) comes from what core already
+tracks — `description` is the only thing you're actually publishing.
+Leaving it out isn't an error; the user just sees a plain "not published
+yet" line instead, pointing back at your repository. Keep it to one
+line — anything longer belongs in your docs, below.
+
+**`docs`** — drop a `HELP.md` at your repo root, and `wb module docs
+<name>` prints it in full, read straight out of your module's synced
+snapshot. No manifest field, no registration — pure convention. If you
+don't have a `HELP.md`, your `README.md` is used instead; if you have
+neither, the user sees a friendly pointer to your repository rather than
+an error. Nothing beyond those two filenames is checked, so name it
+exactly `HELP.md` if you want something distinct from your repo's
+landing-page README.
 
 ## The arch-normalization snippet
 
