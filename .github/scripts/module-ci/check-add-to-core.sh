@@ -27,7 +27,7 @@ fail() { check_no=$((check_no + 1)); echo "FAIL: [$check_no] $*"; FAILED=$((FAIL
 : "${MODULE_BRANCH:?MODULE_BRANCH is required}"
 : "${MODULE_ROOT:?MODULE_ROOT (local checkout, for manifest introspection) is required}"
 
-# shellcheck disable=SC1090
+# shellcheck disable=SC1090,SC1091
 source "$(dirname "${WB}")/../lib/manifest/parse.sh"
 MANIFEST="$(workbench_resolve_manifest_path "${MODULE_ROOT}")"
 [[ -n "${MANIFEST}" ]] || { echo "FAIL: [1] no manifest at ${MODULE_ROOT} (checked ${_WB_MANIFEST_CANDIDATE_NAMES}) -- nothing to add"; exit 1; }
