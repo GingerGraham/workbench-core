@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-09-10
+
 ### Added
 
 - **Manifest discovery now also checks `workbench.yml`/`workbench.yaml`/
