@@ -35,7 +35,7 @@ LIB="${WB_ROOT}/lib"
 export WORKBENCH_CORE_INSTALL_DIR="${WB_ROOT}"
 
 for _wb_f in \
-    core/log.sh core/version.sh core/functions.sh loader-select.sh core/semver.sh core/prereqs.sh \
+    core/log.sh core/version.sh core/functions.sh core/completion.sh loader-select.sh core/semver.sh core/prereqs.sh \
     manifest/parse.sh \
     sync/state.sh \
     distribution/resolve.sh distribution/fetch-tarball.sh distribution/fetch-git-snapshot.sh distribution/snapshot.sh \
@@ -117,6 +117,9 @@ ADVANCED / INTERNAL
                                normally run by hand.
   version                      Release version and every loaded file's own
                                script-local version.
+  completion bash|zsh          Print a tab-completion script for the
+                               given shell. Wired up automatically — you
+                               don't need to run this by hand.
 EOF
 }
 
@@ -1172,6 +1175,21 @@ this process.
 EOF
 }
 
+_wb_help_completion() {
+    cat <<'EOF'
+Usage: wb completion bash|zsh
+
+Prints a tab-completion script for the given shell to stdout. You don't
+need to run this by hand — it's wired up automatically once 'wb' itself
+is registered (shell/completions/wb.sh sources a cached copy, regenerated
+whenever workbench-core's release version changes).
+
+Phase 1: completes top-level command names only (e.g. 'wb st<TAB>' ->
+'wb status'). Completing arguments — module names for 'track'/'remove',
+tool names for 'tools install' — isn't implemented yet.
+EOF
+}
+
 _wb_help_reload() {
     cat <<'EOF'
 Usage: wb reload
@@ -1207,21 +1225,22 @@ _wb_cmd_help() {
     [[ -z "${cmd}" ]] && { _wb_usage; return 0; }
 
     case "${cmd}" in
-        status)    _wb_help_status ;;
-        update)    _wb_help_update ;;
-        functions) _wb_help_functions ;;
-        tools)     _wb_help_tools ;;
-        install)   _wb_help_install ;;
-        apply)     _wb_help_apply ;;
-        add)       _wb_help_add ;;
-        remove)    _wb_help_remove ;;
-        track)     _wb_help_track ;;
-        dev)       _wb_help_dev ;;
-        sync)      _wb_help_sync ;;
-        scheduler) _wb_help_scheduler ;;
-        version)   _wb_help_version ;;
-        help)      _wb_help_help ;;
-        reload)    _wb_help_reload ;;
+        status)     _wb_help_status ;;
+        update)     _wb_help_update ;;
+        functions)  _wb_help_functions ;;
+        tools)      _wb_help_tools ;;
+        install)    _wb_help_install ;;
+        apply)      _wb_help_apply ;;
+        add)        _wb_help_add ;;
+        remove)     _wb_help_remove ;;
+        track)      _wb_help_track ;;
+        dev)        _wb_help_dev ;;
+        sync)       _wb_help_sync ;;
+        scheduler)  _wb_help_scheduler ;;
+        version)    _wb_help_version ;;
+        completion) _wb_help_completion ;;
+        help)       _wb_help_help ;;
+        reload)     _wb_help_reload ;;
         *)
             echo "wb help: unknown command '${cmd}'"
             echo
@@ -1245,20 +1264,21 @@ if [[ -n "${_wb_cmd}" && "${_wb_cmd}" != "help" && "${_wb_cmd}" != "-h" && "${_w
 fi
 
 case "${_wb_cmd}" in
-    install)   _wb_cmd_install "$@" ;;
-    apply)     _wb_cmd_apply "$@" ;;
-    add)       workbench_cmd_add "$@" ;;
-    remove)    workbench_cmd_remove "$@" ;;
-    track)     workbench_cmd_track "$@" ;;
-    dev)       workbench_cmd_dev "$@" ;;
-    sync)      _wb_cmd_sync "$@" ;;
-    scheduler) _wb_cmd_scheduler "$@" ;;
-    update)    _wb_cmd_update "$@" ;;
-    status)    _wb_cmd_status "$@" ;;
-    functions) _wb_cmd_functions "$@" ;;
-    tools)     _wb_cmd_tools "$@" ;;
-    version)   _wb_cmd_version "$@" ;;
-    help)      _wb_cmd_help "$@" ;;
+    install)    _wb_cmd_install "$@" ;;
+    apply)      _wb_cmd_apply "$@" ;;
+    add)        workbench_cmd_add "$@" ;;
+    remove)     workbench_cmd_remove "$@" ;;
+    track)      workbench_cmd_track "$@" ;;
+    dev)        workbench_cmd_dev "$@" ;;
+    sync)       _wb_cmd_sync "$@" ;;
+    scheduler)  _wb_cmd_scheduler "$@" ;;
+    update)     _wb_cmd_update "$@" ;;
+    status)     _wb_cmd_status "$@" ;;
+    functions)  _wb_cmd_functions "$@" ;;
+    tools)      _wb_cmd_tools "$@" ;;
+    version)    _wb_cmd_version "$@" ;;
+    completion) _wb_cmd_completion "$@" ;;
+    help)       _wb_cmd_help "$@" ;;
     reload)
         log_error "wb reload: this only works as a shell function, defined by lib/loader.sh — a subprocess (this one) can't reload its own parent shell. Either you're not in a shell that's sourced lib/loader.sh yet, or this host predates this wrapper (ARCHITECTURE.md §12 D39). Run 'source ~/.bashrc' (or open a new shell) once — 'wb reload' and every state-changing 'wb' command will auto-reload from then on."
         exit 1

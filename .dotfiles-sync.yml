@@ -21,3 +21,5 @@ register:
       tier: core
     - src: lib/core/installers-common.sh
       tier: core
+    - src: shell/completions/wb.sh
+      tier: tools

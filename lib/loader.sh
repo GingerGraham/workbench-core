@@ -450,7 +450,7 @@ wb() {
     command wb "$@" || _wb_wrapper_rc=$?
 
     case "${1:-}" in
-        status|functions|tools|version|help|-h|--help|"") ;;
+        status|functions|tools|version|completion|help|-h|--help|"") ;;
         *)
             # shellcheck disable=SC1090
             if source "${WORKBENCH_LOADER_PATH}"; then
