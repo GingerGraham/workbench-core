@@ -497,7 +497,7 @@ _wb_status_check_register_lists() {
     while IFS= read -r name; do
         [[ -z "${name}" ]] && continue
         current_dir="$(workbench_module_current_dir "${name}")"
-        manifest="${current_dir}/.dotfiles-sync.yml"
+        manifest="$(workbench_resolve_manifest_path "${current_dir}")"
         [[ -f "${manifest}" ]] || continue
 
         core_api="$(workbench_manifest_scalar core_api "${manifest}")"
@@ -587,7 +587,7 @@ _wb_cmd_functions() {
     while IFS= read -r name; do
         [[ -z "${name}" ]] && continue
         local manifest
-        manifest="$(workbench_module_current_dir "${name}")/.dotfiles-sync.yml"
+        manifest="$(workbench_resolve_manifest_path "$(workbench_module_current_dir "${name}")")"
         [[ -f "${manifest}" ]] || continue
         local getter_name getter_fn getter_label
         while IFS='|' read -r getter_name getter_fn getter_label; do
@@ -905,11 +905,11 @@ _wb_cmd_module_info() {
 
     local current_dir manifest
     current_dir="$(workbench_module_current_dir "${name}")"
-    manifest="${current_dir}/.dotfiles-sync.yml"
     if [[ ! -d "${current_dir}" ]]; then
         log_error "wb module info: '${name}' is registered but has never been synced — run 'wb update ${name}' first"
         return 1
     fi
+    manifest="$(workbench_resolve_manifest_path "${current_dir}")"
 
     local repo_url private_flag visibility mode ref sha enabled registered core_api description
 

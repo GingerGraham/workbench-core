@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
 # lib/manifest/validate.sh
 # ─────────────────────────────────────────────────────────────────────────────
-# Developer-time validator for .dotfiles-sync.yml against
+# Developer-time validator for a workbench-core manifest against
 # contracts/manifest-spec.md — the authoritative contract. Ported from
 # workbench-precursor's scripts/validate-sync-manifest.sh and extended for
 # the new, additive `core_api`/`sync`/`register`/keys (ARCHITECTURE.md §5,
 # build brief Phase 3) — its path-safety discipline (the src/dest denylist
 # checks) is kept exactly as it was.
+#
+# With no path argument, discovers the manifest by checking, in order:
+# workbench.yml, workbench.yaml, wb.yml, wb.yaml (each requiring a
+# top-level version: key to be accepted, version: 2), then
+# .dotfiles-sync.yml (version: 1, unconditionally trusted, no sniff-check)
+# — see ARCHITECTURE.md §12 D46. An explicit path argument always bypasses
+# discovery. Filename and version: are a bound pair, enforced below.
 #
 # This is the one place in workbench-core where yq is an acceptable
 # dependency: it's a developer-time tool, run by hand or in a module repo's
@@ -14,7 +21,7 @@
 # lib/manifest/parse.sh for the pure bash/awk reader that path actually uses.
 # Requires mikefarah/yq v4.
 #
-# Usage: validate.sh [path]   (default: ./.dotfiles-sync.yml)
+# Usage: validate.sh [path]   (default: discover, see above)
 # Exit status: 0 if the manifest is valid, non-zero otherwise.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -25,16 +32,45 @@ ERRORS=0
 WARNINGS=0
 
 # The manifest schema version(s) this copy of the validator understands.
-# Bump when contracts/manifest-spec.md's `version: 2` escape hatch (§5.4)
-# is actually built. Deliberately independent of the hot-path's own
+# Deliberately independent of the hot-path's own
 # _WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED in lib/manifest/parse.sh — this
 # script must run standalone, without workbench-core installed alongside
 # it (a module repo's own CI, say), so it cannot read the live
 # ~/.config/workbench/core/version file. Two constants, same reason
 # bootstrap.sh duplicates fetch logic instead of sourcing
 # lib/distribution/fetch-tarball.sh — structurally unavoidable. See
-# ARCHITECTURE.md §12 D30.
-_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED="1"
+# ARCHITECTURE.md §12 D30/D46.
+_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED="1 2"
+
+# The manifest filenames this validator discovers, in order, and the
+# version: each one is required to declare — ported verbatim from
+# lib/manifest/parse.sh rather than sourced across the boundary, for the
+# same standalone-execution reason the schema-versions constant above is
+# duplicated. See ARCHITECTURE.md §12 D46.
+_WB_MANIFEST_CANDIDATE_NAMES="workbench.yml workbench.yaml wb.yml wb.yaml .dotfiles-sync.yml"
+
+workbench_resolve_manifest_path() {
+    local dir="$1" name candidate version
+    for name in ${_WB_MANIFEST_CANDIDATE_NAMES}; do
+        candidate="${dir%/}/${name}"
+        [[ -f "${candidate}" ]] || continue
+        if [[ "${name}" == ".dotfiles-sync.yml" ]]; then
+            printf '%s\n' "${candidate}"
+            return 0
+        fi
+        version="$(yq eval '.version' "${candidate}" 2>/dev/null)"
+        [[ -n "${version}" && "${version}" != "null" ]] && { printf '%s\n' "${candidate}"; return 0; }
+    done
+    return 1
+}
+
+workbench_manifest_expected_version() {
+    case "$(basename -- "$1")" in
+        .dotfiles-sync.yml) echo 1 ;;
+        workbench.yml|workbench.yaml|wb.yml|wb.yaml) echo 2 ;;
+        *) return 1 ;;
+    esac
+}
 
 err()  { echo "[ERROR] $*" >&2; ERRORS=$((ERRORS + 1)); }
 warn() { echo "[WARN]  $*" >&2; WARNINGS=$((WARNINGS + 1)); }
@@ -47,9 +83,13 @@ usage() {
     cat << EOF
 Usage: ${SCRIPT_NAME} [path]
 
-Validates a .dotfiles-sync.yml manifest against contracts/manifest-spec.md.
+Validates a workbench-core manifest against contracts/manifest-spec.md.
 
-  path   Path to the manifest to validate (default: ./.dotfiles-sync.yml)
+  path   Path to the manifest to validate. If omitted, discovers one in the
+         current directory by checking, in order: ${_WB_MANIFEST_CANDIDATE_NAMES}
+         — workbench.yml/workbench.yaml/wb.yml/wb.yaml must declare
+         version: 2, .dotfiles-sync.yml must declare version: 1
+         (ARCHITECTURE.md §12 D46).
 
 Checks (fail the manifest) — unchanged from schema version 1:
   - the file parses as YAML
@@ -91,8 +131,6 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     exit 0
 fi
 
-MANIFEST="${1:-./.dotfiles-sync.yml}"
-
 require_yq() {
     if ! command -v yq &>/dev/null; then
         err "yq is required for manifest validation."
@@ -109,6 +147,13 @@ require_yq() {
 }
 
 require_yq
+
+if [[ -n "${1:-}" ]]; then
+    MANIFEST="$1"   # explicit path always bypasses discovery
+else
+    MANIFEST="$(workbench_resolve_manifest_path .)"
+    [[ -n "${MANIFEST}" ]] || { err "no manifest found (checked ${_WB_MANIFEST_CANDIDATE_NAMES})"; exit 1; }
+fi
 
 if [[ ! -f "${MANIFEST}" ]]; then
     err "Manifest not found: ${MANIFEST}"
@@ -187,6 +232,8 @@ if [[ -z "${_version}" || "${_version}" == "null" ]]; then
     err "version is required (contracts/manifest-spec.md §Field reference)."
 elif [[ " ${_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED} " != *" ${_version} "* ]]; then
     err "version must be one of: ${_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED} — found '${_version}' (contracts/manifest-spec.md §Schema version 1)."
+elif [[ "${_version}" != "$(workbench_manifest_expected_version "${MANIFEST}")" ]]; then
+    err "$(basename -- "${MANIFEST}") must declare version: $(workbench_manifest_expected_version "${MANIFEST}") — found '${_version}' (ARCHITECTURE.md §12 D46)."
 fi
 
 # ── deploy[] ─────────────────────────────────────────────────────────────────
