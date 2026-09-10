@@ -3,6 +3,13 @@ name: PR Check
 on:
   pull_request:
     branches: [main]
+    # `edited` is required alongside the defaults (opened/synchronize/
+    # reopened) so the "PR title format" job below re-runs when only the
+    # title changes — without it, a title edited after the check last ran
+    # (in either direction: fixed post-open, or broken pre-merge after
+    # passing) leaves a stale result instead of re-validating what will
+    # actually become the squash commit's subject (ARCHITECTURE.md §12 D47).
+    types: [opened, edited, synchronize, reopened]
 
 jobs:
   commit-format:
@@ -19,3 +26,22 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: .github/scripts/release/check-commit-format.sh "${BASE_SHA}" "${HEAD_SHA}"
+
+  pr-title-format:
+    name: PR title format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # This repo squash-merges PRs, and GitHub's default squash commit
+      # message uses the PR *title* as the resulting commit's subject —
+      # not any individual commit's message. An unparseable title silently
+      # drops that merge's release severity even when every commit inside
+      # the PR was itself correctly formatted (ARCHITECTURE.md §12 D47).
+      # PR_TITLE is untrusted, contributor-controlled text, so it's passed
+      # through env indirection rather than interpolated into `run:`.
+      - name: Check PR title format
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: .github/scripts/release/check-pr-title-format.sh "${PR_TITLE}"

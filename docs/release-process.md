@@ -61,6 +61,17 @@ Commits:
   interactive rebase before merging. If one somehow gets through anyway
   (an admin merge, say), `release.yml` logs a visible warning and simply
   doesn't count that commit toward any bump — it never blocks the release.
+- **The PR title matters too.** This repo squash-merges every PR, and
+  GitHub's default squash commit message uses the PR's *title* as the
+  resulting commit's subject — not any of the PR's individual commit
+  messages, which only survive in the squash commit's body. A PR whose
+  every commit is correctly formatted can still land on `main` as a single
+  unparseable commit if the PR title itself wasn't given a
+  `type[(scope)][!]: subject` prefix — `pr-check.yml`'s "PR title format"
+  job checks this at PR time, the same fail-loud-while-fixable principle
+  as the per-commit check above. Give the PR itself a real Conventional
+  Commit title, not just its commits. See ARCHITECTURE.md §12 D47 — the
+  real incident (PR #46) this check exists to prevent from recurring.
 
 ### `core`-scoped commits: when to reach for one
 

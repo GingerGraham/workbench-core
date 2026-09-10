@@ -377,6 +377,31 @@ else
     fail "no-baseline-tag case produced an unexpected plan: ${PLAN_UNTAGGED}"
 fi
 
+# ── 9. PR title format check (ARCHITECTURE.md §12 D47) ───────────────────
+# The real-world incident this guards against: PR #46's title lacked a
+# Conventional Commit prefix, so the squash-merge commit that landed on
+# main (using the PR title as its subject, per GitHub's default squash
+# behaviour) didn't parse — silently dropping the whole PR's release
+# severity even though every individual commit inside it was correctly
+# formatted.
+if bash "${RELEASE_DIR}/check-pr-title-format.sh" "feat: add a thing" >/dev/null 2>&1; then
+    ok "check-pr-title-format.sh: a well-formed title passes"
+else
+    fail "check-pr-title-format.sh: a well-formed title was rejected"
+fi
+if bash "${RELEASE_DIR}/check-pr-title-format.sh" "feat(core)!: breaking change" >/dev/null 2>&1; then
+    ok "check-pr-title-format.sh: a well-formed title with scope+breaking marker passes"
+else
+    fail "check-pr-title-format.sh: a well-formed scoped/breaking title was rejected"
+fi
+if bash "${RELEASE_DIR}/check-pr-title-format.sh" "Support workbench.yml/wb.yml as a parallel, version-2 manifest name" >/tmp/wb-pr-title-bad.log 2>&1; then
+    fail "check-pr-title-format.sh: PR #46's actual (unprefixed) title was incorrectly accepted"
+else
+    ok "check-pr-title-format.sh: rejects a title with no Conventional Commit prefix (PR #46's actual title)"
+fi
+# shellcheck disable=SC2015
+grep -q "expected: <feat|fix" /tmp/wb-pr-title-bad.log && ok "check-pr-title-format.sh: rejection message names the expected grammar" || fail "check-pr-title-format.sh: rejection message missing expected-grammar hint"
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."
