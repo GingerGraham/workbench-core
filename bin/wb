@@ -1018,34 +1018,43 @@ _wb_cmd_module_reset() {
         done <<< "${entries}"
     else
         local match_count=0
+        local -a src_bases=() src_srcs=() src_dests=()
         while IFS='|' read -r base src real_dest; do
             if [[ "${base}" == "${target}" ]]; then
                 chosen_bases+=("${base}"); chosen_srcs+=("${src}"); chosen_dests+=("${real_dest}")
                 match_count=$((match_count + 1))
             fi
+            # Tracked independently of the basename match above, so a
+            # full src path resolves regardless of whether it also
+            # collides with another entry's basename — this is what
+            # actually makes the "name it by its full src path instead"
+            # disambiguation reachable (a target typed as a full src
+            # path never equals any entry's bare basename, so relying on
+            # the basename match above to find it first would never work).
+            if [[ "${src}" == "${target}" ]]; then
+                src_bases+=("${base}"); src_srcs+=("${src}"); src_dests+=("${real_dest}")
+            fi
         done <<< "${entries}"
 
         if [[ "${match_count}" -eq 0 ]]; then
-            log_error "wb module reset: '${target}' doesn't match any of ${name}'s deploy files. Available:"
-            while IFS='|' read -r base src real_dest; do
-                printf '    %s\n' "${base}"
-            done <<< "${entries}"
-            return 1
+            if [[ "${#src_srcs[@]}" -eq 1 ]]; then
+                chosen_bases=("${src_bases[@]}"); chosen_srcs=("${src_srcs[@]}"); chosen_dests=("${src_dests[@]}")
+            else
+                log_error "wb module reset: '${target}' doesn't match any of ${name}'s deploy files. Available:"
+                while IFS='|' read -r base src real_dest; do
+                    printf '    %s\n' "${base}"
+                done <<< "${entries}"
+                return 1
+            fi
         elif [[ "${match_count}" -gt 1 ]]; then
             # Ambiguous by basename — disambiguate by full src path instead.
-            local -a d_bases=("${chosen_bases[@]}") d_srcs=("${chosen_srcs[@]}") d_dests=("${chosen_dests[@]}")
-            chosen_bases=(); chosen_srcs=(); chosen_dests=()
-            local i
-            for i in "${!d_srcs[@]}"; do
-                if [[ "${d_srcs[$i]}" == "${target}" ]]; then
-                    chosen_bases+=("${d_bases[$i]}"); chosen_srcs+=("${d_srcs[$i]}"); chosen_dests+=("${d_dests[$i]}")
-                fi
-            done
-            if [[ "${#chosen_srcs[@]}" -ne 1 ]]; then
+            if [[ "${#src_srcs[@]}" -eq 1 ]]; then
+                chosen_bases=("${src_bases[@]}"); chosen_srcs=("${src_srcs[@]}"); chosen_dests=("${src_dests[@]}")
+            else
                 log_error "wb module reset: '${target}' matches more than one of ${name}'s deploy files — name it by its full src path instead:"
                 local j
-                for j in "${!d_bases[@]}"; do
-                    printf '    %-24s (src: %s)\n' "${d_bases[$j]}" "${d_srcs[$j]}"
+                for j in "${!chosen_bases[@]}"; do
+                    printf '    %-24s (src: %s)\n' "${chosen_bases[$j]}" "${chosen_srcs[$j]}"
                 done
                 return 1
             fi
@@ -1075,11 +1084,16 @@ _wb_cmd_module_reset() {
             ;;
     esac
 
-    local abs_src
+    local abs_src failed=0
     for k in "${!chosen_dests[@]}"; do
         abs_src="${current_dir}/${chosen_srcs[$k]%/}"
-        workbench_deploy_copy_file "${abs_src}" "${chosen_dests[$k]}" "true"
+        workbench_deploy_copy_file "${abs_src}" "${chosen_dests[$k]}" "true" || failed=1
     done
+
+    if [[ "${failed}" -eq 1 ]]; then
+        log_error "wb module reset: one or more files failed to reset — see errors above."
+        return 1
+    fi
 }
 
 _wb_cmd_module() {

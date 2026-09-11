@@ -168,8 +168,12 @@ workbench_deploy_copy_file() {
     # file, while leaving the destination still a symlink afterwards.
     # Remove the symlink first so cp always writes a real, detached file.
     [[ -L "${dest}" ]] && rm -f "${dest}"
-    cp -f "${src}" "${dest}"
-    log_info "  deployed (copy): ${dest}"
+    if cp -f "${src}" "${dest}"; then
+        log_info "  deployed (copy): ${dest}"
+    else
+        log_error "  failed to deploy (copy): ${dest}"
+        return 1
+    fi
 }
 
 workbench_deploy_link_file() {

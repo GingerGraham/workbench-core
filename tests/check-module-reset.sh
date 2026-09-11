@@ -152,6 +152,93 @@ else
     cat /tmp/wb-mr-linkmode.log
 fi
 
+# ── Second fixture module: two deploy[] entries sharing a basename, to
+#    exercise the full-src-path disambiguation path. ───────────────────────
+SRC2="${WORK}/src-mod2"
+BARE2="${WORK}/mod2.git"
+mkdir -p "${SRC2}"
+git init -q --bare "${BARE2}"
+git clone -q "${BARE2}" "${SRC2}" 2>/dev/null
+(
+    cd "${SRC2}" || exit 1
+    git config user.email t@t.com
+    git config user.name Test
+    mkdir -p files files/other
+    echo "WORKBENCH DEFAULT TMUX CONF (primary)" > files/tmux.conf
+    echo "WORKBENCH DEFAULT TMUX CONF (other)" > files/other/tmux.conf
+    cat > .dotfiles-sync.yml <<'EOF'
+version: 1
+branch: main
+
+deploy:
+  - src: files/tmux.conf
+    dest: ~/.config/tmux/tmux.conf
+    mode: copy
+  - src: files/other/tmux.conf
+    dest: ~/.config/tmux/other/tmux.conf
+    mode: copy
+EOF
+    git add -A && git commit -q -m v1
+    git branch -M main
+    git push -q origin main
+    git tag v1.0.0 && git push -q origin v1.0.0
+)
+workbench_cmd_add reset-mod2 "${BARE2}" --private >/tmp/wb-module-reset-add2.log 2>&1
+
+PRIMARY_DEST="${HOME}/.config/tmux/tmux.conf"
+OTHER_DEST="${HOME}/.config/tmux/other/tmux.conf"
+
+# ── 7. A basename collision across two deploy[] entries is ambiguous and
+#    names the full-src-path escape hatch instead of picking one. ─────────
+echo "y" | _wb_cmd_module_reset reset-mod2 tmux.conf >/tmp/wb-mr-collision.log 2>&1; rc=$?
+if [[ "${rc}" -ne 0 ]] && grep -q "matches more than one" /tmp/wb-mr-collision.log \
+    && grep -q "files/tmux.conf" /tmp/wb-mr-collision.log && grep -q "files/other/tmux.conf" /tmp/wb-mr-collision.log; then
+    ok "a basename collision is reported as ambiguous and lists both full src paths"
+else
+    fail "basename collision did not report ambiguity with both src paths as expected"
+    cat /tmp/wb-mr-collision.log
+fi
+
+# ── 8. Naming the full src path resolves a basename collision — this is
+#    the path check 7 says to use, and it must actually work (it didn't,
+#    prior to this fix: the fallback compared the typed target against
+#    entries already filtered by basename equality, which a full src path
+#    can never satisfy). ────────────────────────────────────────────────
+echo "USER RUINED PRIMARY" > "${PRIMARY_DEST}"
+echo "USER RUINED OTHER" > "${OTHER_DEST}"
+echo "y" | _wb_cmd_module_reset reset-mod2 files/tmux.conf >/tmp/wb-mr-srcpath1.log 2>&1
+if [[ "$(cat "${PRIMARY_DEST}")" == "WORKBENCH DEFAULT TMUX CONF (primary)" && "$(cat "${OTHER_DEST}")" == "USER RUINED OTHER" ]]; then
+    ok "naming the full src path resolves a basename collision and resets only that one file"
+else
+    fail "full-src-path disambiguation did not reset exactly the targeted file"
+    cat /tmp/wb-mr-srcpath1.log
+fi
+
+echo "y" | _wb_cmd_module_reset reset-mod2 files/other/tmux.conf >/tmp/wb-mr-srcpath2.log 2>&1
+if [[ "$(cat "${OTHER_DEST}")" == "WORKBENCH DEFAULT TMUX CONF (other)" ]]; then
+    ok "the second colliding entry's full src path resolves independently"
+else
+    fail "the second colliding entry's full src path did not reset as expected"
+    cat /tmp/wb-mr-srcpath2.log
+fi
+
+# ── 9. A partial failure across a multi-file reset is reported, not
+#    swallowed as success — one entry's snapshot src is removed so its
+#    cp genuinely fails (root in this sandbox defeats a permissions-based
+#    failure, so this is a real, privilege-independent one instead). ─────
+CURRENT_DIR2="$(workbench_module_current_dir reset-mod2)"
+rm -f "${CURRENT_DIR2}/files/tmux.conf"
+echo "USER RUINED PRIMARY AGAIN" > "${PRIMARY_DEST}"
+echo "USER RUINED OTHER AGAIN" > "${OTHER_DEST}"
+echo "y" | _wb_cmd_module_reset reset-mod2 all >/tmp/wb-mr-partial.log 2>&1; rc=$?
+if [[ "${rc}" -ne 0 ]] && [[ "$(cat "${OTHER_DEST}")" == "WORKBENCH DEFAULT TMUX CONF (other)" ]] \
+    && [[ "$(cat "${PRIMARY_DEST}")" == "USER RUINED PRIMARY AGAIN" ]]; then
+    ok "a partial failure across a multi-file reset is reported with a non-zero exit, not silently swallowed"
+else
+    fail "partial failure was not reported correctly (exit ${rc})"
+    cat /tmp/wb-mr-partial.log
+fi
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."
