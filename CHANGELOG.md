@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-09-11
+
 ### Added
 
 - **`overrides_src`** — a module can now declare a manifest field

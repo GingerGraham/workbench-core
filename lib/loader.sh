@@ -345,7 +345,7 @@ fi
 # (lib/core/version.sh via register.list), so neither is available until
 # that content has actually been sourced.
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/loader.sh" "0.2.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/loader.sh" "0.3.0" || true
 # Gated on WORKBENCH_DEBUG explicitly, before ever calling
 # _workbench_release_version — not just left to log_debug's own internal
 # gate. Bash evaluates a command's arguments (the $(...) substitution)
