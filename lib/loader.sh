@@ -328,6 +328,55 @@ if command -v workbench_list_registered_modules &>/dev/null; then
     unset _wb_track_name _wb_track_mode _wb_track_ref _wb_track_var
 fi
 
+# ── Prompt-engine reset, before the tier loop runs (ARCHITECTURE.md §12
+#    D50) ────────────────────────────────────────────────────────────────
+# Re-sourcing this file in an already-running shell — 'source ~/.bashrc',
+# or the wb() wrapper's own auto-reload after a state-changing command —
+# is not a new process, so anything a previously-elected prompt engine
+# hooked into the shell to render itself (bash's PROMPT_COMMAND, zsh's
+# precmd_functions) is still live from the last run. A module switching
+# which engine it elects (workbench-shell's WORKBENCH_OVERRIDE_PROMPT_ENGINE,
+# §12 D48, is the motivating case) correctly re-runs its own init, but
+# nothing tears down the *previous* engine's hook first — well-behaved
+# prompt tools preserve whatever PROMPT_COMMAND already contains rather
+# than overwriting it (so they can coexist with unrelated tools), which
+# is exactly wrong the moment one is meant to replace another. Confirmed
+# live: the election recomputes correctly (WORKBENCH_PROMPT_ENGINE
+# flips), but the visible prompt does not, until a genuinely new shell
+# process starts.
+#
+# Cleared here, before any tier content (including a prompt-owning
+# module's) runs, so every reload gives whichever engine wins a clean
+# slate — the same state a brand-new shell would have. Only fires when
+# WORKBENCH_PROMPT_SET was already true, i.e. only on an actual reload
+# where we know for certain this loader itself is what last touched
+# PROMPT_COMMAND/precmd_functions — never on a genuinely first load,
+# where either could hold a user's own pre-stub customisation that has
+# nothing to do with prompt-engine election and must not be wiped.
+# bash's PROMPT_COMMAND is unset outright, not just blanked
+# (PROMPT_COMMAND="") — bash 5.1+ treats it as an array internally, and
+# an empty-string assignment does not reliably clear every element.
+# zsh's precmd_functions is reset the same way.
+#
+# Trade-off, deliberate: if a module appends to PROMPT_COMMAND/
+# precmd_functions for its own unrelated purposes from within its tier
+# content on run N, and WORKBENCH_PROMPT_SET happens to be set at that
+# point, run N+1's reset clears that too — but the same tier content
+# re-runs on every reload regardless, so it's re-added, not lost.
+# Genuinely external customisation (raw shell rc content *above* this
+# loader's own stub line) is only at risk if it predates the first ever
+# WORKBENCH_PROMPT_SET=true in this shell's lifetime, which this
+# condition already protects.
+if [[ -n "${WORKBENCH_PROMPT_SET:-}" ]]; then
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+        # shellcheck disable=SC2034
+        precmd_functions=()
+    else
+        unset PROMPT_COMMAND
+    fi
+fi
+unset WORKBENCH_PROMPT_SET WORKBENCH_PROMPT_ENGINE
+
 if command -v workbench_list_loadable_modules &>/dev/null; then
     for _wb_tier in ${_WB_LOADER_TIERS}; do
         _wb_loader_source_tier "${_wb_tier}"

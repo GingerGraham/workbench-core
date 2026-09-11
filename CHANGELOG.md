@@ -13,6 +13,14 @@ All notable changes to `workbench-core` are documented here.
   Now calls `validate.sh` with no argument so discovery runs, matching
   what D46 shipped. See ARCHITECTURE.md §12 D49.
 
+- **Prompt-engine state now resets on reload** — re-sourcing
+  `lib/loader.sh` in an already-running shell (`source ~/.bashrc`, `wb
+  reload`, or the automatic reload after any state-changing `wb`
+  command) no longer leaves a previously-elected prompt engine's shell
+  hook (`PROMPT_COMMAND`/zsh's `precmd_functions`) behind when a
+  different engine is elected instead — the visible prompt now updates
+  without needing a full shell restart. See ARCHITECTURE.md §12 D50.
+
 ## [2.4.0] - 2026-09-11
 
 ### Added
