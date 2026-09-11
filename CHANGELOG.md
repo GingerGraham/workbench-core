@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-09-11
+
 ### Added
 
 - **`wb module reset <module> <name>|all`** — force-redeploys a
