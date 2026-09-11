@@ -4,6 +4,15 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`module-ci.yml`'s `manifest-validate` job** was passing
+  `.dotfiles-sync.yml` as an explicit path argument to
+  `lib/manifest/validate.sh`, which always bypasses D46's filename
+  discovery — breaking CI for any module migrating to `workbench.yml`.
+  Now calls `validate.sh` with no argument so discovery runs, matching
+  what D46 shipped. See ARCHITECTURE.md §12 D49.
+
 ## [2.4.0] - 2026-09-11
 
 ### Added
