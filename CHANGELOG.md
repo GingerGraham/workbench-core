@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-09-11
+
 ### Fixed
 
 - **`module-ci.yml`'s `manifest-validate` job** was passing
