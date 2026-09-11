@@ -221,6 +221,25 @@ workbench_deploy_module() {
             log_warn "workbench_deploy_module: ${name}: deploy src not found: ${abs_src}"
         fi
     done < <(workbench_manifest_deploy_entries "${manifest}")
+
+    # ── overrides_src (ARCHITECTURE.md §12 D48) ───────────────────────────
+    # Engine-computed destination, always — never a manifest-declared
+    # dest, same reasoning as register.shell[]'s engine-computed path
+    # (§12 D16). force is hardcoded "false", never read from the
+    # manifest: this file is deployed once and is the user's from that
+    # point on, permanently — there is deliberately no force: true
+    # escape hatch for it, unlike an ordinary deploy[] entry.
+    local overrides_src
+    overrides_src="$(workbench_manifest_scalar overrides_src "${manifest}")"
+    if [[ -n "${overrides_src}" ]]; then
+        local abs_overrides_src="${current_dir}/${overrides_src}"
+        local overrides_dest="${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/local/overrides/${name}.sh"
+        if [[ -f "${abs_overrides_src}" ]]; then
+            workbench_deploy_copy_file "${abs_overrides_src}" "${overrides_dest}" "false"
+        else
+            log_warn "workbench_deploy_module: ${name}: overrides_src not found: ${abs_overrides_src}"
+        fi
+    fi
 }
 
 # ── register.list / deploy.list rendering ─────────────────────────────────────

@@ -154,45 +154,6 @@ export WORKBENCH_ARCH
 WORKBENCH_PLATFORM_DETECTED="true"
 export WORKBENCH_PLATFORM_DETECTED
 
-# ── Local overrides directory (ARCHITECTURE.md §12 D22) ───────────────────────
-# Machine-local, outside every module's own tree.
-# ${XDG_CONFIG_HOME:-~/.config}/workbench/local/ holds `settings.sh` — the
-# reserved-name direct successor to the old single-file `90-local.sh`,
-# keeping exactly its two-pass semantics: sourced first (so flags it sets
-# gate later tiers) and again at the very end (so it wins over anything a
-# later tier also touches) — plus any number of other user-authored `*.sh`
-# files, sourced once, together, filename-sorted, immediately after
-# settings.sh's final pass (see below). `_wb_loader_source_sh_files_once`
-# (defined just below) is the shared safety discipline both that "other
-# files" pass and WORKBENCH_USER_EXT_DIR use: bash -n syntax smoke-test,
-# skip-and-warn on failure, stamp-cache to avoid re-checking unchanged files
-# on every shell start.
-#
-# Sourced BEFORE the "Behaviour flags" block just below, deliberately — a
-# flag like WORKBENCH_PLAIN_SHELL set only in settings.sh (never exported as
-# a real environment variable ahead of time) must already be a real shell
-# variable by the time that block's own `${WORKBENCH_PLAIN_SHELL:-false}`
-# default-and-forcing logic runs, or "settings.sh's early pass gates later
-# tiers" — the documented contract this file has always claimed — would be
-# true for tiers/the prompt fallback but silently false for
-# WORKBENCH_SHOW_FUNCTIONS specifically (caught by
-# tests/check-local-overrides.sh).
-WORKBENCH_LOCAL_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/local"
-WORKBENCH_LOCAL_ENV="${WORKBENCH_LOCAL_DIR}/settings.sh"
-# shellcheck disable=SC1090
-[[ -f "${WORKBENCH_LOCAL_ENV}" ]] && source "${WORKBENCH_LOCAL_ENV}"
-
-# ── Behaviour flags ───────────────────────────────────────────────────────────
-WORKBENCH_SHOW_FUNCTIONS="${WORKBENCH_SHOW_FUNCTIONS:-false}"
-WORKBENCH_USER_EXT_DIR="${WORKBENCH_USER_EXT_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/user}"
-WORKBENCH_USER_EXT_ENABLED="${WORKBENCH_USER_EXT_ENABLED:-true}"
-
-WORKBENCH_PLAIN_SHELL="${WORKBENCH_PLAIN_SHELL:-false}"
-if [[ "${WORKBENCH_PLAIN_SHELL}" == "true" ]]; then
-    export NO_COLOR=1
-    WORKBENCH_SHOW_FUNCTIONS=false
-fi
-
 # _wb_loader_source_sh_files_once <dir> <stamp-file> [exclude-basename]
 # Sources every *.sh file directly in <dir> (nullglob-safe, no matches is a
 # silent no-op), skipping [exclude-basename] if given. Each file gets a
@@ -200,6 +161,14 @@ fi
 # (tracked via <stamp-file>, `-nt` being a builtin test in both bash and
 # zsh) — a failing file is skipped and warned about, and the stamp is
 # withheld so it's re-checked (and re-warned) every start until fixed.
+#
+# Defined here, ahead of its first two call sites below (module-shipped
+# overrides, then settings.sh's own directory setup) rather than down by
+# its other two call sites (the "other local/*.sh" pass and
+# WORKBENCH_USER_EXT_DIR, further down this file) — bash requires a
+# function to be defined before it's called, and this one now has to run
+# before settings.sh does (ARCHITECTURE.md §12 D48). One definition, four
+# call sites total, never duplicated.
 _wb_loader_source_sh_files_once() {
     local dir="$1" stamp="$2" exclude="${3:-}"
     local cache_dir dirty=false f base
@@ -239,6 +208,65 @@ _wb_loader_source_sh_files_once() {
         : > "${stamp}"
     fi
 }
+
+# ── Local overrides directory (ARCHITECTURE.md §12 D22) ───────────────────────
+# Machine-local, outside every module's own tree.
+# ${XDG_CONFIG_HOME:-~/.config}/workbench/local/ holds `settings.sh` — the
+# reserved-name direct successor to the old single-file `90-local.sh`,
+# keeping exactly its two-pass semantics: sourced first (so flags it sets
+# gate later tiers) and again at the very end (so it wins over anything a
+# later tier also touches) — plus any number of other user-authored `*.sh`
+# files, sourced once, together, filename-sorted, immediately after
+# settings.sh's final pass (see below).
+#
+# Sourced BEFORE the "Behaviour flags" block just below, deliberately — a
+# flag like WORKBENCH_PLAIN_SHELL set only in settings.sh (never exported as
+# a real environment variable ahead of time) must already be a real shell
+# variable by the time that block's own `${WORKBENCH_PLAIN_SHELL:-false}`
+# default-and-forcing logic runs, or "settings.sh's early pass gates later
+# tiers" — the documented contract this file has always claimed — would be
+# true for tiers/the prompt fallback but silently false for
+# WORKBENCH_SHOW_FUNCTIONS specifically (caught by
+# tests/check-local-overrides.sh).
+WORKBENCH_LOCAL_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/local"
+WORKBENCH_LOCAL_ENV="${WORKBENCH_LOCAL_DIR}/settings.sh"
+
+# ── Module-shipped overrides (ARCHITECTURE.md §12 D48) ────────────────────────
+# ${WORKBENCH_LOCAL_DIR}/overrides/<module-name>.sh — one per module,
+# deployed once by the sync engine from that module's manifest-declared
+# `overrides_src`, never touched again by the engine once it exists (see
+# contracts/manifest-spec.md's overrides_src section). Sourced here,
+# BEFORE settings.sh's own early pass just below, so:
+#   - a variable a module's opinionated default sets here is already a
+#     real shell variable by the time that module's own tier content
+#     runs further down this file — the same way settings.sh's early
+#     pass already works for a user's own settings, ${VAR:-default}-style
+#     tier code picks it up either way;
+#   - a user's settings.sh, sourced immediately after this, still wins if
+#     it sets the same variable — a module's shipped opinion is always
+#     the lowest-precedence layer, never the last word.
+# Same flat, unvalidated, filename-sorted, syntax-smoke-tested sourcing as
+# the "other local/*.sh files" pass further down this file — reuses the
+# identical helper just above, just a different directory and a separate
+# stamp file so the two passes' change-detection never collide.
+WORKBENCH_OVERRIDES_DIR="${WORKBENCH_LOCAL_DIR}/overrides"
+_wb_loader_source_sh_files_once \
+    "${WORKBENCH_OVERRIDES_DIR}" \
+    "${XDG_CACHE_HOME:-${HOME}/.cache}/workbench/local-overrides.stamp"
+
+# shellcheck disable=SC1090
+[[ -f "${WORKBENCH_LOCAL_ENV}" ]] && source "${WORKBENCH_LOCAL_ENV}"
+
+# ── Behaviour flags ───────────────────────────────────────────────────────────
+WORKBENCH_SHOW_FUNCTIONS="${WORKBENCH_SHOW_FUNCTIONS:-false}"
+WORKBENCH_USER_EXT_DIR="${WORKBENCH_USER_EXT_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/user}"
+WORKBENCH_USER_EXT_ENABLED="${WORKBENCH_USER_EXT_ENABLED:-true}"
+
+WORKBENCH_PLAIN_SHELL="${WORKBENCH_PLAIN_SHELL:-false}"
+if [[ "${WORKBENCH_PLAIN_SHELL}" == "true" ]]; then
+    export NO_COLOR=1
+    WORKBENCH_SHOW_FUNCTIONS=false
+fi
 
 # ── register.list tier resolution ─────────────────────────────────────────────
 # Six tiers, sourced in this fixed order for every loadable module — the

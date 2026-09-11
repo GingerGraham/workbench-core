@@ -4,9 +4,9 @@
 # Developer-time validator for a workbench-core manifest against
 # contracts/manifest-spec.md — the authoritative contract. Ported from
 # workbench-precursor's scripts/validate-sync-manifest.sh and extended for
-# the new, additive `core_api`/`sync`/`register`/keys (ARCHITECTURE.md §5,
-# build brief Phase 3) — its path-safety discipline (the src/dest denylist
-# checks) is kept exactly as it was.
+# the new, additive `core_api`/`sync`/`register`/`overrides_src` keys
+# (ARCHITECTURE.md §5, build brief Phase 3) — its path-safety discipline
+# (the src/dest denylist checks) is kept exactly as it was.
 #
 # With no path argument, discovers the manifest by checking, in order:
 # workbench.yml, workbench.yaml, wb.yml, wb.yaml (each requiring a
@@ -112,6 +112,10 @@ New checks (register:, additive per ARCHITECTURE.md §5):
   - sync.enabled, when given, is true or false
   - info.description, when given, is reported informationally (free text,
     no format constraint — read regardless of whether core_api is declared)
+  - overrides_src, when given, is a safe relative path; a create-once
+    file deployed to ~/.config/workbench/local/overrides/<module-name>.sh
+    — no dest field exists for it, the destination is always
+    engine-computed
   - register.shell[].src is required and a safe relative path; register.
     shell[].dest is REJECTED if present — destinations for registered shell
     content are always engine-computed, never author-specified
@@ -327,6 +331,17 @@ if [[ -n "${_info_description}" && "${_info_description}" != "null" ]]; then
     info "info.description: ${_info_description}"
 fi
 
+_overrides_src=$(yq eval '.overrides_src' "${MANIFEST}")
+if [[ -n "${_overrides_src}" && "${_overrides_src}" != "null" ]]; then
+    if ! _is_safe_relative_path "${_overrides_src}"; then
+        err "overrides_src '${_overrides_src}' must be a path relative to the repo root, without '..' segments or a leading '/' (contracts/manifest-spec.md §overrides_src)."
+    elif [[ ! -e "${REPO_ROOT}/${_overrides_src}" ]]; then
+        warn "overrides_src '${_overrides_src}' does not exist in the repo (checked ${REPO_ROOT}/${_overrides_src})."
+    else
+        info "overrides_src: ${_overrides_src} (deploys once to ~/.config/workbench/local/overrides/<module-name>.sh — create-once, no dest field, contracts/manifest-spec.md §overrides_src)."
+    fi
+fi
+
 # ── register: (new, additive) ────────────────────────────────────────────────
 
 _has_register=$(yq eval '.register != null' "${MANIFEST}")
@@ -444,8 +459,8 @@ if [[ "${_hook_declared}" == "true" ]]; then
     fi
 fi
 
-if [[ "${_deploy_count}" -eq 0 && "${_hook_declared}" != "true" && "${_shell_count}" -eq 0 ]]; then
-    warn "manifest has no deploy entries, no register.shell entries, and no hooks — this is a valid clone-only manifest, but confirm that was deliberate."
+if [[ "${_deploy_count}" -eq 0 && "${_hook_declared}" != "true" && "${_shell_count}" -eq 0 && ( -z "${_overrides_src}" || "${_overrides_src}" == "null" ) ]]; then
+    warn "manifest has no deploy entries, no register.shell entries, no hooks, and no overrides_src — this is a valid clone-only manifest, but confirm that was deliberate."
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

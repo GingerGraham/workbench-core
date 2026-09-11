@@ -299,6 +299,88 @@ else
     cat /tmp/wb-validate-customname.log
 fi
 
+# ── Fixture 13: valid overrides_src pointing at an existing file — must ─────
+#    PASS, with the informational overrides_src: ... line in the output.
+
+mkdir -p "${WORK}/overrides/shell"
+touch "${WORK}/overrides/shell/aws.sh"
+cat > "${WORK}/overrides/shell/overrides.sh" <<'EOF'
+# export AWS_DEFAULT_REGION="eu-west-1"
+EOF
+cat > "${WORK}/overrides/.dotfiles-sync.yml" <<'EOF'
+version: 1
+core_api: ">=1.0 <2.0"
+register:
+  shell:
+    - src: shell/aws.sh
+overrides_src: shell/overrides.sh
+EOF
+if "${VALIDATE}" "${WORK}/overrides/.dotfiles-sync.yml" >/tmp/wb-validate-overrides.log 2>&1; then
+    ok "a valid overrides_src pointing at an existing file validates cleanly"
+else
+    fail "a valid overrides_src was rejected — see /tmp/wb-validate-overrides.log"
+    cat /tmp/wb-validate-overrides.log
+fi
+# shellcheck disable=SC2015
+grep -q "overrides_src: shell/overrides.sh" /tmp/wb-validate-overrides.log && ok "the informational overrides_src line appears in output" || fail "overrides_src informational line missing"
+
+# ── Fixture 14: overrides_src pointing at a path that doesn't exist in the ──
+#    repo — must WARN, not error, mirroring deploy[].src's own behaviour.
+
+mkdir -p "${WORK}/overrides-missing"
+cat > "${WORK}/overrides-missing/.dotfiles-sync.yml" <<'EOF'
+version: 1
+overrides_src: shell/does-not-exist.sh
+EOF
+if "${VALIDATE}" "${WORK}/overrides-missing/.dotfiles-sync.yml" >/tmp/wb-validate-overrides-missing.log 2>&1; then
+    ok "overrides_src pointing at a missing file still validates (warning, not error)"
+else
+    fail "overrides_src pointing at a missing file was rejected as an error, expected a warning — see /tmp/wb-validate-overrides-missing.log"
+    cat /tmp/wb-validate-overrides-missing.log
+fi
+# shellcheck disable=SC2015
+grep -q "\[WARN\].*overrides_src 'shell/does-not-exist.sh' does not exist" /tmp/wb-validate-overrides-missing.log && ok "the missing-overrides_src warning message is present" || fail "missing-overrides_src warning message missing"
+
+# ── Fixture 15: overrides_src with a '..' escape — must FAIL, mirroring ─────
+#    deploy[].src's own path-safety check.
+
+mkdir -p "${WORK}/overrides-escape"
+cat > "${WORK}/overrides-escape/.dotfiles-sync.yml" <<'EOF'
+version: 1
+overrides_src: ../escape.sh
+EOF
+if "${VALIDATE}" "${WORK}/overrides-escape/.dotfiles-sync.yml" >/tmp/wb-validate-overrides-escape.log 2>&1; then
+    fail "overrides_src: ../escape.sh was accepted — path-safety check not enforced"
+else
+    ok "overrides_src: ../escape.sh is rejected — path-safety check enforced"
+fi
+# shellcheck disable=SC2015
+grep -q "overrides_src '../escape.sh' must be a path relative to the repo root" /tmp/wb-validate-overrides-escape.log && ok "rejects the unsafe overrides_src with the expected message" || fail "unsafe overrides_src rejection message missing"
+
+# ── Fixture 16: a manifest declaring only overrides_src (no deploy[], no ────
+#    register.shell[], no hooks) — must validate cleanly with NO "clone-only,
+#    confirm deliberate" warning (the §2c fix).
+
+mkdir -p "${WORK}/overrides-only/shell"
+cat > "${WORK}/overrides-only/shell/overrides.sh" <<'EOF'
+# export SOME_OPINION="default"
+EOF
+cat > "${WORK}/overrides-only/.dotfiles-sync.yml" <<'EOF'
+version: 1
+overrides_src: shell/overrides.sh
+EOF
+if "${VALIDATE}" "${WORK}/overrides-only/.dotfiles-sync.yml" >/tmp/wb-validate-overrides-only.log 2>&1; then
+    ok "a manifest declaring only overrides_src (no deploy/register.shell/hooks) validates cleanly"
+else
+    fail "an overrides_src-only manifest was rejected — see /tmp/wb-validate-overrides-only.log"
+    cat /tmp/wb-validate-overrides-only.log
+fi
+if grep -q "clone-only" /tmp/wb-validate-overrides-only.log; then
+    fail "an overrides_src-only manifest incorrectly triggered the clone-only warning"
+else
+    ok "an overrides_src-only manifest does not trigger the clone-only warning"
+fi
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."

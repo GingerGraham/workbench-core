@@ -10,6 +10,7 @@ and shell loader.
 - [The manifest](#the-manifest)
 - [The tag format contract](#the-tag-format-contract)
 - [Registering shell content](#registering-shell-content)
+- [Shipping overridable defaults (`overrides_src`)](#shipping-overridable-defaults-overrides_src)
 - [Declaring installers (`wb tools`)](#declaring-installers-wb-tools)
 - [Publishing module info & docs (optional but recommended)](#publishing-module-info--docs-optional-but-recommended)
 - [The arch-normalization snippet](#the-arch-normalization-snippet)
@@ -74,6 +75,92 @@ supported field, and the validator rejects it. The engine computes where
 your registered files land; this is deliberate (see ARCHITECTURE.md
 principle 1) and is exactly what makes `register:` safe without a `dest`
 denylist of its own.
+
+## Shipping overridable defaults (`overrides_src`)
+
+If your module has an opinionated default a user might reasonably want to
+change — a theme name, a plugin list, which of several interchangeable
+tools it prefers when more than one is installed — don't hardcode it as a
+literal inside a file your module deploys. Files your module deploys live
+inside its own immutable, per-sync snapshot
+(`${XDG_DATA_HOME}/workbench/modules/<name>/current/`) and get silently
+replaced on every sync; a user editing one directly loses that edit the
+next time your module updates (ARCHITECTURE.md §12 D16).
+
+Instead:
+
+1. Write the opinion as a shell variable your own tier file reads with a
+   default, not a bare literal:
+
+   ```bash
+   # shell/omp.sh, tier: tools
+   OMP_THEME="${OMP_THEME:-atomic}"
+   ```
+
+2. Declare an `overrides_src` in your manifest — a small, commented file
+   shipped alongside your module, containing the variable(s) a user can
+   uncomment to change:
+
+   ```yaml
+   overrides_src: shell/overrides.sh
+   ```
+
+   ```bash
+   # shell/overrides.sh
+   # Uncomment to change this module's defaults. This file is yours —
+   # workbench-core deploys it once and never touches it again.
+
+   # export OMP_THEME="jandedobbeleer"
+   ```
+
+The engine deploys this once, to
+`~/.config/workbench/local/overrides/<your-module-name>.sh`, and sources
+it early — before your module's own tier content runs, and before the
+user's own `settings.sh` — so a value it sets is visible to your
+`${VAR:-default}` code, and a user's own `settings.sh` still wins if they
+set the same variable there instead. You never choose the destination —
+there is no `dest` field, the same as `register.shell[]` — because this
+file lands inside the one directory a user's shell trusts enough to
+source unconditionally on every start.
+
+If you don't have an opinion worth exposing yet, omit `overrides_src`
+entirely — there's no placeholder to create, and nothing to migrate later
+when you add one.
+
+### `WORKBENCH_OVERRIDE_<SCOPE>` — naming convention for election-type opinions
+
+A default like `OMP_THEME` already has a natural escape hatch —
+`${OMP_THEME:-atomic}` is overridable the moment anyone sets `OMP_THEME`
+anywhere upstream of your tier file running. It needs no special name.
+
+An **election** — your module choosing between two or more
+mutually-exclusive implementations of the same feature, like
+workbench-shell's oh-my-posh > starship > oh-my-zsh prompt-engine
+priority — is different. That priority is decided by hardcoded
+`command -v <tool>` guard clauses, not by a variable, so there's nothing
+for a user to set today. If your module has an election like this and you
+want it overridable, name the override variable
+`WORKBENCH_OVERRIDE_<SCOPE>` and check it at the top of every guard in
+the election, before the `command -v` check:
+
+```bash
+# shell/starship.sh
+command -v oh-my-posh &>/dev/null && [[ "${WORKBENCH_OVERRIDE_PROMPT_ENGINE:-}" != "starship" ]] && return 0
+command -v starship &>/dev/null || return 0
+```
+
+`<SCOPE>` resolution:
+
+- If the thing you're overriding already has a name in a cross-module
+  contract (`contracts/core-api.md`), reuse that name minus the
+  `WORKBENCH_` prefix — the prompt engine is already
+  `WORKBENCH_PROMPT_ENGINE`/`WORKBENCH_PROMPT_SET`, so its override is
+  `WORKBENCH_OVERRIDE_PROMPT_ENGINE`.
+- Otherwise, `<MODULE>_<KNOB>` — e.g. `WORKBENCH_OVERRIDE_SHELL_ZSH_THEME`.
+
+Don't rename an existing, already-working `${VAR:-default}` knob to fit
+this prefix — it doesn't need one. Reserve `WORKBENCH_OVERRIDE_*` for
+opinions that are currently hardcoded with no other escape hatch.
 
 ## Declaring installers (`wb tools`)
 
