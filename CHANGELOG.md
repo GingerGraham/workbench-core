@@ -4,6 +4,22 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`wb module reset <module> <name>|all`** — force-redeploys a
+  copy-mode `deploy[]` file from a module's current snapshot, discarding
+  any local edit. Always confirms first, for a single named target as
+  well as `all`. See ARCHITECTURE.md §12 D51.
+
+### Fixed
+
+- **`workbench_deploy_copy_file` no longer corrupts a module's own
+  snapshot file** when force-copying over a destination that's a stale
+  symlink (the situation a `mode: link` → `mode: copy` manifest change
+  creates on any host that already has the module installed) — the
+  symlink is now removed before the copy, rather than followed. Affects
+  every caller of this function, not just the new `wb module reset`.
+
 ## [2.4.1] - 2026-09-11
 
 ### Fixed
