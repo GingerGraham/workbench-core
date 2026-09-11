@@ -86,7 +86,11 @@ jobs:
           curl -fsSL "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64" -o /tmp/yq
           chmod +x /tmp/yq
           echo "/tmp" >> "$GITHUB_PATH"
-      - run: _core/lib/manifest/validate.sh .dotfiles-sync.yml
+      # No explicit path argument: an explicit argument always bypasses
+      # discovery (validate.sh's own header), so this must let it discover
+      # the module's manifest under whichever of the D46 candidate names
+      # it's using, run from the module's checkout at the default path.
+      - run: _core/lib/manifest/validate.sh
 
   structural-tests:
     name: structural tests (${{ matrix.os }})
