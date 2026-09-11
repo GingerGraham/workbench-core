@@ -159,6 +159,15 @@ workbench_deploy_copy_file() {
     local src="$1" dest="$2" force="$3"
     mkdir -p "$(dirname "${dest}")"
     [[ -e "${dest}" && "${force}" != "true" ]] && return 0
+    # A symlink counts as existing for the check above, so this only runs
+    # when force=true — but `cp -f` on a destination that's a symlink
+    # follows it and overwrites whatever it points at, not the symlink
+    # itself. For a stale `mode: link` destination migrating to `mode:
+    # copy` (ARCHITECTURE.md §12 D51), that target is the module's own
+    # immutable snapshot file — silently corrupting it, not the user's
+    # file, while leaving the destination still a symlink afterwards.
+    # Remove the symlink first so cp always writes a real, detached file.
+    [[ -L "${dest}" ]] && rm -f "${dest}"
     cp -f "${src}" "${dest}"
     log_info "  deployed (copy): ${dest}"
 }
@@ -240,6 +249,51 @@ workbench_deploy_module() {
             log_warn "workbench_deploy_module: ${name}: overrides_src not found: ${abs_overrides_src}"
         fi
     fi
+}
+
+# workbench_module_reset_targets <name>
+# Lists every deploy[] entry eligible for `wb module reset` (ARCHITECTURE.md
+# §12 D51) — one line per entry, `basename(real_dest)|src|real_dest`.
+# Copy-mode only (mode: copy, or mode omitted — copy is the deploy[]
+# default): a `mode: link` destination is already kept in sync on every
+# update, so there is nothing to "reset" for it. Single-file entries only
+# — a directory src is skipped; resetting an entire directory tree by one
+# name is ambiguous in a way a single file isn't, and no module currently
+# needs it (documented limitation, not an oversight).
+#
+# Deliberately re-derives real_dest (platform filter, macOS dest_macos
+# override, ~-expansion) rather than calling a shared helper with
+# workbench_deploy_module's own loop — that loop is the tested, hot sync
+# path; duplicating this much smaller amount of logic here was judged
+# lower-risk than refactoring it to share. Keep the two in sync by hand if
+# either changes.
+workbench_module_reset_targets() {
+    local name="$1"
+    local current_dir manifest
+    current_dir="$(workbench_module_current_dir "${name}")"
+    [[ -d "${current_dir}" ]] || return 1
+    manifest="$(workbench_resolve_manifest_path "${current_dir}")"
+
+    local src dest dest_macos mode force platforms
+    while IFS='|' read -r src dest dest_macos mode force platforms; do
+        [[ -z "${src}" ]] && continue
+        [[ "${mode}" == "link" ]] && continue
+        local abs_src="${current_dir}/${src%/}"
+        [[ -d "${abs_src}" ]] && continue
+
+        if [[ -n "${platforms}" ]]; then
+            case "${WORKBENCH_OS:-}" in
+                Mac)   printf '%s\n' "${platforms}" | tr ',' '\n' | grep -qx macos || continue ;;
+                Linux) printf '%s\n' "${platforms}" | tr ',' '\n' | grep -qx linux || continue ;;
+            esac
+        fi
+
+        local real_dest="${dest}"
+        [[ "${WORKBENCH_OS:-}" == "Mac" && -n "${dest_macos}" ]] && real_dest="${dest_macos}"
+        real_dest="$(_wb_expand_dest "${real_dest}")"
+
+        printf '%s|%s|%s\n' "$(basename "${real_dest}")" "${src}" "${real_dest}"
+    done < <(workbench_manifest_deploy_entries "${manifest}")
 }
 
 # ── register.list / deploy.list rendering ─────────────────────────────────────

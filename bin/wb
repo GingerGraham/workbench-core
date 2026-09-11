@@ -984,14 +984,113 @@ _wb_cmd_module_docs() {
     echo
 }
 
+_wb_cmd_module_reset() {
+    local name="${1:-}" target="${2:-}"
+
+    if [[ -z "${name}" || -z "${target}" ]]; then
+        log_error "wb module reset: usage: wb module reset <module> <name>|all"
+        return 2
+    fi
+    if ! workbench_is_registered "${name}"; then
+        log_error "wb module reset: '${name}' is not registered — run 'wb add ${name}' first"
+        return 1
+    fi
+    local current_dir
+    current_dir="$(workbench_module_current_dir "${name}")"
+    if [[ ! -d "${current_dir}" ]]; then
+        log_error "wb module reset: '${name}' is registered but has never been synced — run 'wb update ${name}' first"
+        return 1
+    fi
+
+    local entries
+    entries="$(workbench_module_reset_targets "${name}")"
+    if [[ -z "${entries}" ]]; then
+        log_info "wb module reset: '${name}' has no copy-mode deploy files to reset."
+        return 0
+    fi
+
+    local base src real_dest
+    local -a chosen_bases=() chosen_srcs=() chosen_dests=()
+
+    if [[ "${target}" == "all" ]]; then
+        while IFS='|' read -r base src real_dest; do
+            chosen_bases+=("${base}"); chosen_srcs+=("${src}"); chosen_dests+=("${real_dest}")
+        done <<< "${entries}"
+    else
+        local match_count=0
+        while IFS='|' read -r base src real_dest; do
+            if [[ "${base}" == "${target}" ]]; then
+                chosen_bases+=("${base}"); chosen_srcs+=("${src}"); chosen_dests+=("${real_dest}")
+                match_count=$((match_count + 1))
+            fi
+        done <<< "${entries}"
+
+        if [[ "${match_count}" -eq 0 ]]; then
+            log_error "wb module reset: '${target}' doesn't match any of ${name}'s deploy files. Available:"
+            while IFS='|' read -r base src real_dest; do
+                printf '    %s\n' "${base}"
+            done <<< "${entries}"
+            return 1
+        elif [[ "${match_count}" -gt 1 ]]; then
+            # Ambiguous by basename — disambiguate by full src path instead.
+            local -a d_bases=("${chosen_bases[@]}") d_srcs=("${chosen_srcs[@]}") d_dests=("${chosen_dests[@]}")
+            chosen_bases=(); chosen_srcs=(); chosen_dests=()
+            local i
+            for i in "${!d_srcs[@]}"; do
+                if [[ "${d_srcs[$i]}" == "${target}" ]]; then
+                    chosen_bases+=("${d_bases[$i]}"); chosen_srcs+=("${d_srcs[$i]}"); chosen_dests+=("${d_dests[$i]}")
+                fi
+            done
+            if [[ "${#chosen_srcs[@]}" -ne 1 ]]; then
+                log_error "wb module reset: '${target}' matches more than one of ${name}'s deploy files — name it by its full src path instead:"
+                local j
+                for j in "${!d_bases[@]}"; do
+                    printf '    %-24s (src: %s)\n' "${d_bases[$j]}" "${d_srcs[$j]}"
+                done
+                return 1
+            fi
+        fi
+    fi
+
+    echo
+    echo "[INFO] About to discard any local edits and restore the workbench default for:"
+    local k
+    for k in "${!chosen_dests[@]}"; do
+        printf '    %s\n' "${chosen_dests[$k]}"
+    done
+    echo
+
+    local answer
+    printf 'Proceed? This cannot be undone. [y/N]: '
+    if ! read -r answer; then
+        echo
+        log_info "wb module reset: aborted (no input) — nothing was reset."
+        return 0
+    fi
+    case "${answer}" in
+        y|Y|yes|YES) ;;
+        *)
+            log_info "wb module reset: aborted — nothing was reset."
+            return 0
+            ;;
+    esac
+
+    local abs_src
+    for k in "${!chosen_dests[@]}"; do
+        abs_src="${current_dir}/${chosen_srcs[$k]%/}"
+        workbench_deploy_copy_file "${abs_src}" "${chosen_dests[$k]}" "true"
+    done
+}
+
 _wb_cmd_module() {
     local sub="${1:-}"
     [[ $# -gt 0 ]] && shift
     case "${sub}" in
-        info) _wb_cmd_module_info "$@" ;;
-        docs) _wb_cmd_module_docs "$@" ;;
+        info)  _wb_cmd_module_info "$@" ;;
+        docs)  _wb_cmd_module_docs "$@" ;;
+        reset) _wb_cmd_module_reset "$@" ;;
         *)
-            log_error "wb module: usage: wb module info <name> | wb module docs <name>"
+            log_error "wb module: usage: wb module info <name> | wb module docs <name> | wb module reset <name> <target>|all"
             return 2
             ;;
     esac
@@ -1283,7 +1382,7 @@ EOF
 
 _wb_help_module() {
     cat <<'EOF'
-Usage: wb module info <name>  |  wb module docs <name>
+Usage: wb module info <name>  |  wb module docs <name>  |  wb module reset <name> <target>|all
 
 Module-published information — distinct from 'wb status' (sync/tracking
 state core already knows regardless of what a module publishes) and from
@@ -1298,9 +1397,20 @@ module).
                  straight from its synced snapshot — nothing else is
                  checked. Neither present prints a pointer to the
                  module's repository instead.
+  reset <name> <target>|all
+                 Force-redeploys a copy-mode deploy[] file from <name>'s
+                 current snapshot, discarding any local edit — "get me
+                 back to the workbench default". <target> is the file's
+                 basename (e.g. tmux.conf), or 'all' for every copy-mode
+                 file the module deploys. Always confirms first, even for
+                 a single named target — this destroys local edits. Only
+                 covers mode: copy deploy files; mode: link destinations
+                 are already kept in sync on every update, so there's
+                 nothing to reset.
 
-Both require <name> to already be registered ('wb add <name>' first) and
-synced at least once ('wb update <name>' if 'wb add' hasn't run yet).
+Both info and docs require <name> to already be registered ('wb add
+<name>' first) and synced at least once ('wb update <name>' if 'wb add'
+hasn't run yet) — reset requires the same.
 EOF
 }
 
