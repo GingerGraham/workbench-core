@@ -108,6 +108,15 @@ registered tier files, then set `WORKBENCH_PROMPT_SET=true`; the loader
 skips its own fallback whenever that variable is already set. This keeps
 the loader itself free of any hardcoded list of known prompt tools.
 
+Before every tier pass — including a reload in an already-running shell,
+not just a fresh shell start — the loader clears `WORKBENCH_PROMPT_SET`/
+`WORKBENCH_PROMPT_ENGINE` and, only if a previous pass in this same shell
+had already set them, resets bash's `PROMPT_COMMAND`/zsh's
+`precmd_functions` too (ARCHITECTURE.md §12 D50). A prompt-owning module
+can rely on this: your own guard never needs to defensively clear a
+competing engine's leftover hook before running — by the time your tier
+content is reached, the slate is already as clean as a brand-new shell's.
+
 ## The tracking-variable contract
 
 For every registered module (core included), the loader exports a
