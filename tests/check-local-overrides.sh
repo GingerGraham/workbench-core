@@ -14,7 +14,11 @@
 # just a new-file-loads test); settings.sh's final pass still wins over a
 # tier; another *.sh file in the same directory is callable in a new shell
 # without touching settings.sh; and the local/*.sh -> WORKBENCH_USER_EXT_DIR
-# ordering holds.
+# ordering holds. Also covers module-shipped overrides (ARCHITECTURE.md §12
+# D48): a module-shipped override file in local/overrides/ is sourced
+# before the module's own tier content and before settings.sh's early
+# pass, settings.sh still wins over both the tier and the override, and
+# the override file is sourced exactly once.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -74,6 +78,7 @@ export XDG_CACHE_HOME="${WORK}/loader-cache"
 LOCAL_DIR="${XDG_CONFIG_HOME}/workbench/local"
 USER_EXT_DIR="${XDG_CONFIG_HOME}/workbench/user"
 mkdir -p "${LOCAL_DIR}" "${USER_EXT_DIR}"
+mkdir -p "${LOCAL_DIR}/overrides"
 
 # settings.sh: sets WORKBENCH_PLAIN_SHELL early (must gate the prompt
 # fallback/WORKBENCH_SHOW_FUNCTIONS the same way 90-local.sh's early pass
@@ -83,6 +88,15 @@ cat > "${LOCAL_DIR}/settings.sh" <<'EOF'
 WB_TEST_LOG="${WB_TEST_LOG:-}settings-pass "
 WORKBENCH_PLAIN_SHELL=true
 SOME_VAR=fromsettings
+EOF
+
+# A module-shipped override file — must load before settings.sh's early
+# pass (so settings.sh still wins on a shared variable) and before the
+# tier below (so the tier's ${VAR:-default} picks up its value).
+cat > "${LOCAL_DIR}/overrides/acme-widget.sh" <<'EOF'
+WB_TEST_LOG="${WB_TEST_LOG:-}override "
+THEME_VAR=fromoverride
+SOME_VAR=fromoverride
 EOF
 
 # Another, genuinely open local file — must load without touching
@@ -107,6 +121,7 @@ mkdir -p "${WORK}/widget-src"
 cat > "${WORK}/widget-src/10-env.sh" <<'EOF'
 WB_TEST_LOG="${WB_TEST_LOG}tier "
 SOME_VAR=fromtier
+THEME_VAR="${THEME_VAR:-tierdefault}"
 EOF
 cat > "${WORK}/modules/acme-widget/register.list" <<EOF
 ${WORK}/widget-src/10-env.sh|env
@@ -132,6 +147,7 @@ OUT="$(
             echo "SOME_VAR=${SOME_VAR:-unset}"
             echo "SHOW_FUNCTIONS=${WORKBENCH_SHOW_FUNCTIONS:-unset}"
             echo "PROMPT_ENGINE=${WORKBENCH_PROMPT_ENGINE:-unset}"
+            echo "THEME_VAR=${THEME_VAR:-unset}"
             command -v local-extra-fn >/dev/null && echo "EXTRA_FN=true" || echo "EXTRA_FN=false"
         '
 )"
@@ -186,6 +202,43 @@ if [[ -n "${local_pos}" && -n "${ext_pos}" && "${local_pos}" -lt "${ext_pos}" ]]
     ok "other local/*.sh files are sourced before WORKBENCH_USER_EXT_DIR"
 else
     fail "ordering broken: local/*.sh did not precede WORKBENCH_USER_EXT_DIR (log: ${test_log})"
+fi
+
+# 9. Module-shipped override ran before the tier: the tier's
+#    ${THEME_VAR:-tierdefault} picked up the override's value, not its
+#    own fallback.
+if printf '%s\n' "${OUT}" | grep -q '^THEME_VAR=fromoverride$'; then
+    ok "a module-shipped override file is sourced before the module's own tier content"
+else
+    fail "the tier's own default won instead of the override's value: $(printf '%s\n' "${OUT}" | grep '^THEME_VAR=')"
+fi
+
+# 10. settings.sh still wins over BOTH the tier's and the override's
+#     value for the same variable (SOME_VAR) — strictly stronger than
+#     check 5, now that a module override is also in the mix.
+if printf '%s\n' "${OUT}" | grep -q '^SOME_VAR=fromsettings$'; then
+    ok "settings.sh's final pass wins over a module-shipped override, not just a tier"
+else
+    fail "settings.sh did not win over the module override: $(printf '%s\n' "${OUT}" | grep '^SOME_VAR=')"
+fi
+
+# 11. Ordering: the override file is sourced before settings.sh's early
+#     pass (its marker appears before the first settings-pass marker).
+override_pos=$(printf '%s\n' "${test_log}" | grep -bo 'override' | head -1 | cut -d: -f1)
+settings_first_pos=$(printf '%s\n' "${test_log}" | grep -bo 'settings-pass' | head -1 | cut -d: -f1)
+if [[ -n "${override_pos}" && -n "${settings_first_pos}" && "${override_pos}" -lt "${settings_first_pos}" ]]; then
+    ok "module-shipped overrides are sourced before settings.sh's early pass"
+else
+    fail "ordering broken: override did not precede settings.sh's early pass (log: ${test_log})"
+fi
+
+# 12. The override file is sourced exactly once — not picked up again by
+#     the unrelated "other local/*.sh files" pass (different directory).
+override_count="$(printf '%s\n' "${test_log}" | grep -o 'override' | wc -l | tr -d ' ')"
+if [[ "${override_count}" -eq 1 ]]; then
+    ok "the override file is sourced exactly once, not duplicated by the other local/*.sh pass"
+else
+    fail "override file was sourced ${override_count} time(s), expected exactly 1 (log: ${test_log})"
 fi
 
 echo

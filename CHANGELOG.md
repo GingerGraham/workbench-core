@@ -4,6 +4,17 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`overrides_src`** — a module can now declare a manifest field
+  pointing at a file deployed once (never overwritten) to
+  `~/.config/workbench/local/overrides/<module-name>.sh`, for opinionated
+  defaults a user should be able to change without editing a file inside
+  the module's immutable per-sync snapshot. No `dest` field — the
+  destination is always engine-computed. New `WORKBENCH_OVERRIDE_<SCOPE>`
+  naming convention for election-type opinions (`docs/module-authoring.md`).
+  See ARCHITECTURE.md §12 D48.
+
 ## [2.3.0] - 2026-09-10
 
 ### Added

@@ -26,6 +26,7 @@ wins** — both cite the relevant section here in their own error output.
 - [`core_api`](#core_api)
 - [`sync.enabled`](#syncenabled)
 - [`info`](#info)
+- [`overrides_src`](#overrides_src)
 - [`register:`](#register)
   - [`register.shell[]`](#registershell)
   - [`register.installers[]`](#registerinstallers)
@@ -191,6 +192,46 @@ or `README.md` at the repo root, shown in full by `wb module docs
 is tried first, falling back to `README.md`; neither present is reported
 as "not published," not an error.
 
+## `overrides_src`
+
+```yaml
+overrides_src: shell/overrides.sh
+```
+
+A module's answer to "I ship an opinionated default, but you should be
+able to change it without editing a file that lives inside my immutable,
+per-sync snapshot." `src` is validated exactly like `deploy[].src` (safe
+relative path, no leading `/`, no `..` segment) — there is deliberately no
+`dest` field, for the same reason `register.shell[]` has none (see
+above): the destination is always engine-computed, never
+author-specified, because this file lands inside
+`~/.config/workbench/local/` — the one directory a user's own shell
+trusts enough to source unconditionally on every start, and the one
+place this project's non-negotiables specifically forbid a module from
+choosing its own path into.
+
+The engine deploys it once, to
+`${XDG_CONFIG_HOME:-~/.config}/workbench/local/overrides/<module-name>.sh`
+(`<module-name>` is the module's registration name — the same name `wb
+add <name>` uses), with the same `copy`/`force: false` semantics
+`deploy[]` already has — create once, never touched again by the engine.
+There is no `force: true` escape hatch for this field: once deployed,
+the file is the user's, permanently, by design. A module bumping
+`overrides_src`'s content in a later release does **not** update anyone
+who already has the file — same one-way-publish model `deploy[]`'s own
+`copy` mode already documents above. If a module doesn't yet have an
+opinion worth exposing, it simply omits this field — there is no blank
+placeholder, and none is ever created on a module's behalf.
+
+Loaded early — before every module's own tier content, and before
+`~/.config/workbench/local/settings.sh`'s own early pass — so a value it
+sets is visible to a module's own `${VAR:-default}`-style tier code, and
+a user's own `settings.sh` always wins if both set the same variable. See
+`lib/loader.sh`'s "Module-shipped overrides" section and
+`docs/module-authoring.md`'s "Shipping overridable defaults" section for
+the full load-order picture and the `WORKBENCH_OVERRIDE_<SCOPE>` naming
+convention this field exists to support.
+
 ## `register:`
 
 The fix for a structural gap in the pre-`workbench` design: a manifest-
@@ -278,6 +319,7 @@ forward-compatibility posture as the rest of this spec.
 | `core_api` | no | — | Semver range this module targets. Absent = `register:` ignored. |
 | `sync.enabled` | no | `true` | Module-level default; machine state can override. |
 | `info.description` | no | — | Free text, shown by `wb module info`. No functional effect — read regardless of whether `core_api` is declared. |
+| `overrides_src` | no | — | Path to a file deployed once (never overwritten) to `~/.config/workbench/local/overrides/<module-name>.sh`. No `dest` — always engine-computed. |
 | `register.shell[].src` | yes, per entry | — | Validated like `deploy[].src`. |
 | `register.shell[].tier` | no | `tools` | Loader tier. |
 | `register.shell[].dest` | — | — | **Not permitted.** Engine-computed only. |
