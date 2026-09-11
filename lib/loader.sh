@@ -162,13 +162,13 @@ export WORKBENCH_PLATFORM_DETECTED
 # zsh) — a failing file is skipped and warned about, and the stamp is
 # withheld so it's re-checked (and re-warned) every start until fixed.
 #
-# Defined here, ahead of its first two call sites below (module-shipped
-# overrides, then settings.sh's own directory setup) rather than down by
-# its other two call sites (the "other local/*.sh" pass and
-# WORKBENCH_USER_EXT_DIR, further down this file) — bash requires a
-# function to be defined before it's called, and this one now has to run
-# before settings.sh does (ARCHITECTURE.md §12 D48). One definition, four
-# call sites total, never duplicated.
+# Defined here, ahead of its first call site below (module-shipped
+# overrides) rather than down by its other two call sites (the "other
+# local/*.sh" pass and WORKBENCH_USER_EXT_DIR, further down this file) —
+# bash requires a function to be defined before it's called, and this one
+# now has to run before settings.sh's own early pass, which is sourced
+# directly rather than through this helper (ARCHITECTURE.md §12 D48). One
+# definition, three call sites total, never duplicated.
 _wb_loader_source_sh_files_once() {
     local dir="$1" stamp="$2" exclude="${3:-}"
     local cache_dir dirty=false f base
