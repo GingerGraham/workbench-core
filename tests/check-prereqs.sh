@@ -165,6 +165,26 @@ for bin in ${missing_prereqs}; do
 done
 ok "workbench_missing_shell_prereqs only reports binaries actually absent from PATH"
 
+# 7. sudo-test / get-elevation-command do not crash with "USER: unbound
+#    variable" when $USER is unset — confirmed in a bare `docker run -it
+#    fedora:latest` root shell, which never exports USER. bin/wb runs
+#    under `set -uo pipefail`; before the fix, get-elevation-command's
+#    `${USER}` reference inside elevate-cmd's own
+#    `elevation_cmd="$(get-elevation-command)"` command substitution
+#    killed that subshell with "unbound variable" — swallowed by
+#    elevate-cmd's `|| return 1` — so wb install never actually invoked
+#    the package manager for missing prereqs, silently. See
+#    ARCHITECTURE.md §12 D52.
+# shellcheck source=lib/core/functions.sh
+source "${REPO_ROOT}/lib/core/functions.sh"
+OUT="$( { unset USER; set -u; sudo-test; get-elevation-command; } 2>&1 )" || true
+if printf '%s\n' "${OUT}" | grep -q "unbound variable"; then
+    fail "sudo-test/get-elevation-command raise 'unbound variable' when \$USER is unset"
+    echo "${OUT}"
+else
+    ok "sudo-test and get-elevation-command do not crash when \$USER is unset under set -u"
+fi
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."

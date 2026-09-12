@@ -148,22 +148,44 @@ detect-package-manager() {
 }
 
 # ── Privilege elevation helpers ───────────────────────────────────────────
+# _workbench_current_user
+# Resolves the invoking user without depending on $USER being exported —
+# confirmed unset in a bare `docker run -it fedora:latest` root shell (no
+# login/PAM session ever sets it), which crashed sudo-test/get-elevation-
+# command under bin/wb's `set -u`: get-elevation-command's `${USER}`
+# reference inside elevate-cmd's `elevation_cmd="$(...)"` command
+# substitution killed that subshell with "unbound variable", swallowed by
+# elevate-cmd's `|| return 1`, so wb install silently never actually
+# invoked the package manager (ARCHITECTURE.md §12 D52). `id -un` is used
+# directly, not just as a fallback — it's more reliable than $USER even
+# when exported (immune to a stale value inherited across `su`), and needs
+# no new prereq check: `id` is more fundamental than anything in
+# _WB_SHELL_PREREQS_REQUIRED, same "assumed always present" class as the
+# bare `uname` calls in _workbench_detect_platform.
+_workbench_current_user() {
+    id -un
+}
+
 sudo-test() {
-    if sudo -l -U "${USER}" &>/dev/null; then
+    local _wb_user
+    _wb_user="$(_workbench_current_user)"
+    if sudo -l -U "${_wb_user}" &>/dev/null; then
         return 0
-    elif command -v run0 &>/dev/null && run0 -l -U "${USER}" &>/dev/null; then
+    elif command -v run0 &>/dev/null && run0 -l -U "${_wb_user}" &>/dev/null; then
         log_debug "User has run0 access"
         return 0
     fi
-    log_error "No sudo/run0 access for ${USER}"
+    log_error "No sudo/run0 access for ${_wb_user}"
     return 1
 }
 
 get-elevation-command() {
-    if command -v sudo &>/dev/null && sudo -l -U "${USER}" &>/dev/null; then
+    local _wb_user
+    _wb_user="$(_workbench_current_user)"
+    if command -v sudo &>/dev/null && sudo -l -U "${_wb_user}" &>/dev/null; then
         echo "sudo"
         return 0
-    elif command -v run0 &>/dev/null && run0 -l -U "${USER}" &>/dev/null; then
+    elif command -v run0 &>/dev/null && run0 -l -U "${_wb_user}" &>/dev/null; then
         log_debug "Using run0 for privilege elevation"
         echo "run0"
         return 0
