@@ -4,6 +4,17 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`sudo-test`/`get-elevation-command` no longer crash with an
+  "unbound variable" error when `$USER` isn't exported** — reproduced
+  in a bare `docker run -it fedora:latest` root shell, where the crash
+  was swallowed by `elevate-cmd`'s own error handling and surfaced only
+  as a generic "could not install all missing prerequisites
+  automatically" warning, silently skipping prerequisite installation.
+  Both functions now resolve the invoking user via `id -un` instead of
+  reading `${USER}` directly. See ARCHITECTURE.md §12 D52.
+
 ## [2.5.0] - 2026-09-11
 
 ### Added
