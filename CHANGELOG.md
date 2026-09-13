@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-09-13
+
 ### Added
 
 - **Backup-before-overwrite for force copy/link deploys** — any real
