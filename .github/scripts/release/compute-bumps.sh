@@ -85,6 +85,14 @@ while IFS= read -r sha; do
     scope="$(_rel_commit_scope "${header}")"
 
     if [[ "${scope}" == "core" ]]; then
+        core_touches_registered="false"
+        while IFS= read -r f; do
+            [[ -z "${f}" ]] && continue
+            _rel_is_registered "${f}" && core_touches_registered="true"
+        done <<< "${files_touched}"
+        if [[ "${core_touches_registered}" == "true" ]]; then
+            echo "WARNING: commit ${sha} ('${header}') is scoped 'core' but also touches a registered file — that file's own bump was dropped. pr-check.yml (D55) should have caught this at PR time." >&2
+        fi
         CORE_SEV="$(_rel_max_sev "${CORE_SEV}" "${severity}")"
     elif [[ -n "${scope}" ]]; then
         if _rel_is_registered "${scope}"; then

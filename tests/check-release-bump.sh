@@ -377,6 +377,41 @@ else
     fail "no-baseline-tag case produced an unexpected plan: ${PLAN_UNTAGGED}"
 fi
 
+export WORKBENCH_RELEASE_TEST_REPO_ROOT="${FIXTURE}"
+REPO_ROOT="${FIXTURE}"
+(
+    cd "${FIXTURE}" || exit 1
+    git checkout -q -B main v1.0.0
+)
+
+# 4h. 'core' scope touching a registered file: compute-bumps.sh still only
+#     bumps OVERALL (documented, deliberate — D27), but now also logs a
+#     visible warning pointing at the PR-time check that should have caught
+#     this (D55) — a post-merge safety net for an admin-bypass path, not a
+#     substitute for pr-check.yml.
+(
+    cd "${FIXTURE}" || exit 1
+    echo "# should have been scoped to widget.sh" >> lib/other/widget.sh
+    git add -A
+    git commit -q -m "feat(core): should have been scoped to widget.sh"
+)
+PLAN_CORE_REG="$("${RELEASE_DIR}/compute-bumps.sh" 2>"${WORK}/core-reg-warn.log")"
+if ! grep -q -v '^OVERALL|' <<< "${PLAN_CORE_REG}"; then
+    ok "'core' scope touching a registered file: still no per-file bump line (documented D27 behaviour)"
+else
+    fail "'core' scope touching a registered file unexpectedly produced a per-file bump line: ${PLAN_CORE_REG}"
+fi
+if grep -q '^OVERALL|1\.0\.0|1\.1\.0|minor|core-scoped commit$' <<< "${PLAN_CORE_REG}"; then
+    ok "'core' scope touching a registered file: OVERALL still bumps minor as designed"
+else
+    fail "'core' scope touching a registered file: OVERALL line wrong: ${PLAN_CORE_REG}"
+fi
+if grep -qi "D55" "${WORK}/core-reg-warn.log"; then
+    ok "compute-bumps.sh logs a visible D55 warning when 'core' scope touches a registered file"
+else
+    fail "compute-bumps.sh did not log the expected D55 warning"
+fi
+
 # ── 9. PR title format check (ARCHITECTURE.md §12 D47) ───────────────────
 # The real-world incident this guards against: PR #46's title lacked a
 # Conventional Commit prefix, so the squash-merge commit that landed on
@@ -401,6 +436,128 @@ else
 fi
 # shellcheck disable=SC2015
 grep -q "expected: <feat|fix" /tmp/wb-pr-title-bad.log && ok "check-pr-title-format.sh: rejection message names the expected grammar" || fail "check-pr-title-format.sh: rejection message missing expected-grammar hint"
+
+# ── 10. 'core' scope vs a touched registered file (ARCHITECTURE.md §12 D55) ──
+# The PR #58/#59 incident: an explicit 'core' scope is an author override
+# that skips auto-detection entirely, so it must never coincide with a
+# commit/PR that actually touches a registered file — that file would
+# silently keep its old script-local version. This checks both
+# check-commit-format.sh and check-pr-title-format.sh catch it at PR time.
+
+(
+    cd "${FIXTURE}" || exit 1
+    git checkout -q -B main v1.0.0
+)
+BASE_D55="$(cd "${FIXTURE}" && git rev-parse HEAD)"
+
+# 10a. check-commit-format.sh: a 'core'-scoped commit that also touches a
+#      registered file must fail.
+(
+    cd "${FIXTURE}" || exit 1
+    echo "# should have been scoped to widget.sh" >> lib/other/widget.sh
+    git add -A
+    git commit -q -m "feat(core): should have been scoped to widget.sh"
+)
+HEAD_D55_BAD="$(cd "${FIXTURE}" && git rev-parse HEAD)"
+if bash "${RELEASE_DIR}/check-commit-format.sh" "${BASE_D55}" "${HEAD_D55_BAD}" >/tmp/wb-commit-core-reg.log 2>&1; then
+    fail "check-commit-format.sh: 'core' scope touching a registered file was incorrectly accepted"
+else
+    ok "check-commit-format.sh: rejects 'core' scope when the commit also touches a registered file"
+fi
+# shellcheck disable=SC2015
+grep -q "also touches a registered file" /tmp/wb-commit-core-reg.log \
+    && ok "check-commit-format.sh: rejection message explains the 'core'-scope rule" \
+    || fail "check-commit-format.sh: rejection message missing the 'core'-scope explanation"
+
+(
+    cd "${FIXTURE}" || exit 1
+    git checkout -q -B main v1.0.0
+)
+
+# 10b. check-commit-format.sh: a legitimate 'core'-scoped commit touching no
+#      registered file must still pass.
+(
+    cd "${FIXTURE}" || exit 1
+    echo "# a real product-level decision" >> README-placeholder.md
+    git add -A
+    git commit -q -m "feat(core): a product-level decision with no file of its own"
+)
+HEAD_D55_OK="$(cd "${FIXTURE}" && git rev-parse HEAD)"
+if bash "${RELEASE_DIR}/check-commit-format.sh" "${BASE_D55}" "${HEAD_D55_OK}" >/dev/null 2>&1; then
+    ok "check-commit-format.sh: a legitimate 'core' scope touching no registered file still passes"
+else
+    fail "check-commit-format.sh: a legitimate 'core' scope was incorrectly rejected"
+fi
+
+(
+    cd "${FIXTURE}" || exit 1
+    git checkout -q -B main v1.0.0
+)
+
+# 10c. check-pr-title-format.sh: same rule, evaluated against the PR's
+#      overall diff — the squash commit only ever carries the title's scope.
+export WORKBENCH_RELEASE_TEST_REPO_ROOT="${FIXTURE}"
+REPO_ROOT="${FIXTURE}"
+
+(
+    cd "${FIXTURE}" || exit 1
+    echo "# change" >> lib/other/widget.sh
+    git add -A
+    git commit -q -m "chore: commit message irrelevant here — the PR title drives the squash commit"
+)
+HEAD_D55_TITLE_BAD="$(cd "${FIXTURE}" && git rev-parse HEAD)"
+if bash "${RELEASE_DIR}/check-pr-title-format.sh" "feat(core): should have been scoped to widget.sh" "${BASE_D55}" "${HEAD_D55_TITLE_BAD}" >/tmp/wb-pr-title-core-reg.log 2>&1; then
+    fail "check-pr-title-format.sh: 'core'-scoped title touching a registered file was incorrectly accepted"
+else
+    ok "check-pr-title-format.sh: rejects a 'core'-scoped title when the PR also touches a registered file"
+fi
+# shellcheck disable=SC2015
+grep -q "also touches a registered file" /tmp/wb-pr-title-core-reg.log \
+    && ok "check-pr-title-format.sh: rejection message explains the 'core'-scope rule" \
+    || fail "check-pr-title-format.sh: rejection message missing the 'core'-scope explanation"
+
+(
+    cd "${FIXTURE}" || exit 1
+    git checkout -q -B main v1.0.0
+)
+
+if bash "${RELEASE_DIR}/check-pr-title-format.sh" "feat(core): a product-level decision with no file of its own" "${BASE_D55}" "${BASE_D55}" >/dev/null 2>&1; then
+    ok "check-pr-title-format.sh: a legitimate 'core'-scoped title with an empty diff still passes"
+else
+    fail "check-pr-title-format.sh: a legitimate 'core'-scoped title was incorrectly rejected"
+fi
+
+if bash "${RELEASE_DIR}/check-pr-title-format.sh" "feat: add a thing" >/dev/null 2>&1; then
+    ok "check-pr-title-format.sh: omitting base/head still validates grammar only (backward compatible)"
+else
+    fail "check-pr-title-format.sh: omitting base/head broke the existing grammar-only call path"
+fi
+
+# 10d. check-pr-title-format.sh: exactly one of base-sha/head-sha given is a
+#      caller misconfiguration and must fail loudly, not silently downgrade
+#      to grammar-only (Copilot review finding on PR #62).
+if bash "${RELEASE_DIR}/check-pr-title-format.sh" "feat(core): a product-level decision with no file of its own" "${BASE_D55}" >/tmp/wb-pr-title-partial-args.log 2>&1; then
+    fail "check-pr-title-format.sh: base-sha with no head-sha was incorrectly accepted"
+else
+    ok "check-pr-title-format.sh: rejects base-sha given without head-sha"
+fi
+# shellcheck disable=SC2015
+grep -q "requires both" /tmp/wb-pr-title-partial-args.log \
+    && ok "check-pr-title-format.sh: partial-args rejection message explains the requirement" \
+    || fail "check-pr-title-format.sh: partial-args rejection message missing"
+
+# 10e. check-pr-title-format.sh: a failed 'git diff' (unreachable SHA) must
+#      fail loudly rather than being treated as an empty, no-registered-file
+#      diff (Copilot review finding on PR #62).
+if bash "${RELEASE_DIR}/check-pr-title-format.sh" "feat(core): a product-level decision with no file of its own" "${BASE_D55}" "0000000000000000000000000000000000000000" >/tmp/wb-pr-title-bad-diff.log 2>&1; then
+    fail "check-pr-title-format.sh: an unreachable head-sha was incorrectly accepted"
+else
+    ok "check-pr-title-format.sh: rejects an unreachable head-sha instead of silently treating it as an empty diff"
+fi
+# shellcheck disable=SC2015
+grep -q "could not diff" /tmp/wb-pr-title-bad-diff.log \
+    && ok "check-pr-title-format.sh: unreachable-sha rejection message explains the diff failure" \
+    || fail "check-pr-title-format.sh: unreachable-sha rejection message missing"
 
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
