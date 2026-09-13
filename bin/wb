@@ -1450,9 +1450,14 @@ need to run this by hand — it's wired up automatically once 'wb' itself
 is registered (shell/completions/wb.sh sources a cached copy, regenerated
 whenever workbench-core's release version changes).
 
-Phase 1: completes top-level command names only (e.g. 'wb st<TAB>' ->
-'wb status'). Completing arguments — module names for 'track'/'remove',
-tool names for 'tools install' — isn't implemented yet.
+Completes top-level command names (e.g. 'wb st<TAB>' -> 'wb status'),
+each command group's own sub-commands ('wb tools <TAB>', 'wb module
+<TAB>', 'wb sync <TAB>', 'wb scheduler <TAB>'), and the actual current
+registered module names, catalog module/bundle names, and discovered
+tool names on this host (e.g. 'wb track <TAB>' only offers modules
+you've actually registered — never a deregistered one). Flag names
+(--private, --bundle, etc.) and 'wb module reset <name>'s own target
+argument aren't completed yet — see ARCHITECTURE.md §12 D54.
 EOF
 }
 
@@ -1546,6 +1551,7 @@ case "${_wb_cmd}" in
     module)     _wb_cmd_module "$@" ;;
     version)    _wb_cmd_version "$@" ;;
     completion) _wb_cmd_completion "$@" ;;
+    __complete) _wb_cmd_complete "$@" ;;
     help)       _wb_cmd_help "$@" ;;
     reload)
         log_error "wb reload: this only works as a shell function, defined by lib/loader.sh — a subprocess (this one) can't reload its own parent shell. Either you're not in a shell that's sourced lib/loader.sh yet, or this host predates this wrapper (ARCHITECTURE.md §12 D39). Run 'source ~/.bashrc' (or open a new shell) once — 'wb reload' and every state-changing 'wb' command will auto-reload from then on."
