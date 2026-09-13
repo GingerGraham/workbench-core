@@ -40,6 +40,25 @@ else
     fail "dest is still a symlink or has wrong content after force copy"
 fi
 
+# ── 0b. workbench_deploy_link_file backs up a real file before its force
+#    branch rm -rf's it (ARCHITECTURE.md §12 D53). No live manifest sets
+#    mode: link + force: true today, so this exercises the engine
+#    function directly, same as check 0 above. ─────────────────────────
+mkdir -p "${WORK}/link-src-dir"
+echo "LINK MODE SNAPSHOT CONTENT" > "${WORK}/link-src-dir/thing.conf"
+mkdir -p "${WORK}/home-link-test"
+echo "REAL PRE-EXISTING FILE, NOT A SYMLINK" > "${WORK}/home-link-test/thing.conf"
+workbench_deploy_link_file "${WORK}/link-src-dir/thing.conf" "${WORK}/home-link-test/thing.conf" "true" "link-test-mod" >/tmp/wb-link-backup.log 2>&1
+LINK_BACKUP="$(find "${XDG_DATA_HOME}/workbench/backups" -name 'link-test-mod-thing.conf.*' 2>/dev/null | head -1)"
+if [[ -L "${WORK}/home-link-test/thing.conf" ]] && [[ -n "${LINK_BACKUP}" ]] \
+    && [[ "$(cat "${LINK_BACKUP}")" == "REAL PRE-EXISTING FILE, NOT A SYMLINK" ]]; then
+    ok "workbench_deploy_link_file backs up a real pre-existing file before replacing it with a symlink"
+else
+    fail "workbench_deploy_link_file did not back up the pre-existing file correctly"
+    cat /tmp/wb-link-backup.log
+fi
+rm -rf "${XDG_DATA_HOME}/workbench/backups"
+
 # ── Fixture module: copy-mode tmux.conf/vimrc, one link-mode file. ─────────
 SRC="${WORK}/src-mod"
 BARE="${WORK}/mod.git"
@@ -120,6 +139,41 @@ if [[ "$(cat "${TMUX_DEST}")" == "WORKBENCH DEFAULT TMUX CONF" ]]; then
 else
     fail "confirmed reset did not restore the default content"
     cat /tmp/wb-mr-confirm.log
+fi
+
+# ── 3b. Confirming a reset backs up the pre-existing (differing) file,
+#    and says so, with a path, in the log output (ARCHITECTURE.md §12
+#    D53). ──────────────────────────────────────────────────────────────
+BACKUP_ROOT="${XDG_DATA_HOME}/workbench/backups"
+# Check 3, above, already left its own backup of tmux.conf in here — clear
+# it first so this check's find-by-basename match is unambiguous, rather
+# than racing against an unrelated earlier backup with the same basename.
+rm -rf "${BACKUP_ROOT}"
+echo "USER RUINED THIS FILE YET AGAIN" > "${TMUX_DEST}"
+echo "y" | _wb_cmd_module_reset reset-mod tmux.conf >/tmp/wb-mr-backup.log 2>&1
+BACKUP_FILE="$(find "${BACKUP_ROOT}" -name 'reset-mod-tmux.conf.*' 2>/dev/null | head -1)"
+if [[ -n "${BACKUP_FILE}" ]] && [[ "$(cat "${BACKUP_FILE}")" == "USER RUINED THIS FILE YET AGAIN" ]]; then
+    ok "resetting a modified file backs up the pre-existing content under workbench/backups/"
+else
+    fail "no backup found (or wrong content) for the modified file before reset"
+    cat /tmp/wb-mr-backup.log
+fi
+if grep -q "backed up existing" /tmp/wb-mr-backup.log && grep -q "${BACKUP_ROOT}" /tmp/wb-mr-backup.log; then
+    ok "the backup's path is reported in the log output"
+else
+    fail "backup path was not reported in the log output"
+    cat /tmp/wb-mr-backup.log
+fi
+
+# ── 3c. Resetting a file that already matches the workbench default
+#    produces no backup — nothing actually changed. ───────────────────────
+rm -rf "${BACKUP_ROOT}"
+echo "y" | _wb_cmd_module_reset reset-mod tmux.conf >/tmp/wb-mr-nobackup.log 2>&1
+if [[ ! -d "${BACKUP_ROOT}" ]]; then
+    ok "resetting an already-current file produces no backup"
+else
+    fail "a backup was created even though the file already matched the default"
+    find "${BACKUP_ROOT}"
 fi
 
 # ── 4. 'all' resets every copy-mode file, confirmation covers all of them. ──
