@@ -4,6 +4,18 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`wb` shell completions — Phase 2.** Bash/zsh tab-completion now
+  covers each command group's own sub-commands (`tools`, `module`,
+  `sync`, `scheduler`) and the actual current registered module names,
+  catalog module/bundle names, and discovered tool names on this host —
+  queried fresh on every completion via a new hidden `wb __complete
+  <kind>` fast path, not baked into the cached script. Deregistered
+  modules are never offered. Flag-name completion and `wb module reset
+  <name> <target>`'s own target argument are deliberately deferred to a
+  follow-up Phase 3. See `ARCHITECTURE.md` §12, D54.
+
 ## [2.6.0] - 2026-09-13
 
 ### Added

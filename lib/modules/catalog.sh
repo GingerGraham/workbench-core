@@ -68,3 +68,33 @@ workbench_catalog_bundle_modules() {
     done < "${file}"
     return 1
 }
+
+# workbench_catalog_list_modules
+# Prints every known-module name in the resolved catalog file (host
+# override if present, else the shipped default — same resolution as
+# workbench_catalog_lookup), one per line. Used by 'wb add <TAB>'
+# completion (ARCHITECTURE.md §12 D54) — never hand-maintain a second
+# copy of this list anywhere else.
+workbench_catalog_list_modules() {
+    local file n u p
+    file="$(_wb_catalog_modules_file)"
+    [[ -f "${file}" ]] || return 0
+    while IFS='|' read -r n u p; do
+        [[ -z "${n}" || "${n}" == \#* ]] && continue
+        printf '%s\n' "${n}"
+    done < "${file}"
+}
+
+# workbench_catalog_list_bundles
+# Prints every named bundle in the resolved bundles file, one per line.
+# Used by 'wb install --bundle <TAB>' completion (ARCHITECTURE.md §12
+# D54).
+workbench_catalog_list_bundles() {
+    local file n members
+    file="$(_wb_catalog_bundles_file)"
+    [[ -f "${file}" ]] || return 0
+    while IFS='|' read -r n members; do
+        [[ -z "${n}" || "${n}" == \#* ]] && continue
+        printf '%s\n' "${n}"
+    done < "${file}"
+}

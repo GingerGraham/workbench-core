@@ -55,11 +55,15 @@ echo "${ZSH_OUT}" | grep -q "compdef _wb_completions wb" \
 
 # ── 2. The introspected command list matches the real dispatch case — the
 #    single-source-of-truth guarantee this whole mechanism exists for.
+#    Scoped to the top-level 'compgen -W' only (the first one emitted,
+#    inside the '${COMP_CWORD} -eq 1' branch) — Phase 2 (ARCHITECTURE.md
+#    §12 D54) added several more further down for sub-command/argument
+#    completion, and this check's job is only ever the top-level list.
 #    Adjust the COMPLETION_CMDS extraction regex here if the generated
 #    bash format changes. ───────────────────────────────────────────────
 DISPATCH_CMDS="$(sed -n '/^case "\${_wb_cmd}" in$/,/^esac$/p' "${WB}" \
     | grep -oE '^[[:space:]]*[a-z][a-zA-Z0-9_-]*\)' | tr -d ' )' | sort -u)"
-COMPLETION_CMDS="$(echo "${BASH_OUT}" | grep -oE 'compgen -W "[^"]*"' \
+COMPLETION_CMDS="$(echo "${BASH_OUT}" | grep -oE 'compgen -W "[^"]*"' | head -n 1 \
     | sed -E 's/compgen -W "//; s/"$//' | tr ' ' '\n' | sort -u)"
 
 if [[ "${DISPATCH_CMDS}" == "${COMPLETION_CMDS}" ]]; then
