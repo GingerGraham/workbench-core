@@ -464,6 +464,7 @@ if bash "${RELEASE_DIR}/check-commit-format.sh" "${BASE_D55}" "${HEAD_D55_BAD}" 
 else
     ok "check-commit-format.sh: rejects 'core' scope when the commit also touches a registered file"
 fi
+# shellcheck disable=SC2015
 grep -q "also touches a registered file" /tmp/wb-commit-core-reg.log \
     && ok "check-commit-format.sh: rejection message explains the 'core'-scope rule" \
     || fail "check-commit-format.sh: rejection message missing the 'core'-scope explanation"
@@ -510,6 +511,7 @@ if bash "${RELEASE_DIR}/check-pr-title-format.sh" "feat(core): should have been 
 else
     ok "check-pr-title-format.sh: rejects a 'core'-scoped title when the PR also touches a registered file"
 fi
+# shellcheck disable=SC2015
 grep -q "also touches a registered file" /tmp/wb-pr-title-core-reg.log \
     && ok "check-pr-title-format.sh: rejection message explains the 'core'-scope rule" \
     || fail "check-pr-title-format.sh: rejection message missing the 'core'-scope explanation"
