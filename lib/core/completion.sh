@@ -210,20 +210,34 @@ _wb_completions() {
 
     case "\${cmd}" in
         add)
-            [[ \${CURRENT} -eq 3 ]] && _describe 'module' "(\$(wb __complete catalog-modules 2>/dev/null))"
+            if [[ \${CURRENT} -eq 3 ]]; then
+                local -a _wb_catalog_mods
+                _wb_catalog_mods=(\${(f)"\$(wb __complete catalog-modules 2>/dev/null)"})
+                _describe 'module' _wb_catalog_mods
+            fi
             ;;
         remove|track|dev|update)
-            [[ \${CURRENT} -eq 3 ]] && _describe 'module' "(\$(wb __complete registered-modules 2>/dev/null))"
+            if [[ \${CURRENT} -eq 3 ]]; then
+                local -a _wb_reg_mods
+                _wb_reg_mods=(\${(f)"\$(wb __complete registered-modules 2>/dev/null)"})
+                _describe 'module' _wb_reg_mods
+            fi
             ;;
         install)
-            [[ "\${words[CURRENT-1]}" == "--bundle" ]] && _describe 'bundle' "(\$(wb __complete catalog-bundles 2>/dev/null))"
+            if [[ "\${words[CURRENT-1]}" == "--bundle" ]]; then
+                local -a _wb_catalog_bundles
+                _wb_catalog_bundles=(\${(f)"\$(wb __complete catalog-bundles 2>/dev/null)"})
+                _describe 'bundle' _wb_catalog_bundles
+            fi
             ;;
         sync)
             if [[ \${CURRENT} -eq 3 ]]; then
                 local -a sync_subs; sync_subs=(${sync_subs})
                 _describe 'wb sync subcommand' sync_subs
             elif [[ \${CURRENT} -eq 4 && ( "\${words[3]}" == "enable" || "\${words[3]}" == "disable" ) ]]; then
-                _describe 'module' "(\$(wb __complete registered-modules 2>/dev/null))"
+                local -a _wb_reg_mods
+                _wb_reg_mods=(\${(f)"\$(wb __complete registered-modules 2>/dev/null)"})
+                _describe 'module' _wb_reg_mods
             fi
             ;;
         tools)
@@ -231,7 +245,9 @@ _wb_completions() {
                 local -a tools_subs; tools_subs=(${tools_subs})
                 _describe 'wb tools subcommand' tools_subs
             elif [[ \${CURRENT} -eq 4 && ( "\${words[3]}" == "install" || "\${words[3]}" == "upgrade" ) ]]; then
-                _describe 'tool' "(\$(wb __complete tools 2>/dev/null) all)"
+                local -a _wb_tools
+                _wb_tools=(\${(f)"\$(wb __complete tools 2>/dev/null)"} all)
+                _describe 'tool' _wb_tools
             fi
             ;;
         module)
@@ -239,7 +255,9 @@ _wb_completions() {
                 local -a module_subs; module_subs=(${module_subs})
                 _describe 'wb module subcommand' module_subs
             elif [[ \${CURRENT} -eq 4 && ( "\${words[3]}" == "info" || "\${words[3]}" == "docs" || "\${words[3]}" == "reset" ) ]]; then
-                _describe 'module' "(\$(wb __complete registered-modules 2>/dev/null))"
+                local -a _wb_reg_mods
+                _wb_reg_mods=(\${(f)"\$(wb __complete registered-modules 2>/dev/null)"})
+                _describe 'module' _wb_reg_mods
             fi
             ;;
         scheduler)
