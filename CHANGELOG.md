@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-09-13
+
 ### Added
 
 - **`wb` shell completions — Phase 2.** Bash/zsh tab-completion now
