@@ -541,6 +541,7 @@ if bash "${RELEASE_DIR}/check-pr-title-format.sh" "feat(core): a product-level d
 else
     ok "check-pr-title-format.sh: rejects base-sha given without head-sha"
 fi
+# shellcheck disable=SC2015
 grep -q "requires both" /tmp/wb-pr-title-partial-args.log \
     && ok "check-pr-title-format.sh: partial-args rejection message explains the requirement" \
     || fail "check-pr-title-format.sh: partial-args rejection message missing"
@@ -553,6 +554,7 @@ if bash "${RELEASE_DIR}/check-pr-title-format.sh" "feat(core): a product-level d
 else
     ok "check-pr-title-format.sh: rejects an unreachable head-sha instead of silently treating it as an empty diff"
 fi
+# shellcheck disable=SC2015
 grep -q "could not diff" /tmp/wb-pr-title-bad-diff.log \
     && ok "check-pr-title-format.sh: unreachable-sha rejection message explains the diff failure" \
     || fail "check-pr-title-format.sh: unreachable-sha rejection message missing"
