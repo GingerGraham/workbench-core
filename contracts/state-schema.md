@@ -168,6 +168,41 @@ A single unix timestamp, rewritten by `workbench_cadence_mark_ran()` after
 every `wb sync run-if-due`/`workbench_sync_all` invocation — see
 `contracts/tracking-spec.md` §Cadence.
 
+## Backup root
+
+```
+${XDG_DATA_HOME:-~/.local/share}/workbench/backups/
+└── <YYYY-MM-DD>/
+    └── <HH00>/
+        └── <module>-<basename>.<HHMMSS>[.<n>]
+```
+
+Written by `workbench_backup_existing_file` (`lib/sync/engine.sh`)
+immediately before `workbench_deploy_copy_file` or
+`workbench_deploy_link_file` overwrites or removes a real (non-symlink)
+pre-existing file or directory under `force: true` — this covers both
+`wb module reset` and any manifest `deploy[]` entry that sets
+`force: true` directly (see `ARCHITECTURE.md` §12 D53). Never written for
+a symlink destination — that's the engine's own pointer, never user
+content.
+
+`<HH00>` is the hour, zero-padded to two digits, with a literal `00`
+appended (`09:14` → `0900`), not the minute — kept coarse deliberately,
+since this directory is for a human to browse, not to correlate to the
+second. `<HHMMSS>` on the filename itself disambiguates multiple backups
+of the same file inside one hour bucket; a numeric `.<n>` suffix is added
+only in the (expected to be vanishingly rare) case two backups of the
+same file land in the same second.
+
+Copy-mode backup is skipped when the incoming content is byte-identical
+to what's already at `dest` — an unchanged `force: true` re-deploy
+produces nothing here. Link-mode backup (a real file/directory about to
+be `rm -rf`'d and replaced with a symlink) is unconditional — a type
+change is worth preserving even when the content matched.
+
+No retention policy and no scheduled cleanup — deliberate, not deferred;
+revisit only if volume ever actually becomes a problem.
+
 ## What is deliberately NOT here
 
 - No persistent, incrementally-`git pull`-updated working tree anywhere,

@@ -1068,9 +1068,12 @@ _wb_cmd_module_reset() {
         printf '    %s\n' "${chosen_dests[$k]}"
     done
     echo
+    echo "[INFO] Any file that currently differs from the workbench default is backed up first, under"
+    echo "       ${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/backups/ — see the log lines below for the exact path."
+    echo
 
     local answer
-    printf 'Proceed? This cannot be undone. [y/N]: '
+    printf 'Proceed? [y/N]: '
     if ! read -r answer; then
         echo
         log_info "wb module reset: aborted (no input) — nothing was reset."
@@ -1087,7 +1090,7 @@ _wb_cmd_module_reset() {
     local abs_src failed=0
     for k in "${!chosen_dests[@]}"; do
         abs_src="${current_dir}/${chosen_srcs[$k]%/}"
-        workbench_deploy_copy_file "${abs_src}" "${chosen_dests[$k]}" "true" || failed=1
+        workbench_deploy_copy_file "${abs_src}" "${chosen_dests[$k]}" "true" "${name}" || failed=1
     done
 
     if [[ "${failed}" -eq 1 ]]; then

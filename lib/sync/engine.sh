@@ -155,8 +155,57 @@ _wb_expand_dest() {
     printf '%s\n' "${d/#\~/${HOME}}"
 }
 
+# workbench_backup_existing_file <dest> [<module>]
+# Copies whatever currently exists at <dest> into the engine-computed
+# backup root before a force overwrite replaces or removes it
+# (ARCHITECTURE.md §12 D53) — the single choke point both
+# workbench_deploy_copy_file's and workbench_deploy_link_file's force
+# branches call through, so nothing that overwrites real content via
+# either path can do so unbacked-up.
+#
+# No-ops (returns 0) when there's nothing worth preserving: dest doesn't
+# exist, or dest is a symlink — a symlink is the engine's own pointer,
+# never user content, exactly the same distinction
+# workbench_deploy_copy_file's own D51 fix already draws just below this.
+# A real file OR a real directory (workbench_deploy_link_file's rm -rf
+# case) is handled identically — cp -a copies either.
+#
+# A failed backup aborts the caller's overwrite (non-zero return) rather
+# than proceeding unprotected: a backup that silently didn't happen is a
+# worse outcome than refusing the whole operation and saying so.
+workbench_backup_existing_file() {
+    local dest="$1" module="${2:-}"
+    [[ -e "${dest}" ]] || return 0
+    [[ -L "${dest}" ]] && return 0
+
+    local backup_root="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/backups"
+    local backup_dir
+    backup_dir="${backup_root}/$(date +%Y-%m-%d)/$(date +%H00)"
+    local backup_base
+    backup_base="${module:+${module}-}$(basename "${dest}").$(date +%H%M%S)"
+    local backup_path="${backup_dir}/${backup_base}"
+
+    # Same-second collision inside one hour bucket (two overwrites of the
+    # same file within a second) — unlikely at the volume this exists
+    # for, but a counter suffix is nearly free and beats silently
+    # clobbering an earlier backup.
+    local n=2
+    while [[ -e "${backup_path}" ]]; do
+        backup_path="${backup_dir}/${backup_base}.${n}"
+        n=$((n + 1))
+    done
+
+    mkdir -p "${backup_dir}"
+    if cp -a "${dest}" "${backup_path}"; then
+        log_info "  backed up existing ${dest} -> ${backup_path}"
+    else
+        log_error "  failed to back up ${dest} before overwrite — leaving it in place, not proceeding"
+        return 1
+    fi
+}
+
 workbench_deploy_copy_file() {
-    local src="$1" dest="$2" force="$3"
+    local src="$1" dest="$2" force="$3" module="${4:-}"
     mkdir -p "$(dirname "${dest}")"
     [[ -e "${dest}" && "${force}" != "true" ]] && return 0
     # A symlink counts as existing for the check above, so this only runs
@@ -168,6 +217,15 @@ workbench_deploy_copy_file() {
     # file, while leaving the destination still a symlink afterwards.
     # Remove the symlink first so cp always writes a real, detached file.
     [[ -L "${dest}" ]] && rm -f "${dest}"
+    # Back up a real pre-existing file before a force overwrite actually
+    # changes its content (ARCHITECTURE.md §12 D53) — skipped when the
+    # incoming content is byte-identical, so a re-deploy of an unchanged
+    # force: true entry (e.g. workbench-git's generated direnv context
+    # file, redeployed whenever that module's commit changes) never
+    # produces a backup with nothing new in it.
+    if [[ -e "${dest}" ]] && ! cmp -s "${src}" "${dest}"; then
+        workbench_backup_existing_file "${dest}" "${module}" || return 1
+    fi
     if cp -f "${src}" "${dest}"; then
         log_info "  deployed (copy): ${dest}"
     else
@@ -177,7 +235,7 @@ workbench_deploy_copy_file() {
 }
 
 workbench_deploy_link_file() {
-    local src="$1" dest="$2" force="$3"
+    local src="$1" dest="$2" force="$3" module="${4:-}"
     mkdir -p "$(dirname "${dest}")"
     if [[ -L "${dest}" ]]; then
         [[ "$(readlink "${dest}")" == "${src}" ]] && return 0
@@ -185,6 +243,12 @@ workbench_deploy_link_file() {
         log_info "  relinked: ${dest} -> ${src}"
     elif [[ -e "${dest}" ]]; then
         [[ "${force}" != "true" ]] && { log_warn "  ${dest} exists and is not a symlink — skipping"; return 0; }
+        # rm -rf below can destroy a real file OR an entire real
+        # directory — back it up first (ARCHITECTURE.md §12 D53).
+        # Unconditional, no content comparison: replacing a real path
+        # with a symlink is a type change worth preserving even when the
+        # content happened to match, unlike the copy-mode case above.
+        workbench_backup_existing_file "${dest}" "${module}" || return 1
         rm -rf "${dest}"; ln -s "${src}" "${dest}"
         log_info "  deployed (link): ${dest} -> ${src}"
     else
@@ -219,16 +283,16 @@ workbench_deploy_module() {
                 rel="${file#"${abs_src}"/}"
                 target="${real_dest%/}/${rel}"
                 if [[ "${mode}" == "link" ]]; then
-                    workbench_deploy_link_file "${file}" "${target}" "${force}"
+                    workbench_deploy_link_file "${file}" "${target}" "${force}" "${name}"
                 else
-                    workbench_deploy_copy_file "${file}" "${target}" "${force}"
+                    workbench_deploy_copy_file "${file}" "${target}" "${force}" "${name}"
                 fi
             done < <(find "${abs_src}" -name .git -prune -o -type f -print0)
         elif [[ -e "${abs_src}" ]]; then
             if [[ "${mode}" == "link" ]]; then
-                workbench_deploy_link_file "${abs_src}" "${real_dest}" "${force}"
+                workbench_deploy_link_file "${abs_src}" "${real_dest}" "${force}" "${name}"
             else
-                workbench_deploy_copy_file "${abs_src}" "${real_dest}" "${force}"
+                workbench_deploy_copy_file "${abs_src}" "${real_dest}" "${force}" "${name}"
             fi
         else
             log_warn "workbench_deploy_module: ${name}: deploy src not found: ${abs_src}"
@@ -248,7 +312,7 @@ workbench_deploy_module() {
         local abs_overrides_src="${current_dir}/${overrides_src}"
         local overrides_dest="${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/local/overrides/${name}.sh"
         if [[ -f "${abs_overrides_src}" ]]; then
-            workbench_deploy_copy_file "${abs_overrides_src}" "${overrides_dest}" "false"
+            workbench_deploy_copy_file "${abs_overrides_src}" "${overrides_dest}" "false" "${name}"
         else
             log_warn "workbench_deploy_module: ${name}: overrides_src not found: ${abs_overrides_src}"
         fi

@@ -4,6 +4,16 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Backup-before-overwrite for force copy/link deploys** — any real
+  (non-symlink) file or directory about to be overwritten or removed by
+  a `force: true` copy/link deploy, including `wb module reset`, is now
+  backed up first under `~/.local/share/workbench/backups/`, reported in
+  the log output. No prompt — automatic and unconditional, since the
+  same code path also runs unattended off the sync timer. See
+  ARCHITECTURE.md §12 D53.
+
 ## [2.5.1] - 2026-09-12
 
 ### Fixed
