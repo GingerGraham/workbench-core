@@ -86,6 +86,11 @@ component's behaviour change. For anything that's really about one file's
 (or one component's) behaviour, use auto-detection or an explicit path
 scope instead — `core` is the exception, not the default.
 
+Since D55, `pr-check.yml` enforces this at PR time: a commit or PR title
+scoped `core` that also touches a registered file fails the check
+outright, rather than silently leaving that file on its old script-local
+version.
+
 ## What happens on merge
 
 `main`'s branch ruleset requires a pull request, signed commits, linear

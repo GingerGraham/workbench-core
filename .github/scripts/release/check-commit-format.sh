@@ -49,6 +49,20 @@ while IFS= read -r sha; do
         echo "FAIL: ${sha:0:7} touches a registered file but its message doesn't parse as a Conventional Commit: '${header}'" >&2
         echo "      expected: <feat|fix|perf|refactor|docs|test|chore|ci|build>[(scope)][!]: <subject>" >&2
         FAILED=1
+        continue
+    fi
+
+    # A 'core' scope is an explicit author override — compute-bumps.sh trusts
+    # it completely and never walks this commit's touched files, so every
+    # registered file it touches would silently keep its old script-local
+    # version. Real incident: PR #58/#59. ARCHITECTURE.md §12 D55.
+    if [[ "$(_rel_commit_scope "${header}")" == "core" ]]; then
+        echo "FAIL: ${sha:0:7} is scoped 'core' but also touches a registered file: '${header}'" >&2
+        echo "      'core' skips this commit's file-level bump entirely — every registered file" >&2
+        echo "      it touches would keep its old script-local version. Drop the scope (let" >&2
+        echo "      auto-detection bump each touched file) or scope explicitly to the touched" >&2
+        echo "      file's own repo-relative path instead." >&2
+        FAILED=1
     fi
 done < <(git log --format=%H "${BASE_SHA}..${HEAD_SHA}")
 

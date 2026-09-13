@@ -61,7 +61,10 @@ than silently reinterpreting one of these away:
 
 - Conventional Commits on every commit that touches a registered file
   (`bin/`, `lib/`, `bootstrap.sh`) — `pr-check.yml` enforces the
-  grammar at PR time. See `docs/release-process.md`.
+  grammar at PR time. See `docs/release-process.md`; before writing a
+  commit message or PR title, check
+  `.claude/skills/conventional-commits/SKILL.md` for the scope decision
+  procedure.
 - A `CHANGELOG.md` `[Unreleased]` entry, in the same change, for
   anything user-facing — `release.yml` gates a real version bump on
   this being non-empty.
