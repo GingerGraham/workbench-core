@@ -533,6 +533,30 @@ else
     fail "check-pr-title-format.sh: omitting base/head broke the existing grammar-only call path"
 fi
 
+# 10d. check-pr-title-format.sh: exactly one of base-sha/head-sha given is a
+#      caller misconfiguration and must fail loudly, not silently downgrade
+#      to grammar-only (Copilot review finding on PR #62).
+if bash "${RELEASE_DIR}/check-pr-title-format.sh" "feat(core): a product-level decision with no file of its own" "${BASE_D55}" >/tmp/wb-pr-title-partial-args.log 2>&1; then
+    fail "check-pr-title-format.sh: base-sha with no head-sha was incorrectly accepted"
+else
+    ok "check-pr-title-format.sh: rejects base-sha given without head-sha"
+fi
+grep -q "requires both" /tmp/wb-pr-title-partial-args.log \
+    && ok "check-pr-title-format.sh: partial-args rejection message explains the requirement" \
+    || fail "check-pr-title-format.sh: partial-args rejection message missing"
+
+# 10e. check-pr-title-format.sh: a failed 'git diff' (unreachable SHA) must
+#      fail loudly rather than being treated as an empty, no-registered-file
+#      diff (Copilot review finding on PR #62).
+if bash "${RELEASE_DIR}/check-pr-title-format.sh" "feat(core): a product-level decision with no file of its own" "${BASE_D55}" "0000000000000000000000000000000000000000" >/tmp/wb-pr-title-bad-diff.log 2>&1; then
+    fail "check-pr-title-format.sh: an unreachable head-sha was incorrectly accepted"
+else
+    ok "check-pr-title-format.sh: rejects an unreachable head-sha instead of silently treating it as an empty diff"
+fi
+grep -q "could not diff" /tmp/wb-pr-title-bad-diff.log \
+    && ok "check-pr-title-format.sh: unreachable-sha rejection message explains the diff failure" \
+    || fail "check-pr-title-format.sh: unreachable-sha rejection message missing"
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."
