@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # .github/scripts/ci/run-tests.sh — runs tests/check-*.sh in turn, tallies
 # each suite's own OK:/FAIL: line counts, and writes a markdown summary
-# table. ARCHITECTURE.md §12 D26/§13 CI.
+# table. docs/decisions-log.md D26 / docs/architecture.md §13 CI.
 #
 # Runs standalone too: $GITHUB_STEP_SUMMARY writes are guarded, so this is
 # safe to run locally with no GitHub Actions context, for the exact same

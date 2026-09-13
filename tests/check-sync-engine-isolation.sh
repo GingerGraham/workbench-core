@@ -190,7 +190,7 @@ fi
 
 # ── 6. Unsupported manifest version: workbench_sync_module refuses to sync
 #    a module declaring a version: this core doesn't know how to process
-#    (ARCHITECTURE.md §12 D30) — deploy and register both skipped, and an
+#    (docs/decisions-log.md D30) — deploy and register both skipped, and an
 #    unrelated healthy module in the same workbench_sync_all run still
 #    succeeds. ─────────────────────────────────────────────────────────────
 BADSRC="${WORK}/badsrc"
@@ -360,7 +360,7 @@ else
     fail "noversion: deploy destination was created despite the missing version:"
 fi
 
-# ── Manifest filename/version pairing (ARCHITECTURE.md §12 D46) ────────────
+# ── Manifest filename/version pairing (docs/decisions-log.md D46) ────────────
 # A module using the new workbench.yml name at version: 2 must sync exactly
 # like a .dotfiles-sync.yml/version: 1 module does — mirrors the "first
 # sync (version: 1) deployed successfully" assertion above, for the new

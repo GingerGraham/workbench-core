@@ -4,7 +4,7 @@
 # "Does this module add correctly to core?" -- one module vs. core, no wider
 # integration. Runs the real wb add/track/update primitives against the
 # module's actual remote branch (never "latest"), the same primitives a
-# real user's `wb dev <module>` would drive interactively (ARCHITECTURE.md
+# real user's `wb dev <module>` would drive interactively (docs/architecture.md
 # S9/S10, D9), scripted non-interactively here.
 #
 # Required env: WB (path to the core checkout's bin/wb), MODULE_NAME

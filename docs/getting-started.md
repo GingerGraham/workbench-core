@@ -63,7 +63,7 @@ module afterward — see below.)
 
 Working on `workbench-core` itself? Use a real `git clone` instead — this
 is the one case that's meant to track a persistent, incrementally-pulled
-checkout, per `ARCHITECTURE.md` §9.6:
+checkout, per `architecture.md` §9.6:
 
 ```sh
 git clone https://github.com/GingerGraham/workbench-core.git
@@ -74,7 +74,7 @@ cd workbench-core
 `wb install` detects the `.git` checkout and registers core with
 `TRACK_MODE=branch:<your current branch>` instead of `latest` — the same
 dev-tracking pathway `wb dev`/`wb track --branch` gives every other module.
-See `ARCHITECTURE.md` §9.6 for why your own editing clone and workbench's
+See `architecture.md` §9.6 for why your own editing clone and workbench's
 own fetched snapshot are expected to be two separate copies on disk, not a
 bug.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/check-semver-comparator.sh — Phase 5b acceptance check for
 # lib/core/semver.sh: tag filtering + comparison correctness, per
-# ARCHITECTURE.md §9.2's exact example set.
+# docs/architecture.md §9.2's exact example set.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -63,7 +63,7 @@ else
     fail "v1.10.0 vs v1.10.0 comparison wrong"
 fi
 
-# ── latest resolution across the exact mixed set from ARCHITECTURE.md §9.2 ──
+# ── latest resolution across the exact mixed set from docs/architecture.md §9.2 ──
 # v1.10.0 should win (not v1.9.0 via naive string sort), and the rc tag must
 # be excluded from the latest pool entirely.
 result="$(printf 'v1.9.0\nv1.10.0\nv2.0.0\nv1.10.0-rc1\n' | _wb_semver_highest)"

@@ -2,7 +2,7 @@
 # tests/check-bash32-compat.sh
 # Greps lib/ for bash-4+-only constructs that silently break (or hard-error)
 # on bash 3.2 — macOS's default /bin/bash, and a hard compatibility
-# requirement for the Core API library and loader (ARCHITECTURE.md §6/§7
+# requirement for the Core API library and loader (docs/architecture.md §6/§7
 # item 11, build brief §2). Fails if any are found.
 set -euo pipefail
 

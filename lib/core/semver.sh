@@ -9,11 +9,11 @@
 #
 # Three independent uses:
 #   1. Tag format filtering/comparison for TRACK_MODE=latest resolution
-#      (ARCHITECTURE.md §9.2) — only clean vX.Y.Z tags participate.
-#   2. core_api range satisfaction for manifest gating (ARCHITECTURE.md §6) —
+#      (docs/architecture.md §9.2) — only clean vX.Y.Z tags participate.
+#   2. core_api range satisfaction for manifest gating (docs/architecture.md §6) —
 #      e.g. does CORE_API_VERSION=1 satisfy a module's declared
 #      core_api: ">=1.0 <2.0"?
-#   3. The release pipeline's own sanity check (ARCHITECTURE.md §12 D27) —
+#   3. The release pipeline's own sanity check (docs/decisions-log.md D27) —
 #      .github/scripts/release/lib.sh sources this file read-only, reusing
 #      _wb_semver_cmp to assert a computed bump actually compares greater
 #      than the version it's replacing, rather than duplicating comparison

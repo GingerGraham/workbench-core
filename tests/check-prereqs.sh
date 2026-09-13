@@ -125,7 +125,7 @@ else
     fail "re-running _workbench_migrate_state_schema produced a duplicate STATE_SCHEMA_VERSION line"
 fi
 
-# 4. prereq checker enumerates the full required list from ARCHITECTURE.md §7
+# 4. prereq checker enumerates the full required list from docs/architecture.md §7
 for bin in awk sed tr grep column git curl ssh-keyscan; do
     if printf '%s\n' "${_WB_SHELL_PREREQS_REQUIRED[@]}" | grep -qx "${bin}"; then
         ok "prereq list includes ${bin}"
@@ -174,7 +174,7 @@ ok "workbench_missing_shell_prereqs only reports binaries actually absent from P
 #    killed that subshell with "unbound variable" — swallowed by
 #    elevate-cmd's `|| return 1` — so wb install never actually invoked
 #    the package manager for missing prereqs, silently. See
-#    ARCHITECTURE.md §12 D52.
+#    docs/decisions-log.md D52.
 # shellcheck source=lib/core/functions.sh
 source "${REPO_ROOT}/lib/core/functions.sh"
 OUT="$( { unset USER; set -u; sudo-test; get-elevation-command; } 2>&1 )" || true

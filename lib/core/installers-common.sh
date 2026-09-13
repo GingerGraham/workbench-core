@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # lib/core/installers-common.sh — shared install-helper primitives, promoted
-# to Core API surface (ARCHITECTURE.md §12 D34) rather than left to be
+# to Core API surface (docs/decisions-log.md D34) rather than left to be
 # duplicated per module. Every ecosystem module's `install-*` functions
 # (declared via `register.installers[]`, docs/module-authoring.md) can rely
 # on these being sourced already — this file is registered in core's own
@@ -9,7 +9,7 @@
 # installer file could possibly run.
 #
 # Only `_`-prefixed helpers live here (contracts/core-api.md's naming
-# convention, ARCHITECTURE.md §12 D24) — none of these are meant to show up
+# convention, docs/decisions-log.md D24) — none of these are meant to show up
 # in `wb functions`/`get-functions` output. Bash 3.2 / zsh compatible: no
 # associative arrays, no ${var,,}/${var^^}, no mapfile.
 [[ -n "${_WORKBENCH_INSTALLERS_COMMON_LOADED:-}" ]] && return 0

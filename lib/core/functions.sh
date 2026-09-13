@@ -124,7 +124,7 @@ dedupe-path() {
 # ── String helpers ─────────────────────────────────────────────────────────
 # _str_lower <string>
 # Lowercases via `tr`, not `${var,,}` — the latter is a bash-4+-only
-# construct (ARCHITECTURE.md §7 item 11) and breaks on bash 3.2/zsh. Ported
+# construct (docs/architecture.md §7 item 11) and breaks on bash 3.2/zsh. Ported
 # from workbench-precursor's core/functions.sh — used across multiple Wave
 # C modules (workbench-git, workbench-gpg, workbench-security) for
 # case-insensitive comparisons, so it belongs in Core API rather than each
@@ -156,7 +156,7 @@ detect-package-manager() {
 # reference inside elevate-cmd's `elevation_cmd="$(...)"` command
 # substitution killed that subshell with "unbound variable", swallowed by
 # elevate-cmd's `|| return 1`, so wb install silently never actually
-# invoked the package manager (ARCHITECTURE.md §12 D52). `id -un` is used
+# invoked the package manager (docs/decisions-log.md D52). `id -un` is used
 # directly, not just as a fallback — it's more reliable than $USER even
 # when exported (immune to a stale value inherited across `su`), and needs
 # no new prereq check: `id` is more fundamental than anything in
@@ -277,7 +277,7 @@ _get_aliases_in() {
 }
 
 # ── Introspection: get-functions ─────────────────────────────────────────
-# The generalised get-functions (ARCHITECTURE.md §3): walks every registered
+# The generalised get-functions (docs/architecture.md §3): walks every registered
 # module's declared shell/installer/getter entries — driven entirely by
 # each module's own register: block, never a hardcoded registry in core.
 # Delegates to `wb functions` (bin/wb) rather than re-implementing the

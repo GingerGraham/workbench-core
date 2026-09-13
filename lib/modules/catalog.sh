@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lib/modules/catalog.sh — known-modules catalog & bundles (ARCHITECTURE.md
+# lib/modules/catalog.sh — known-modules catalog & bundles (docs/architecture.md
 # §10). Ships the *structure* in Wave B, empty of real entries until Wave C
 # — `wb add <name>`/`wb install --bundle` have somewhere to resolve against
 # from day one, without any hardcoded profile branching in the engine
@@ -17,7 +17,7 @@
 # ${XDG_CONFIG_HOME}/workbench/catalog/{modules,bundles}.list, if present,
 # is read INSTEAD of (not merged with) the shipped defaults below — the
 # override is total per-file, matching the "small, host-overridable"
-# framing in ARCHITECTURE.md §10 without inventing a merge algorithm this
+# framing in docs/architecture.md §10 without inventing a merge algorithm this
 # task doesn't need yet.
 
 _wb_catalog_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -73,7 +73,7 @@ workbench_catalog_bundle_modules() {
 # Prints every known-module name in the resolved catalog file (host
 # override if present, else the shipped default — same resolution as
 # workbench_catalog_lookup), one per line. Used by 'wb add <TAB>'
-# completion (ARCHITECTURE.md §12 D54) — never hand-maintain a second
+# completion (docs/decisions-log.md D54) — never hand-maintain a second
 # copy of this list anywhere else.
 workbench_catalog_list_modules() {
     local file n u p
@@ -87,7 +87,7 @@ workbench_catalog_list_modules() {
 
 # workbench_catalog_list_bundles
 # Prints every named bundle in the resolved bundles file, one per line.
-# Used by 'wb install --bundle <TAB>' completion (ARCHITECTURE.md §12
+# Used by 'wb install --bundle <TAB>' completion (docs/decisions-log.md
 # D54).
 workbench_catalog_list_bundles() {
     local file n members

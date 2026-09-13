@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lib/modules/remove.sh — `wb remove` (ARCHITECTURE.md §10).
+# lib/modules/remove.sh — `wb remove` (docs/architecture.md §10).
 #
 # Idempotent, non-destructive: flips REGISTERED=false so the loader stops
 # sourcing this module's register.list and the sync engine stops touching

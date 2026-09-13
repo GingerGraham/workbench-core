@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/check-wb-track-parsing.sh — regression check for `wb track`'s
-# <name>-vs-flag argument parsing (ARCHITECTURE.md §9.2/§10).
+# <name>-vs-flag argument parsing (docs/architecture.md §9.2/§10).
 #
 # A missing <name> whose slot gets filled by the first flag instead (e.g.
 # `wb track --latest` with nothing else) must be caught as a missing-name

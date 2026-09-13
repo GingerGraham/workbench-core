@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/check-overrides-deploy.sh — ARCHITECTURE.md §12 D48 acceptance
+# tests/check-overrides-deploy.sh — docs/decisions-log.md D48 acceptance
 # check for overrides_src: create-once deploy to
 # ~/.config/workbench/local/overrides/<module-name>.sh, engine-computed
 # destination (no dest field exists to validate), and the specific

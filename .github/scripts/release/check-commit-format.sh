@@ -5,7 +5,7 @@
 # touches a registered file and its message's Conventional Commit type
 # doesn't parse, fail. This is where "fail loud" actually bites — at PR
 # time, while the message is still fixable — rather than after merge, when
-# compute-bumps.sh only warns and moves on (§3.1). ARCHITECTURE.md §12 D27.
+# compute-bumps.sh only warns and moves on (§3.1). docs/decisions-log.md D27.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -55,7 +55,7 @@ while IFS= read -r sha; do
     # A 'core' scope is an explicit author override — compute-bumps.sh trusts
     # it completely and never walks this commit's touched files, so every
     # registered file it touches would silently keep its old script-local
-    # version. Real incident: PR #58/#59. ARCHITECTURE.md §12 D55.
+    # version. Real incident: PR #58/#59. docs/decisions-log.md D55.
     if [[ "$(_rel_commit_scope "${header}")" == "core" ]]; then
         echo "FAIL: ${sha:0:7} is scoped 'core' but also touches a registered file: '${header}'" >&2
         echo "      'core' skips this commit's file-level bump entirely — every registered file" >&2

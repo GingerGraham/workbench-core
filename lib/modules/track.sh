@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lib/modules/track.sh — `wb track` (ARCHITECTURE.md §9.2/§10). The single
+# lib/modules/track.sh — `wb track` (docs/architecture.md §9.2/§10). The single
 # verb `wb dev` (lib/modules/dev.sh) wraps; returning a module to production
 # is `wb track <name> --latest`, not a separate command.
 
@@ -125,7 +125,7 @@ workbench_cmd_track() {
     fi
 
     # Captured before the sync regardless of which module is being tracked —
-    # _wb_maybe_reconverge_core (bin/wb, ARCHITECTURE.md §12 D20) already
+    # _wb_maybe_reconverge_core (bin/wb, docs/decisions-log.md D20) already
     # no-ops via its own SHA-diff when core wasn't the module just synced, so
     # no extra name check is needed here.
     local core_sha_before

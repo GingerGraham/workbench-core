@@ -4,11 +4,11 @@ How `workbench-core` gets from a merged PR to a tagged release, a bumped
 `VERSION`, and a GitHub Release — automatically, on every merge to `main`.
 Mechanism lives in `.github/workflows/pr-check.yml`/`release.yml` and
 `.github/scripts/release/`; this doc is the human-readable map. See
-ARCHITECTURE.md §12 D27/§14 for the decision record.
+`docs/decisions-log.md` D27 and `architecture.md` §14 for the decision record.
 
 ## The three version concepts (recap)
 
-ARCHITECTURE.md §6.1/D18 has the full detail; the short version, since this
+`architecture.md` §6.1 and `docs/decisions-log.md` D18 have the full detail; the short version, since this
 whole pipeline exists to move two of these three automatically:
 
 - **Contract versions** (`CORE_API_VERSION`, `MANIFEST_SCHEMA_VERSION`,
@@ -54,7 +54,7 @@ Commits:
   logs a one-line warning and silently drops that commit's severity
   entirely, permanently, rather than falling back to auto-detection. A
   component-style scope that isn't an actual path (`tools`, `sync`, ...)
-  is the easy way to hit this — see ARCHITECTURE.md §12 D42, a real
+  is the easy way to hit this — see `docs/decisions-log.md` D42, a real
   incident. When unsure a scope resolves, omit it.
 - A commit that touches a registered file but whose `type` doesn't parse
   fails `pr-check.yml` at PR time — fix it with `git commit --amend` or an
@@ -70,7 +70,7 @@ Commits:
   `type[(scope)][!]: subject` prefix — `pr-check.yml`'s "PR title format"
   job checks this at PR time, the same fail-loud-while-fixable principle
   as the per-commit check above. Give the PR itself a real Conventional
-  Commit title, not just its commits. See ARCHITECTURE.md §12 D47 — the
+  Commit title, not just its commits. See `docs/decisions-log.md` D47 — the
   real incident (PR #46) this check exists to prevent from recurring.
 
 ### `core`-scoped commits: when to reach for one

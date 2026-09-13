@@ -4,14 +4,15 @@
 [@GingerGraham](https://github.com/GingerGraham)) but it's public and
 contributions — issues, discussion, PRs — are welcome. This doc is the
 condensed, practical version of the rules; the reasoning behind them
-lives in [`ARCHITECTURE.md`](ARCHITECTURE.md), which is the source of
-truth if the two ever disagree.
+lives in [`docs/architecture.md`](docs/architecture.md), which is the
+source of truth if the two ever disagree.
 
 ## Before you start
 
-Read [`ARCHITECTURE.md`](ARCHITECTURE.md) — especially its §12
-decisions log — before proposing anything that touches repo structure,
-the manifest schema, or the sync engine. Something you're about to
+Read [`docs/architecture.md`](docs/architecture.md) — especially the
+[`docs/decisions-log.md`](docs/decisions-log.md) it points to from §12
+— before proposing anything that touches repo structure, the manifest
+schema, or the sync engine. Something you're about to
 propose may already be a settled (or deliberately rejected) decision;
 if it is, argue for reopening it rather than re-litigating it from
 scratch.
@@ -37,7 +38,7 @@ framed:
   which shallow-clone-and-discard rather than persist a working tree.
 - **Engine-computed destinations.** A module — or a change to core
   itself — never gets to specify where its own registered shell content
-  lands. See `ARCHITECTURE.md` principle 1 and `lib/manifest/validate.sh`'s
+  lands. See `docs/architecture.md` principle 1 and `lib/manifest/validate.sh`'s
   rejection of a `dest` on `register.shell[]` entries.
 - **One generalised engine.** Core is "module zero," not a special
   case. A capability that only core can trigger, with every other
@@ -46,15 +47,15 @@ framed:
 - **Manifest changes stay additive.** `.dotfiles-sync.yml version: 1`
   must stay backward-compatible, forever. `version: 2` —
   `workbench.yml`/`workbench.yaml`/`wb.yml`/`wb.yaml` — is the preferred
-  name for new/migrating repos, same field set; see `ARCHITECTURE.md`
-  §12 D46.
+  name for new/migrating repos, same field set; see
+  `docs/decisions-log.md` D46.
 - No Windows/PowerShell support — out of scope by design.
 
 ## Dev setup
 
 Use a real `git clone`, not `bootstrap.sh` — this is the one case
 meant to track a persistent, incrementally-pulled checkout
-(`ARCHITECTURE.md` §9.6):
+(`docs/architecture.md` §9.6):
 
 ```sh
 git clone https://github.com/GingerGraham/workbench-core.git

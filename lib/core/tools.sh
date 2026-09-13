@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # lib/core/tools.sh — the tool-updating framework's discovery/consumption
-# half (ARCHITECTURE.md §12 D23, baseline-completion brief §Phase 3).
+# half (docs/decisions-log.md D23, baseline-completion brief §Phase 3).
 #
 # `register.installers[].src` was declared, parsed, and validated from Wave
 # B onward but nothing ever consumed it at runtime — this is that consumer.
@@ -32,7 +32,7 @@ command -v _workbench_register_script_version &>/dev/null && _workbench_register
 # collision is warned about exactly once.
 #
 # A friendly name matching a reserved wb-tools word (all, list, install,
-# upgrade, status — ARCHITECTURE.md §12 D43) is excluded from discovery
+# upgrade, status — docs/decisions-log.md D43) is excluded from discovery
 # entirely, also with a one-time warning, before collision resolution
 # even runs.
 #
@@ -84,7 +84,7 @@ ${friendly}|${name}"
 # starts with "install-", that prefix-stripped spelling is also accepted —
 # 'wb tools list' also prints the raw install-<name> function in its
 # right column, and that's the value someone most often copies by
-# mistake (ARCHITECTURE.md §12 D41). This never changes which tool wins
+# mistake (docs/decisions-log.md D41). This never changes which tool wins
 # a collision; it just maps a second spelling onto the same lookup.
 #
 # Both spellings are checked in a single pass over workbench_tools_collect

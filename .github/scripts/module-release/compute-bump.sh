@@ -2,7 +2,7 @@
 # .github/scripts/module-release/compute-bump.sh
 #
 # Module-repo simplification of core's own compute-bumps.sh: repo-level
-# version/tag only (ARCHITECTURE.md S12 D40) -- module repos carry no
+# version/tag only (docs/decisions-log.md D40) -- module repos carry no
 # per-file _workbench_register_script_version convention to bump, so
 # there's a single overall severity, not a per-file plan. Walks every
 # commit since the last vX.Y.Z tag reachable from HEAD, takes the highest

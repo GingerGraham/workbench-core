@@ -5,7 +5,7 @@
 # (rendered by `wb install`/`wb apply` — see ansible/roles/module_sync).
 # Rewritten from workbench-precursor's shell/config/loader.sh (which assumed
 # a single SHELL_CONFIG_DIR root) to walk every registered, sync-enabled
-# module's state directory instead (ARCHITECTURE.md §3) — core is "module
+# module's state directory instead (docs/architecture.md §3) — core is "module
 # zero" here and goes through the exact same mechanism as any other module;
 # there is no hardcoded module name or special first pass for core anywhere
 # in this file.
@@ -63,7 +63,7 @@ fi
 # ── Locate our own lib/ root (this file's directory) ─────────────────────────
 _wb_loader_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
-# WORKBENCH_LOADER_PATH (ARCHITECTURE.md §12 D39) — this file's own full
+# WORKBENCH_LOADER_PATH (docs/decisions-log.md D39) — this file's own full
 # path, exported so the `wb` shell-function wrapper defined near the
 # bottom of this file (and its `wb reload` pseudo-command) can re-source
 # it without recomputing the path `_wb_write_rc_stub`'s rc-stub line
@@ -167,7 +167,7 @@ export WORKBENCH_PLATFORM_DETECTED
 # local/*.sh" pass and WORKBENCH_USER_EXT_DIR, further down this file) —
 # bash requires a function to be defined before it's called, and this one
 # now has to run before settings.sh's own early pass, which is sourced
-# directly rather than through this helper (ARCHITECTURE.md §12 D48). One
+# directly rather than through this helper (docs/decisions-log.md D48). One
 # definition, three call sites total, never duplicated.
 _wb_loader_source_sh_files_once() {
     local dir="$1" stamp="$2" exclude="${3:-}"
@@ -209,7 +209,7 @@ _wb_loader_source_sh_files_once() {
     fi
 }
 
-# ── Local overrides directory (ARCHITECTURE.md §12 D22) ───────────────────────
+# ── Local overrides directory (docs/decisions-log.md D22) ───────────────────────
 # Machine-local, outside every module's own tree.
 # ${XDG_CONFIG_HOME:-~/.config}/workbench/local/ holds `settings.sh` — the
 # reserved-name direct successor to the old single-file `90-local.sh`,
@@ -231,7 +231,7 @@ _wb_loader_source_sh_files_once() {
 WORKBENCH_LOCAL_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/local"
 WORKBENCH_LOCAL_ENV="${WORKBENCH_LOCAL_DIR}/settings.sh"
 
-# ── Module-shipped overrides (ARCHITECTURE.md §12 D48) ────────────────────────
+# ── Module-shipped overrides (docs/decisions-log.md D48) ────────────────────────
 # ${WORKBENCH_LOCAL_DIR}/overrides/<module-name>.sh — one per module,
 # deployed once by the sync engine from that module's manifest-declared
 # `overrides_src`, never touched again by the engine once it exists (see
@@ -308,7 +308,7 @@ _wb_loader_source_tier() {
     done < <(workbench_list_loadable_modules)
 }
 
-# ── WORKBENCH_TRACK_<MODULE> (ARCHITECTURE.md §9.5/D7) ────────────────────────
+# ── WORKBENCH_TRACK_<MODULE> (docs/architecture.md §9.5/D7) ────────────────────────
 # Derived, read-only, exported for every registered module (core included),
 # regardless of its sync-enabled state — sourced from sync.conf, never
 # written back. <MODULE> is the registration name, uppercased via `tr`
@@ -328,7 +328,7 @@ if command -v workbench_list_registered_modules &>/dev/null; then
     unset _wb_track_name _wb_track_mode _wb_track_ref _wb_track_var
 fi
 
-# ── Prompt-engine reset, before the tier loop runs (ARCHITECTURE.md §12
+# ── Prompt-engine reset, before the tier loop runs (docs/decisions-log.md
 #    D50) ────────────────────────────────────────────────────────────────
 # Re-sourcing this file in an already-running shell — 'source ~/.bashrc',
 # or the wb() wrapper's own auto-reload after a state-changing command —
@@ -336,7 +336,7 @@ fi
 # hooked into the shell to render itself (bash's PROMPT_COMMAND, zsh's
 # precmd_functions) is still live from the last run. A module switching
 # which engine it elects (workbench-shell's WORKBENCH_OVERRIDE_PROMPT_ENGINE,
-# §12 D48, is the motivating case) correctly re-runs its own init, but
+# docs/decisions-log.md D48, is the motivating case) correctly re-runs its own init, but
 # nothing tears down the *previous* engine's hook first — well-behaved
 # prompt tools preserve whatever PROMPT_COMMAND already contains rather
 # than overwriting it (so they can coexist with unrelated tools), which
@@ -443,7 +443,7 @@ fi
 # Everything in WORKBENCH_LOCAL_DIR except settings.sh itself — functions,
 # aliases, whatever — sourced once, together, filename-sorted, immediately
 # after settings.sh's final pass. Deliberately flat, not trying to
-# reproduce the six loader tiers for local content (ARCHITECTURE.md §12
+# reproduce the six loader tiers for local content (docs/decisions-log.md
 # D22): this is the right level of complexity for something the loader
 # can't validate the shape of the way it can a module's manifest.
 _wb_loader_source_sh_files_once \
@@ -465,7 +465,7 @@ if [[ "${WORKBENCH_USER_EXT_ENABLED}" == "true" ]]; then
 fi
 
 # ── Interactive `wb` wrapper: auto-reload after state-changing commands ──────
-# (ARCHITECTURE.md §12 D39)
+# (docs/decisions-log.md D39)
 #
 # A subprocess (the real `bin/wb` binary) cannot alter its parent shell's
 # functions/environment — Unix process semantics, not a workbench bug (see

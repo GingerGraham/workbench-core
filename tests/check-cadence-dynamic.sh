@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/check-cadence-dynamic.sh — Phase 5d acceptance check.
 #
-# ARCHITECTURE.md §9.4/D8: one shared timer, dynamic interval — weekly by
+# docs/architecture.md §9.4/D8: one shared timer, dynamic interval — weekly by
 # default, 5 minutes for as long as any registered module (core included) is
 # branch:-tracked, reverting once none are. Verifies the interval flips
 # without any OS-timer re-registration: workbench_cadence_seconds()

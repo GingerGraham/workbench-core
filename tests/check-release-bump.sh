@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/check-release-bump.sh — acceptance check for the release pipeline's
 # bump arithmetic, Conventional Commit scope resolution, and CHANGELOG
-# gate/rewrite (.github/scripts/release/). ARCHITECTURE.md §12 D27.
+# gate/rewrite (.github/scripts/release/). docs/decisions-log.md D27.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -412,7 +412,7 @@ else
     fail "compute-bumps.sh did not log the expected D55 warning"
 fi
 
-# ── 9. PR title format check (ARCHITECTURE.md §12 D47) ───────────────────
+# ── 9. PR title format check (docs/decisions-log.md D47) ───────────────────
 # The real-world incident this guards against: PR #46's title lacked a
 # Conventional Commit prefix, so the squash-merge commit that landed on
 # main (using the PR title as its subject, per GitHub's default squash
@@ -437,7 +437,7 @@ fi
 # shellcheck disable=SC2015
 grep -q "expected: <feat|fix" /tmp/wb-pr-title-bad.log && ok "check-pr-title-format.sh: rejection message names the expected grammar" || fail "check-pr-title-format.sh: rejection message missing expected-grammar hint"
 
-# ── 10. 'core' scope vs a touched registered file (ARCHITECTURE.md §12 D55) ──
+# ── 10. 'core' scope vs a touched registered file (docs/decisions-log.md D55) ──
 # The PR #58/#59 incident: an explicit 'core' scope is an author override
 # that skips auto-detection entirely, so it must never coincide with a
 # commit/PR that actually touches a registered file — that file would

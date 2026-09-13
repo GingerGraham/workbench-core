@@ -58,7 +58,7 @@ only excluded from the automatic `latest` chain.
 
 This is published now, formally, as the contract every module author
 should follow — `workbench-core` does not (yet) validate compliance for
-you; see ARCHITECTURE.md §9.2 for why that's deferred.
+you; see `architecture.md` §9.2 for why that's deferred.
 
 ## Registering shell content
 
@@ -72,7 +72,7 @@ distro exactly).
 
 **Do not** put a `dest:` on a `register.shell[]` entry — it isn't a
 supported field, and the validator rejects it. The engine computes where
-your registered files land; this is deliberate (see ARCHITECTURE.md
+your registered files land; this is deliberate (see `architecture.md`
 principle 1) and is exactly what makes `register:` safe without a `dest`
 denylist of its own.
 
@@ -85,7 +85,7 @@ literal inside a file your module deploys. Files your module deploys live
 inside its own immutable, per-sync snapshot
 (`${XDG_DATA_HOME}/workbench/modules/<name>/current/`) and get silently
 replaced on every sync; a user editing one directly loses that edit the
-next time your module updates (ARCHITECTURE.md §12 D16).
+next time your module updates (`docs/decisions-log.md` D16).
 
 Instead:
 
@@ -382,7 +382,7 @@ developer-time-only dependency — see `contracts/manifest-spec.md`). Run
 this by hand before pushing a manifest change, or let your module repo's
 own CI run it for you — see below.
 
-### CI (ARCHITECTURE.md §12 D40)
+### CI (`docs/decisions-log.md` D40)
 
 Every ecosystem module repo has its own thin `.github/workflows/ci.yml`
 that calls `workbench-core`'s reusable `module-ci.yml`:

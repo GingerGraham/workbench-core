@@ -4,7 +4,7 @@
 #
 # Replaces the Ansible-only path that used to live in
 # ansible/roles/module_sync/tasks/main.yml's "Scheduled sync" section
-# (ARCHITECTURE.md §12 D38): the sync engine itself has always been
+# (docs/decisions-log.md D38): the sync engine itself has always been
 # Ansible-free on its hot path (§9.1), but the timer that *fires* that
 # engine had none of its own — Ansible was the only thing that ever wrote
 # and enabled the unit, so a host without ansible-playbook silently never
@@ -127,7 +127,7 @@ _workbench_scheduler_migrate_existing_install() {
 
 # workbench_scheduler_wb_path
 # The path scheduled invocations should use — the stable ~/.local/bin/wb
-# symlink (_wb_link_cli_bin, ARCHITECTURE.md §12 D19), never a module
+# symlink (_wb_link_cli_bin, docs/decisions-log.md D19), never a module
 # snapshot path directly: it survives a core update without the unit file
 # itself ever needing to be rewritten for that reason.
 workbench_scheduler_wb_path() {

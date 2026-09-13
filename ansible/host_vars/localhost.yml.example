@@ -9,7 +9,7 @@
 workbench_core_install_dir: "{{ playbook_dir }}/.."
 
 # Additional modules to converge via Ansible, beyond whatever `wb add`
-# already registered directly (ARCHITECTURE.md §8 — Ansible renders
+# already registered directly (docs/architecture.md §8 — Ansible renders
 # sync.conf for these, then invokes the same engine `wb add` uses; it never
 # re-implements fetch/deploy itself). Empty by default — every module in
 # Wave B is normally registered via `wb add`/`--bundle` directly, which

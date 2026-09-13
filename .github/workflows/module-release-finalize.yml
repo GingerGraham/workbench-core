@@ -1,6 +1,6 @@
 name: Module Release Finalize
 
-# Reusable workflow (ARCHITECTURE.md S12 D40) called by each module repo's
+# Reusable workflow (docs/decisions-log.md D40) called by each module repo's
 # thin .github/workflows/release-finalize.yml. Triggered when a
 # release/vX.Y.Z PR merges; tags the merge commit and publishes the
 # GitHub Release. Module repos carry no VERSION file (repo-level-only

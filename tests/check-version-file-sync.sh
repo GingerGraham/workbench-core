@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/check-version-file-sync.sh — ARCHITECTURE.md §12 D36/D37
+# tests/check-version-file-sync.sh — docs/decisions-log.md D36/D37
 # acceptance check.
 #
 # Reproduces the confirmed regression: a version file written by an older

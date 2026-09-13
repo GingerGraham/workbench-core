@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/check-wb-shell-reload.sh — ARCHITECTURE.md §12 D39 acceptance check.
+# tests/check-wb-shell-reload.sh — docs/decisions-log.md D39 acceptance check.
 #
 # Verifies lib/loader.sh's `wb` shell-function wrapper: state-changing
 # subcommands re-source the loader in the *calling* shell afterwards

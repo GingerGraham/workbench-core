@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/check-tools-registry.sh — baseline-completion brief §Phase 3 +
-# ARCHITECTURE.md §12 D43 acceptance check.
+# docs/decisions-log.md D43 acceptance check.
 #
 # Verifies discovery/grouping, that 'wb tools install <name>' always
 # requires an explicit target, that 'install all' lists+confirms before

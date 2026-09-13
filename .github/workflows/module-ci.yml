@@ -1,6 +1,6 @@
 name: Module CI
 
-# Reusable workflow (ARCHITECTURE.md S12 D40) called by each of the eleven
+# Reusable workflow (docs/decisions-log.md D40) called by each of the eleven
 # Wave C module repos' own thin .github/workflows/ci.yml. Answers one
 # question only: "does this module, at this branch, add correctly to
 # workbench-core?" No cross-module integration, no TUI, no community

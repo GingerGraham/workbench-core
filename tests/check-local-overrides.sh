@@ -14,7 +14,7 @@
 # just a new-file-loads test); settings.sh's final pass still wins over a
 # tier; another *.sh file in the same directory is callable in a new shell
 # without touching settings.sh; and the local/*.sh -> WORKBENCH_USER_EXT_DIR
-# ordering holds. Also covers module-shipped overrides (ARCHITECTURE.md §12
+# ordering holds. Also covers module-shipped overrides (docs/decisions-log.md
 # D48): a module-shipped override file in local/overrides/ is sourced
 # before the module's own tier content and before settings.sh's early
 # pass, settings.sh still wins over both the tier and the override, and

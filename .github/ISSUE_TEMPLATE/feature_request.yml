@@ -42,5 +42,5 @@ body:
     attributes:
       label: Checklist
       options:
-        - label: I checked ARCHITECTURE.md §12 — this isn't already a settled (or deliberately rejected) decision
+        - label: I checked docs/decisions-log.md — this isn't already a settled (or deliberately rejected) decision
           required: true

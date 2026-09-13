@@ -2,7 +2,7 @@
 # bin/wb — the workbench-core CLI dispatcher.
 #
 # install/apply/add/remove/track/dev/sync/update/status/functions
-# (ARCHITECTURE.md §10). This script sources the whole shell library once
+# (docs/architecture.md §10). This script sources the whole shell library once
 # and dispatches to it — it deliberately contains no fetch/deploy/resolve
 # logic of its own (that all lives in lib/, shared with the loader and the
 # timer).
@@ -10,7 +10,7 @@ set -uo pipefail
 
 # `bin/wb` is now reached via `~/.local/bin/wb`, a symlink to this file
 # inside `core/current/bin/` (bin/wb's own _wb_link_cli_bin, called from `wb
-# install`/`wb apply` — ARCHITECTURE.md §12 D19). `dirname "${BASH_SOURCE[0]}"`
+# install`/`wb apply` — docs/decisions-log.md D19). `dirname "${BASH_SOURCE[0]}"`
 # alone resolves relative to the symlink's own location (~/.local/bin), not
 # its target, which would point WB_ROOT/LIB at the wrong tree entirely
 # (flagged in PR review). Follow the symlink chain manually first — plain
@@ -141,7 +141,7 @@ _wb_bootstrap_core_module() {
     # function's body never executes for a bootstrap.sh-driven install at
     # all. The `.git`-presence branch further down is reached in exactly
     # one case: a developer's own `git clone` + `./bin/wb install`
-    # (ARCHITECTURE.md §9.6's "developer's own working clone"), where there
+    # (docs/architecture.md §9.6's "developer's own working clone"), where there
     # genuinely is nothing to fetch because this running checkout already
     # IS the content — see fix-brief §3.3.
     if workbench_is_registered core && [[ -d "$(workbench_module_current_dir core)" ]]; then
@@ -365,7 +365,7 @@ _wb_cmd_apply() {
     _wb_cmd_install "$@"
 }
 
-# ── core self-convergence on update (ARCHITECTURE.md §12 D20) ──────────────
+# ── core self-convergence on update (docs/decisions-log.md D20) ──────────────
 # _wb_maybe_reconverge_core <before-sha> <unattended:true|false>
 #
 # `core` is module zero — it IS workbench-core itself, so a code change to
@@ -393,7 +393,7 @@ _wb_maybe_reconverge_core() {
 
     # Two explicit calls rather than building a possibly-empty args array and
     # expanding "${apply_args[@]}" — bash before 4.4 (still bash 3.2, macOS's
-    # default /bin/bash, per ARCHITECTURE.md's compatibility target) raises
+    # default /bin/bash, per docs/architecture.md's compatibility target) raises
     # "unbound variable" expanding an empty array under `set -u`, which this
     # file runs under.
     local apply_rc=0
@@ -537,7 +537,7 @@ _wb_cmd_status() {
 
 # ── functions ──────────────────────────────────────────────────────────────
 _wb_cmd_functions() {
-    # Generalised get-functions (ARCHITECTURE.md §3/§4): walks every
+    # Generalised get-functions (docs/architecture.md §3/§4): walks every
     # registered module's declared files and extracts what's actually
     # defined in them, the same two-primitive introspection
     # (_extract_function_names/_extract_alias_names, lib/core/functions.sh)
@@ -601,7 +601,7 @@ _wb_cmd_functions() {
 }
 
 # ── tools ──────────────────────────────────────────────────────────────────
-# The tool-updating framework's CLI surface (ARCHITECTURE.md §12 D23,
+# The tool-updating framework's CLI surface (docs/decisions-log.md D23,
 # baseline-completion brief §Phase 3). Discovery (workbench_tools_collect/
 # workbench_tools_lookup, lib/core/tools.sh) is entirely generic — core has
 # no idea how any individual tool is installed, checked, or updated. Manual
@@ -650,7 +650,7 @@ _wb_cmd_tools_list() {
 # aggregate "all up to date" summary, since core has no way to know that.
 # <verb> is "update" or "install" — cosmetic only, so log output echoes
 # back whichever one the caller actually typed rather than always saying
-# "update" under the install alias (ARCHITECTURE.md §12 D41).
+# "update" under the install alias (docs/decisions-log.md D41).
 _wb_tools_invoke() {
     local verb="$1" name="$2" abs_path="$3" func="$4" friendly="$5"
 
@@ -684,7 +684,7 @@ _wb_tools_invoke() {
 # different exit code, a crash, or simply not declaring the predicate at
 # all — is "unresponsive", deliberately never guessed either way, since
 # a wrong guess in either direction is worse than an honest "don't know"
-# (ARCHITECTURE.md §12 D43). Never itself returns non-zero; this is a
+# (docs/decisions-log.md D43). Never itself returns non-zero; this is a
 # status query, not an action, and every caller treats all three outcomes
 # as valid, expected results.
 _wb_tools_check_installed() {
@@ -716,7 +716,7 @@ _wb_tools_check_installed() {
 # _wb_cmd_tools_install <name>|all
 # 'install' always runs install-<name>, first-time or not — no target and
 # no bare invocation are accepted; you must say what you mean
-# (ARCHITECTURE.md §12 D43 — "never install something unless specifically
+# (docs/decisions-log.md D43 — "never install something unless specifically
 # directed to"). 'all' is the one way to mean "everything discovered",
 # and is itself gated behind printing the full list and a plain-stdin
 # y/N confirmation — plain `read -r`, not _read_prompt's /dev/tty read,
@@ -782,7 +782,7 @@ _wb_cmd_tools_install() {
 
 # _wb_cmd_tools_upgrade [<name>|all]
 # Only ever runs install-<name> for a tool whose installed-<name>
-# predicate actually reports it's installed (ARCHITECTURE.md §12 D43).
+# predicate actually reports it's installed (docs/decisions-log.md D43).
 # Bare/'all' walk every discovered tool via _wb_tools_check_installed:
 #   installed     -> run install-<name> (the actual "upgrade" action)
 #   not-installed -> dropped silently; unremarkable, most of a fresh
@@ -804,7 +804,7 @@ _wb_cmd_tools_upgrade() {
         }
         IFS='|' read -r name abs_path func <<< "${hit}"
         # workbench_tools_lookup accepts both the friendly name and the
-        # install-<name> fallback spelling (ARCHITECTURE.md §12 D41), but
+        # install-<name> fallback spelling (docs/decisions-log.md D41), but
         # only ever returns module|abs_path|func — the installed-<name>
         # predicate is keyed on the friendly name, so it must be derived
         # from func here rather than reusing the raw, possibly-fallback
@@ -887,7 +887,7 @@ _wb_cmd_tools() {
     esac
 }
 
-# ── module info / docs (ARCHITECTURE.md §12 D45) ───────────────────────────
+# ── module info / docs (docs/decisions-log.md D45) ───────────────────────────
 # Read-only, module-published metadata — distinct from 'wb status' (sync/
 # tracking state core tracks regardless of what a module publishes) and
 # from 'wb help <command>' (this CLI's own usage text, not a module's
@@ -1313,7 +1313,7 @@ separate, host-wide layer underneath 'wb sync enable|disable [<name>]'.
 
   enable     Turns scheduled sync on for this host and installs/starts the
               timer immediately (no separate 'wb apply' needed). OFF by
-              default (ARCHITECTURE.md §12 D38) — nothing is ever written
+              default (docs/decisions-log.md D38) — nothing is ever written
               to systemd/launchd, or run in the background, until you run
               this once.
   disable    Turns scheduled sync off and immediately removes the
@@ -1457,7 +1457,7 @@ registered module names, catalog module/bundle names, and discovered
 tool names on this host (e.g. 'wb track <TAB>' only offers modules
 you've actually registered — never a deregistered one). Flag names
 (--private, --bundle, etc.) and 'wb module reset <name>'s own target
-argument aren't completed yet — see ARCHITECTURE.md §12 D54.
+argument aren't completed yet — see docs/decisions-log.md D54.
 EOF
 }
 
@@ -1468,7 +1468,7 @@ Usage: wb reload
 Re-sources workbench-core in *this* shell without running a real sync —
 useful right after the background scheduled-sync timer changed something
 you didn't run by hand. Only exists as a shell function, defined by
-lib/loader.sh (ARCHITECTURE.md §12 D39): every shell that's sourced it
+lib/loader.sh (docs/decisions-log.md D39): every shell that's sourced it
 already gets this and every state-changing 'wb' command (update, apply,
 add, remove, track, dev, sync) auto-reloading after itself, with no
 separate step needed. If you're seeing an error instead of this text,
@@ -1554,7 +1554,7 @@ case "${_wb_cmd}" in
     __complete) _wb_cmd_complete "$@" ;;
     help)       _wb_cmd_help "$@" ;;
     reload)
-        log_error "wb reload: this only works as a shell function, defined by lib/loader.sh — a subprocess (this one) can't reload its own parent shell. Either you're not in a shell that's sourced lib/loader.sh yet, or this host predates this wrapper (ARCHITECTURE.md §12 D39). Run 'source ~/.bashrc' (or open a new shell) once — 'wb reload' and every state-changing 'wb' command will auto-reload from then on."
+        log_error "wb reload: this only works as a shell function, defined by lib/loader.sh — a subprocess (this one) can't reload its own parent shell. Either you're not in a shell that's sourced lib/loader.sh yet, or this host predates this wrapper (docs/decisions-log.md D39). Run 'source ~/.bashrc' (or open a new shell) once — 'wb reload' and every state-changing 'wb' command will auto-reload from then on."
         exit 1
         ;;
     -h|--help|"") _wb_usage ;;

@@ -56,8 +56,8 @@ echo "${ZSH_OUT}" | grep -q "compdef _wb_completions wb" \
 # ── 2. The introspected command list matches the real dispatch case — the
 #    single-source-of-truth guarantee this whole mechanism exists for.
 #    Scoped to the top-level 'compgen -W' only (the first one emitted,
-#    inside the '${COMP_CWORD} -eq 1' branch) — Phase 2 (ARCHITECTURE.md
-#    §12 D54) added several more further down for sub-command/argument
+#    inside the '${COMP_CWORD} -eq 1' branch) — Phase 2
+#    (docs/decisions-log.md D54) added several more further down for sub-command/argument
 #    completion, and this check's job is only ever the top-level list.
 #    Adjust the COMPLETION_CMDS extraction regex here if the generated
 #    bash format changes. ───────────────────────────────────────────────

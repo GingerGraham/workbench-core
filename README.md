@@ -123,7 +123,7 @@ installed automatically.
 - `tests/` — plain-bash checks, no framework: numbered checks, a
   `FAIL:`/`OK:` summary line.
 
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) §5 for the full target layout
+See [`docs/architecture.md`](docs/architecture.md) §5 for the full target layout
 and the rationale behind it.
 
 ## Documentation map
@@ -138,7 +138,8 @@ and the rationale behind it.
 | [`contracts/core-api.md`](contracts/core-api.md) | The shell functions/variables every module can rely on, and the loader-tier order. |
 | [`contracts/tracking-spec.md`](contracts/tracking-spec.md) | How a module's tracked ref is resolved, fetched, and re-checked. |
 | [`contracts/state-schema.md`](contracts/state-schema.md) | The on-disk file/directory shapes `wb` reads and writes. |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | The full design rationale, repo topology, rollout plan, and decisions log (§12) — read this before proposing anything that touches repo structure, the manifest schema, or the sync engine. |
+| [`docs/architecture.md`](docs/architecture.md) | The full design rationale, repo topology, and rollout plan — read this before proposing anything that touches repo structure, the manifest schema, or the sync engine. |
+| [`docs/decisions-log.md`](docs/decisions-log.md) | The full, numbered decisions log referenced from `docs/architecture.md` §12. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to propose a change — dev setup, commit/CHANGELOG discipline, the PR checklist. |
 | [`SECURITY.md`](SECURITY.md) | How to report a vulnerability, and the trust boundaries this project actually has. |
 | [`CHANGELOG.md`](CHANGELOG.md) | What's shipped, in order. |
@@ -146,7 +147,7 @@ and the rationale behind it.
 ## Design principles
 
 A few of the load-bearing decisions, in brief (full rationale in
-[`ARCHITECTURE.md`](ARCHITECTURE.md)):
+[`docs/architecture.md`](docs/architecture.md)):
 
 - **One generalised engine.** Core is module zero, not a special case;
   bundles are sugar over `wb add`, never a hardcoded branch inside the
@@ -161,4 +162,4 @@ A few of the load-bearing decisions, in brief (full rationale in
   permanent, unchanged, zero behavioural difference. `version: 2` —
   `workbench.yml`/`workbench.yaml`/`wb.yml`/`wb.yaml` — is the same,
   already-additive field set under a workbench-focused name; new or
-  migrating repos should prefer it (ARCHITECTURE.md §12 D46).
+  migrating repos should prefer it (`docs/decisions-log.md` D46).

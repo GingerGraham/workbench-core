@@ -36,7 +36,7 @@ worth reporting against specifically:
   (`lib/ssh/bootstrap.sh`).
 - **A module's registered shell content is engine-computed, not
   author-specified**, and confined to that module's own snapshot
-  namespace (`ARCHITECTURE.md` principle 1, `lib/manifest/validate.sh`'s
+  namespace (`docs/architecture.md` principle 1, `lib/manifest/validate.sh`'s
   rejection of a `dest` on `register.shell[]` entries) — a module
   cannot declare where its own content lands outside itself.
 - **Manifest parsing rejects `..`/absolute paths** in every

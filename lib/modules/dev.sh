@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lib/modules/dev.sh — `wb dev [<name>]` (ARCHITECTURE.md §10/D9).
+# lib/modules/dev.sh — `wb dev [<name>]` (docs/architecture.md §10/D9).
 #
 # A guided wrapper over `wb track`, not a separate mechanism: with no
 # argument, walks every currently-registered module (core included)

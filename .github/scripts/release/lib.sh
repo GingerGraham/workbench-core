@@ -7,7 +7,7 @@
 # by lib/loader.sh — so unlike everything under lib/, this is free to use
 # bash 4+ features and runs only on GitHub-hosted ubuntu-latest runners.
 #
-# ARCHITECTURE.md §12 D27 / docs/release-process.md.
+# docs/decisions-log.md D27 / docs/release-process.md.
 set -uo pipefail
 
 _REL_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

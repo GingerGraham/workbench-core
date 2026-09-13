@@ -5,14 +5,14 @@
 # contracts/manifest-spec.md — the authoritative contract. Ported from
 # workbench-precursor's scripts/validate-sync-manifest.sh and extended for
 # the new, additive `core_api`/`sync`/`register`/`overrides_src` keys
-# (ARCHITECTURE.md §5, build brief Phase 3) — its path-safety discipline
+# (docs/architecture.md §5, build brief Phase 3) — its path-safety discipline
 # (the src/dest denylist checks) is kept exactly as it was.
 #
 # With no path argument, discovers the manifest by checking, in order:
 # workbench.yml, workbench.yaml, wb.yml, wb.yaml (each requiring a
 # top-level version: key to be accepted, version: 2), then
 # .dotfiles-sync.yml (version: 1, unconditionally trusted, no sniff-check)
-# — see ARCHITECTURE.md §12 D46. An explicit path argument always bypasses
+# — see docs/decisions-log.md D46. An explicit path argument always bypasses
 # discovery. Filename and version: are a bound pair, enforced below.
 #
 # This is the one place in workbench-core where yq is an acceptable
@@ -39,14 +39,14 @@ WARNINGS=0
 # ~/.config/workbench/core/version file. Two constants, same reason
 # bootstrap.sh duplicates fetch logic instead of sourcing
 # lib/distribution/fetch-tarball.sh — structurally unavoidable. See
-# ARCHITECTURE.md §12 D30/D46.
+# docs/decisions-log.md D30/D46.
 _WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED="1 2"
 
 # The manifest filenames this validator discovers, in order, and the
 # version: each one is required to declare — ported verbatim from
 # lib/manifest/parse.sh rather than sourced across the boundary, for the
 # same standalone-execution reason the schema-versions constant above is
-# duplicated. See ARCHITECTURE.md §12 D46.
+# duplicated. See docs/decisions-log.md D46.
 _WB_MANIFEST_CANDIDATE_NAMES="workbench.yml workbench.yaml wb.yml wb.yaml .dotfiles-sync.yml"
 
 workbench_resolve_manifest_path() {
@@ -89,7 +89,7 @@ Validates a workbench-core manifest against contracts/manifest-spec.md.
          current directory by checking, in order: ${_WB_MANIFEST_CANDIDATE_NAMES}
          — workbench.yml/workbench.yaml/wb.yml/wb.yaml must declare
          version: 2, .dotfiles-sync.yml must declare version: 1
-         (ARCHITECTURE.md §12 D46).
+         (docs/decisions-log.md D46).
 
 Checks (fail the manifest) — unchanged from schema version 1:
   - the file parses as YAML
@@ -106,7 +106,7 @@ Checks (fail the manifest) — unchanged from schema version 1:
   - hooks.post_deploy.run_on, when given, is changed/always/initial
   - hooks.post_deploy.timeout, when given, is a positive integer
 
-New checks (register:, additive per ARCHITECTURE.md §5):
+New checks (register:, additive per docs/architecture.md §5):
   - core_api, when given, is a non-empty string (a semver range consumed by
     the Core API gate — not deeply validated here, just checked non-empty)
   - sync.enabled, when given, is true or false
@@ -244,7 +244,7 @@ elif [[ -n "${_expected_version}" && "${_version}" != "${_expected_version}" ]];
     # argument bypasses discovery (see the usage note above) and points at
     # a differently-named file. Such a file still validates on its
     # version: value alone, exactly as before this pairing check existed.
-    err "$(basename -- "${MANIFEST}") must declare version: ${_expected_version} — found '${_version}' (ARCHITECTURE.md §12 D46)."
+    err "$(basename -- "${MANIFEST}") must declare version: ${_expected_version} — found '${_version}' (docs/decisions-log.md D46)."
 fi
 
 # ── deploy[] ─────────────────────────────────────────────────────────────────
@@ -373,7 +373,7 @@ while [[ "${_si}" -lt "${_shell_count}" ]]; do
     fi
 
     if [[ -n "${_rdest}" && "${_rdest}" != "null" ]]; then
-        err "${_rlabel}: dest is not permitted on register.shell[] entries — the destination is always engine-computed (contracts/manifest-spec.md §register.shell, ARCHITECTURE.md principle 1)."
+        err "${_rlabel}: dest is not permitted on register.shell[] entries — the destination is always engine-computed (contracts/manifest-spec.md §register.shell, docs/architecture.md principle 1)."
     fi
 
     if [[ -n "${_rtier}" && "${_rtier}" != "null" ]] && ! _is_valid_tier "${_rtier}"; then

@@ -1,7 +1,7 @@
 # Tracking & distribution contract
 
 How `workbench-core` decides what commit of a module is deployed, and when.
-See `ARCHITECTURE.md` §9 for the design rationale (D5-D8); this document is
+See `docs/architecture.md` §9 for the design rationale (D5-D8); this document is
 the concrete, on-disk/behavioural contract.
 
 ## The four `TRACK_MODE` states
@@ -84,7 +84,7 @@ weekly.
 `wb update [<name>]` bypasses `workbench_sync_due()` entirely — always
 runs immediately, regardless of cadence state.
 
-**Opt-in, host-wide, default OFF (§12 D38):** the OS timer/agent above is
+**Opt-in, host-wide, default OFF (docs/decisions-log.md D38):** the OS timer/agent above is
 never installed automatically. `wb scheduler enable|disable|status`
 controls it explicitly, separate from — and required in addition to —
 each module's own `SYNC_ENABLED` (`wb sync enable|disable [<name>]`). A
@@ -123,7 +123,7 @@ Three related but distinct predicates (`lib/sync/state.sh`):
   `lib/loader.sh` actually sources `register.list` from into a new
   interactive shell. A module with sync paused is frozen at whatever it
   last deployed and is **not** re-sourced into new shells until re-enabled
-  — a deliberate reading of ARCHITECTURE.md §3's "every registered,
+  — a deliberate reading of docs/architecture.md §3's "every registered,
   sync-enabled module," not an oversight: pausing a module's sync is a
   reasonable way to also pause a broken module's shell functions without
   fully deregistering it. `WORKBENCH_TRACK_<MODULE>` is exported for every

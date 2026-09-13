@@ -4,6 +4,14 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Docs reorg.** `ARCHITECTURE.md` moved to `docs/architecture.md`, and
+  its §12 decisions log split out into its own file,
+  `docs/decisions-log.md`, referenced from `architecture.md` §12 rather
+  than embedded. Every cross-reference repo-wide now points at the new
+  paths. See `docs/decisions-log.md` D56.
+
 ## [2.7.0] - 2026-09-13
 
 ### Added

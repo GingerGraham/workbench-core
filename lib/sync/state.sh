@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # lib/sync/state.sh — module state directory layout & sync.conf access
-# (ARCHITECTURE.md §9.3/§9.5).
+# (docs/architecture.md §9.3/§9.5).
 #
 # Single root, replacing dotfiles' scattered ~/.config/dotfiles,
 # ~/.config/shell, ~/.config/external-sync, etc.:
@@ -97,7 +97,7 @@ workbench_module_conf_set() {
 # True iff this module has ever been registered and has not been removed.
 # REGISTERED defaults to "true" the moment sync.conf exists at all — wb add
 # writes it explicitly; wb remove flips it to "false" without deleting
-# anything (idempotent, non-destructive deregistration — ARCHITECTURE.md
+# anything (idempotent, non-destructive deregistration — docs/architecture.md
 # §10/build brief Phase 7).
 workbench_is_registered() {
     local name="$1"
@@ -108,7 +108,7 @@ workbench_is_registered() {
 }
 
 # workbench_is_sync_enabled <name>
-# Independent of TRACK_MODE/TRACK_REF (ARCHITECTURE.md §9.7) — defaults to
+# Independent of TRACK_MODE/TRACK_REF (docs/architecture.md §9.7) — defaults to
 # true.
 workbench_is_sync_enabled() {
     local name="$1"
@@ -142,7 +142,7 @@ workbench_list_registered_modules() {
 
 # workbench_list_loadable_modules
 # The set the loader actually sources from: registered AND sync-enabled.
-# (ARCHITECTURE.md §3 — "every registered, sync-enabled module's state
+# (docs/architecture.md §3 — "every registered, sync-enabled module's state
 # directory.") A module with sync paused via `wb sync disable <name>` is
 # frozen at its last-deployed snapshot and its register.list is not
 # re-sourced into new shells until sync is re-enabled; this is a deliberate

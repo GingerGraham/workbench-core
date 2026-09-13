@@ -3,7 +3,7 @@
 # (<previous release tag>, HEAD] and emits a machine-readable bump plan to
 # stdout: one `<path>|<old>|<new>|<severity>` line per registered file that
 # changed severity this cycle, plus a final
-# `OVERALL|<old>|<new>|<severity>|<reason>` line. ARCHITECTURE.md §12 D27.
+# `OVERALL|<old>|<new>|<severity>|<reason>` line. docs/decisions-log.md D27.
 #
 # Exits 0 in every case, including "nothing to release" (OVERALL severity
 # none) — the caller (release.yml) decides whether to proceed by reading
