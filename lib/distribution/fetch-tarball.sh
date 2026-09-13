@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lib/distribution/fetch-tarball.sh — public-repo fetch, no git.
 #
-# ARCHITECTURE.md §9.1/D5: the default/production path for a public repo,
+# docs/architecture.md §9.1/D5: the default/production path for a public repo,
 # any TRACK_MODE. Generalised from workbench-precursor's scripts/sync.sh
 # release_sync() (self-sync only, commit-based) to any module, tag-based.
 # tests/check-distribution-no-git.sh asserts this file never invokes `git`

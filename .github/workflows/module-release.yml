@@ -1,6 +1,6 @@
 name: Module Release
 
-# Reusable workflow (ARCHITECTURE.md S12 D40) called by each module repo's
+# Reusable workflow (docs/decisions-log.md D40) called by each module repo's
 # thin .github/workflows/release.yml. Same propose-PR-then-finalize shape
 # as core's own release.yml/release-finalize.yml (D27/D28) -- main's
 # branch ruleset requires a PR, so a direct-push bump is equally

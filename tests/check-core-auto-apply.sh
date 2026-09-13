@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/check-core-auto-apply.sh — Action 1 acceptance check (follow-up
 # brief: "workbench-core follow-up: core auto-reconvergence + wb help",
-# ARCHITECTURE.md §12 D20).
+# docs/decisions-log.md D20).
 #
 # `wb update`/`wb sync run-if-due`/`wb track` targeting `core` must trigger
 # a `wb apply` convergence pass exactly when core's resolved commit actually
@@ -47,7 +47,7 @@ set --
 source "${WB}" >/tmp/wb-core-auto-apply-source.log 2>&1
 
 # 'wb sync run-if-due' is gated behind the opt-in, default-off scheduler
-# switch (ARCHITECTURE.md §12 D38) — orthogonal to what this suite tests
+# switch (docs/decisions-log.md D38) — orthogonal to what this suite tests
 # (the convergence-trigger logic once a firing actually proceeds), so flip
 # the persisted flag directly rather than going through
 # workbench_scheduler_cmd_enable, which would also try to touch a real

@@ -131,7 +131,7 @@ EOF
 [[ -z "$(workbench_manifest_hook_post_deploy "${LEGACY}")" ]] \
     && ok "legacy manifest: no hook, not an error" || fail "legacy manifest: unexpected hook output"
 
-# ── Manifest filename resolution & version pairing (ARCHITECTURE.md §12 D46) ─
+# ── Manifest filename resolution & version pairing (docs/decisions-log.md D46) ─
 
 # shellcheck disable=SC2015
 [[ "$(workbench_manifest_expected_version .dotfiles-sync.yml)" == "1" ]] \

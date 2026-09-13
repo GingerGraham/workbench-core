@@ -10,7 +10,7 @@ longer the *only* permanent name, though: `workbench.yml` / `workbench.yaml`
 / `wb.yml` / `wb.yaml`, `version: 2`, is a parallel, equally-supported
 spelling with the identical field set — see
 [Manifest filenames & discovery](#manifest-filenames--discovery) below and
-ARCHITECTURE.md §12 D46. All of `core_api`/`sync`/`register` below are new,
+docs/decisions-log.md D46. All of `core_api`/`sync`/`register` below are new,
 optional, namespaced keys that only `workbench-core` looks for; a manifest
 with none of them behaves exactly as it always has.
 
@@ -65,7 +65,7 @@ always trusted unconditionally, as it always has been.
 There is no deprecation timeline for `.dotfiles-sync.yml` — it may remain a
 fully supported name indefinitely. `workbench.yml`/`version: 2` is simply
 the name this spec's own examples lead with for new or migrating repos. See
-ARCHITECTURE.md §12 D46 for the full decision.
+docs/decisions-log.md D46 for the full decision.
 
 ## Quick start
 
@@ -269,7 +269,7 @@ register:
   `${WORKBENCH_HOME}/modules.d/<module-name>/<basename>` symlink tree for
   this — the sync engine reading `register.list` straight out of each
   module's own `current` snapshot makes that indirection unnecessary; see
-  `ARCHITECTURE.md` §12 D16.)
+  `docs/decisions-log.md` D16.)
 
 ### `register.installers[]`
 
@@ -280,7 +280,7 @@ register:
 ```
 
 Files scanned for `install-<name>`-shaped functions, folded into the
-generalised tool-updating registry `wb tools` walks (ARCHITECTURE.md §12
+generalised tool-updating registry `wb tools` walks (docs/decisions-log.md
 D23). Same `src` validation as `register.shell[]`. See
 `docs/module-authoring.md#declaring-installers-wb-tools` for the naming
 convention (a hard requirement, not a suggestion) and the collision rule
@@ -377,8 +377,8 @@ The additive approach above covers everything currently in scope. A genuine
 break would only be needed for something like changing `dest` validation
 semantics incompatibly, making `register:` mandatory, or supporting multiple
 manifests per repo. `version: 2` is now spoken for by the filename change
-above (ARCHITECTURE.md §12 D46), so a future genuine break would need
-`version: 3` — see ARCHITECTURE.md §5.4. Nothing today requires this.
+above (docs/decisions-log.md D46), so a future genuine break would need
+`version: 3` — see docs/architecture.md §5.4. Nothing today requires this.
 
 ## Validating your manifest
 

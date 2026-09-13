@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # lib/modules/info.sh — `wb module info` / `wb module docs`
-# (ARCHITECTURE.md §12 D45).
+# (docs/decisions-log.md D45).
 #
 # The rendering commands (_wb_cmd_module_info/_wb_cmd_module_docs) live in
 # bin/wb, same split as `wb tools`: this file holds only the one reusable
@@ -14,7 +14,7 @@ command -v _workbench_register_script_version &>/dev/null && _workbench_register
 # Prints the absolute path of whichever of HELP.md/README.md exists at
 # the module's current/ root, in that order, and returns 0. Returns 1
 # with no output if neither exists — convention-only, no manifest field,
-# no further fallback chain (ARCHITECTURE.md §12 D45).
+# no further fallback chain (docs/decisions-log.md D45).
 workbench_module_docs_path() {
     local name="$1"
     local current_dir

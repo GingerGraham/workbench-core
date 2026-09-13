@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # lib/core/version.sh — read/write the version taxonomy file
-# (ARCHITECTURE.md §6): CORE_API_VERSION, STATE_SCHEMA_VERSION,
+# (docs/architecture.md §6): CORE_API_VERSION, STATE_SCHEMA_VERSION,
 # WORKBENCH_CORE_SEMVER.
 #
 # Deliberately readable with only `grep`/`cut` (both hard baseline prereqs,
@@ -85,7 +85,7 @@ _workbench_version_set_var() {
 # Companion to _workbench_version_set_var — strips any NAME=... line
 # entirely, for a field being retired from the file format (used below to
 # clean MANIFEST_SCHEMA_VERSION off existing hosts' already-written files;
-# ARCHITECTURE.md §12 D37). No-op if the file or the key doesn't exist.
+# docs/decisions-log.md D37). No-op if the file or the key doesn't exist.
 _workbench_version_remove_var() {
     local name="$1" file tmp rc
     file="$(_workbench_version_file_path)"
@@ -108,7 +108,7 @@ _workbench_version_remove_var() {
     mv "${tmp}" "${file}"
 }
 
-# ── CORE_API_VERSION: unconditional sync (ARCHITECTURE.md §12 D36) ─────────
+# ── CORE_API_VERSION: unconditional sync (docs/decisions-log.md D36) ─────────
 # Unlike STATE_SCHEMA_VERSION below, CORE_API_VERSION asserts nothing about
 # the shape of other on-disk files — it states one fact only: what does the
 # code that's currently running provide. That's fully determined the instant
@@ -199,7 +199,7 @@ _workbench_release_version() {
 
 # ── Script-local version registry (bootstrap-fix brief §5.2) ────────────────
 # Three decoupled version concepts now exist (contract / release-tag /
-# script-local) — see ARCHITECTURE.md's version-concepts subsection. This
+# script-local) — see docs/architecture.md's version-concepts subsection. This
 # registry is for the third: "which version of *this specific file*
 # produced this output", independent of the release tag and bumped by that
 # file's own author on its own schedule.

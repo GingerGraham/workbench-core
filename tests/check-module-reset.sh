@@ -41,7 +41,7 @@ else
 fi
 
 # ── 0b. workbench_deploy_link_file backs up a real file before its force
-#    branch rm -rf's it (ARCHITECTURE.md §12 D53). No live manifest sets
+#    branch rm -rf's it (docs/decisions-log.md D53). No live manifest sets
 #    mode: link + force: true today, so this exercises the engine
 #    function directly, same as check 0 above. ─────────────────────────
 mkdir -p "${WORK}/link-src-dir"
@@ -142,7 +142,7 @@ else
 fi
 
 # ── 3b. Confirming a reset backs up the pre-existing (differing) file,
-#    and says so, with a path, in the log output (ARCHITECTURE.md §12
+#    and says so, with a path, in the log output (docs/decisions-log.md
 #    D53). ──────────────────────────────────────────────────────────────
 BACKUP_ROOT="${XDG_DATA_HOME}/workbench/backups"
 # Check 3, above, already left its own backup of tmux.conf in here — clear

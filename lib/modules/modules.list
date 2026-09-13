@@ -1,6 +1,6 @@
 # Known-modules catalog — <name>|<url>|<private:true|false>
 #
-# Populated at Wave C (ARCHITECTURE.md §10/§11, §12 D34/D35) as each
+# Populated at Wave C (docs/architecture.md §10/§11, docs/decisions-log.md D34/D35) as each
 # ecosystem module's repo lands. `wb add <name>` still works for any name
 # by passing a url explicitly; this file only saves typing the url once a
 # module is listed here.

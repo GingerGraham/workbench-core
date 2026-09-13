@@ -1,5 +1,5 @@
 ---
-# common — XDG dirs + base prereqs (ARCHITECTURE.md §4/§8). Idempotent by
+# common — XDG dirs + base prereqs (docs/architecture.md §4/§8). Idempotent by
 # construction (Ansible's `file`/`command` modules). Prereq installation
 # itself is NOT re-implemented here — `wb install` already ran
 # lib/core/prereqs.sh's check/install pass in pure shell before Ansible was

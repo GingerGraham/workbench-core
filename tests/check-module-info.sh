@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/check-module-info.sh — ARCHITECTURE.md §12 D45 acceptance check.
+# tests/check-module-info.sh — docs/decisions-log.md D45 acceptance check.
 #
 # Covers: usage errors for unregistered/missing names, `info` built from
 # sync.conf facts even with no `info:` block, `info.description` read

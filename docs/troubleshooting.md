@@ -19,7 +19,7 @@ Install it yourself with your distro's package manager, then re-run
    `bash -x ~/.local/share/workbench/modules/core/current/lib/loader.sh`
 5. Installed via `bootstrap.sh` before this was fixed? A confirmed
    regression left `register.list` unrendered on that install path
-   specifically (ARCHITECTURE.md §12 D21) — just re-run `wb apply` once;
+   specifically (`docs/decisions-log.md` D21) — just re-run `wb apply` once;
    it now unconditionally re-renders `register.list`/`installers.list` for
    every loadable module on every run. `wb status` also now warns loudly
    if a registered module's declared shell/installer content never made
@@ -29,7 +29,7 @@ Install it yourself with your distro's package manager, then re-run
 
 - Check `SYNC` in `wb status` — a module with sync disabled
   (`wb sync disable <name>`) is intentionally not re-sourced into new
-  shells (ARCHITECTURE.md §3) until re-enabled: `wb sync enable <name>`.
+  shells (`architecture.md` §3) until re-enabled: `wb sync enable <name>`.
 - Check the module declares `core_api:` in its manifest — without it,
   `register:` is ignored entirely (treated as a legacy deploy-only
   manifest).
@@ -38,7 +38,7 @@ Install it yourself with your distro's package manager, then re-run
   doesn't include your `CORE_API_VERSION`
   (`~/.config/workbench/core/version`).
 - Registered, rendered, and listed correctly by `wb functions`, but still
-  not callable? As of ARCHITECTURE.md §12 D39, `wb update`/`apply`/`add`/
+  not callable? As of `docs/decisions-log.md` D39, `wb update`/`apply`/`add`/
   `remove`/`track`/`dev`/`sync` auto-reload the shell you ran them from, so
   this is now rare — but it can still happen if the module was synced by
   the background timer instead of a command you ran yourself. Run

@@ -1,6 +1,6 @@
 name: Module PR Check
 
-# Reusable workflow (ARCHITECTURE.md S12 D40) called by each module repo's
+# Reusable workflow (docs/decisions-log.md D40) called by each module repo's
 # thin .github/workflows/pr-check.yml. Simplified from core's own
 # pr-check.yml: module repos carry no per-file
 # _workbench_register_script_version convention, so every commit on the PR

@@ -10,14 +10,14 @@
 # `type[(scope)][!]: subject` prefix — compute-bumps.sh then silently drops
 # that merge's severity (§3.1's documented, intentional behaviour for an
 # unparseable commit), exactly as an untitled PR did for #46. See
-# ARCHITECTURE.md §12 D47.
+# docs/decisions-log.md D47.
 #
 # <base-sha>/<head-sha> are optional as a *pair*: when both are given, this
 # also applies the 'core'-scope-vs-registered-file rule check-commit-format.sh
 # applies per commit, but against the PR's *overall* diff — since the squash
 # commit that actually reaches compute-bumps.sh only ever carries this
 # title's scope, not any individual commit's (D47). Real incident this
-# closes: PR #58/#59. ARCHITECTURE.md §12 D55. Omitting both skips that
+# closes: PR #58/#59. docs/decisions-log.md D55. Omitting both skips that
 # second check (grammar only) — existing callers without a diff range still
 # work. Passing only one is treated as a caller error (fails loudly) rather
 # than silently downgrading to grammar-only, since that shape almost always

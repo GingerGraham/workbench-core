@@ -13,8 +13,7 @@ or platform fact to this file's documented surface requires bumping
 and `lib/core/version-defaults.conf`). Removing or changing the behaviour
 of anything already documented here requires a major bump instead (reset
 minor to `0`) — this invalidates every module's existing `<A.B>` upper
-bound, so treat it as a real break, not a routine edit. See ARCHITECTURE.md
-§12 D29.
+bound, so treat it as a real break, not a routine edit. See docs/decisions-log.md D29.
 
 ## Platform facts
 
@@ -58,7 +57,7 @@ once core's own `core`-tier registration is sourced:
 ## Install-helper functions (`lib/core/installers-common.sh`)
 
 **New in `CORE_API_VERSION` 1.1.** Promoted from workbench-precursor's
-`installers-common.sh` (ARCHITECTURE.md §12 D34) so every module's
+`installers-common.sh` (docs/decisions-log.md D34) so every module's
 `install-<name>` functions (`register.installers[]`) share one
 implementation instead of each ecosystem module (`workbench-cloud`,
 `workbench-iac`, `workbench-containers`, `workbench-security`,
@@ -112,7 +111,7 @@ Before every tier pass — including a reload in an already-running shell,
 not just a fresh shell start — the loader clears `WORKBENCH_PROMPT_SET`/
 `WORKBENCH_PROMPT_ENGINE` and, only if a previous pass in this same shell
 had already set them, resets bash's `PROMPT_COMMAND`/zsh's
-`precmd_functions` too (ARCHITECTURE.md §12 D50). A prompt-owning module
+`precmd_functions` too (docs/decisions-log.md D50). A prompt-owning module
 can rely on this: your own guard never needs to defensively clear a
 competing engine's leftover hook before running — by the time your tier
 content is reached, the slate is already as clean as a brand-new shell's.
@@ -125,7 +124,7 @@ sourced from that module's `sync.conf` (`TRACK_MODE:TRACK_REF`, e.g.
 `latest:v1.4.2` or `branch:my-feature`) — never written back the other
 direction. `<MODULE>` is the module's registration name, uppercased (ASCII,
 ported through `tr` — no `${var^^}`, for bash 3.2 compatibility) with any
-`-` replaced by `_`. Published now as a standing contract (ARCHITECTURE.md
+`-` replaced by `_`. Published now as a standing contract (docs/architecture.md
 §9.5/D7) so Wave C's modules have something settled to build against, even
 though none exist yet. See `contracts/tracking-spec.md` for the full
 `TRACK_MODE` state machine this variable reflects.
@@ -141,14 +140,14 @@ see `contracts/state-schema.md` for the full file shape and
 release's value on every `wb install`/`wb apply`
 (`_workbench_sync_version_facts`, `lib/core/version.sh`) — it states only
 what the running code provides, with no side effect to sequence, so an
-existing host is never allowed to lag a fresh install (ARCHITECTURE.md §12
+existing host is never allowed to lag a fresh install (docs/decisions-log.md
 D36). `STATE_SCHEMA_VERSION` keeps its separate, deliberate
 migrate-then-advance semantics (`_workbench_migrate_state_schema`),
 unchanged — it asserts a claim about the shape of other on-disk files, so
 advancing it has to be sequenced with that shape's own migration.
 
 The version file previously also carried a `MANIFEST_SCHEMA_VERSION`
-field; it has been retired (ARCHITECTURE.md §12 D37) — its getter had zero
+field; it has been retired (docs/decisions-log.md D37) — its getter had zero
 callers, and real manifest-schema-version enforcement was always the
 separate, hardcoded `_WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED` constant
 (`lib/manifest/parse.sh`/`validate.sh`).

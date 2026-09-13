@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # lib/distribution/snapshot.sh — snapshots/ directory management: naming,
-# the atomic `current` symlink swap, and pruning (ARCHITECTURE.md §9.3).
+# the atomic `current` symlink swap, and pruning (docs/architecture.md §9.3).
 # Generalises the atomic-symlink-swap/pruning *pattern* workbench-precursor's
 # self-sync "release mode" (scripts/sync.sh) already established for itself
 # — every module, core included, gets the identical mechanism here.

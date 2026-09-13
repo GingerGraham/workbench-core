@@ -4,7 +4,7 @@
 
 ## Related
 
-<!-- Issue link, and/or the ARCHITECTURE.md §12 decision this
+<!-- Issue link, and/or the docs/decisions-log.md decision this
      implements or requires (e.g. "Implements D31"). Leave blank if
      neither applies. -->
 
@@ -30,7 +30,7 @@
       Bash 3.2 compatible — see [`CONTRIBUTING.md`](https://github.com/GingerGraham/workbench-core/blob/main/CONTRIBUTING.md#bash-32-compatibility).
       `.github/scripts/**` is exempt.
 - [ ] If this touches repo structure, the manifest schema, or the sync
-      engine, [`ARCHITECTURE.md`](https://github.com/GingerGraham/workbench-core/blob/main/ARCHITECTURE.md) §12 has been
+      engine, [`docs/decisions-log.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/decisions-log.md) has been
       checked for an existing decision, and a new entry added if this
       settles something new.
 - [ ] Docs (`docs/`, `contracts/`, `README.md`) updated if behaviour or

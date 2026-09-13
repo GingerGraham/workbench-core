@@ -9,7 +9,7 @@
 # deliberately duplicates a small, accepted slice of
 # lib/distribution/resolve.sh, lib/distribution/fetch-tarball.sh,
 # lib/core/semver.sh, and lib/distribution/snapshot.sh's _wb_slugify
-# (ARCHITECTURE.md §12 decisions log, "Bootstrap fetch mechanism" — the
+# (docs/decisions-log.md, "Bootstrap fetch mechanism" — the
 # same narrow, documented duplication precedent as the private-repo
 # git-as-transport exception in §9.1/D5). Kept intentionally tiny — its
 # only job is to get *just enough* on disk to hand off to `bin/wb install`;
@@ -100,7 +100,7 @@ _gh_curl() {
 
 # _is_clean_tag / _cmp — duplicated (minimal) from lib/core/semver.sh's
 # _wb_semver_is_clean_tag / _wb_semver_cmp: only clean, three-segment,
-# v-prefixed tags participate in `latest` resolution (ARCHITECTURE.md §9.2).
+# v-prefixed tags participate in `latest` resolution (docs/architecture.md §9.2).
 _is_clean_tag() {
     local tag="$1"
     case "${tag}" in v*) : ;; *) return 1 ;; esac
@@ -134,7 +134,7 @@ _cmp() {
 
 # ── 3. Resolve a ref ──────────────────────────────────────────────────────────
 # Latest vX.Y.Z tag via GitHub's unauthenticated API, same tag-format
-# contract as ARCHITECTURE.md §9.2/contracts/tracking-spec.md. Trap: if no
+# contract as docs/architecture.md §9.2/contracts/tracking-spec.md. Trap: if no
 # conforming tag exists yet — true at bootstrap.sh's own introduction,
 # before any release has been cut — fall back to `main` with a clear
 # warning. This isn't just a bring-up convenience: without it, bootstrap is
@@ -191,7 +191,7 @@ SHORT_SHA="${SHA:0:7}"
 # looked fine (fix-brief §3.4). Writing straight into
 # snapshots/<ref-slug>-<shortsha>/ means core's very first snapshot is
 # indistinguishable from one an ordinary sync cycle would have produced —
-# the exact same shape ARCHITECTURE.md §9.3 defines.
+# the exact same shape docs/architecture.md §9.3 defines.
 DEST="${MODULE_DIR}/snapshots/${REF_SLUG}-${SHORT_SHA}"
 
 if [[ ! -e "${DEST}" ]]; then

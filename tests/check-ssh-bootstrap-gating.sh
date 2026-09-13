@@ -147,7 +147,7 @@ else
     fail "REPO_URL was not rewritten correctly: '${new_url}'"
 fi
 
-# ── 4. core is never private (ARCHITECTURE.md §2) — even if somehow marked
+# ── 4. core is never private (docs/architecture.md §2) — even if somehow marked
 #    so, this is just confirming the mechanism has no core-specific
 #    special-casing at all: it acted identically on "awsconfd" as it would
 #    on any name, including "core", per module zero (grep check). ─────────

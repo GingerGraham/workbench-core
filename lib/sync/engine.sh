@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lib/sync/engine.sh — the unified sync loop (ARCHITECTURE.md §9, principle
+# lib/sync/engine.sh — the unified sync loop (docs/architecture.md §9, principle
 # 4). Core syncs itself through the exact same code path as any other
 # module — no special-cased branch for module zero anywhere in this file.
 #
@@ -31,7 +31,7 @@ unset _wb_engine_dep
 # shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/sync/engine.sh" "0.3.0" || true
 
-# ── Cadence (ARCHITECTURE.md §9.4/D8) ─────────────────────────────────────────
+# ── Cadence (docs/architecture.md §9.4/D8) ─────────────────────────────────────────
 : "${WORKBENCH_CADENCE_DEFAULT_SECONDS:=604800}"   # weekly
 : "${WORKBENCH_CADENCE_FAST_SECONDS:=300}"          # 5 minutes, any branch: module
 
@@ -69,7 +69,7 @@ _wb_cadence_state_file() {
 # unconditionally; THIS function is what decides, in userspace, whether that
 # firing should actually do anything. Reconfiguring a live systemd timer's
 # own interval requires a daemon-reload and timer restart, which is
-# exactly the "restart of the timer infrastructure" ARCHITECTURE.md §9.4
+# exactly the "restart of the timer infrastructure" docs/architecture.md §9.4
 # says to avoid — polling cheaply and self-throttling sidesteps that
 # entirely, at the cost of the OS timer firing (as a fast no-op check) more
 # often than the content actually needs to be re-checked.
@@ -113,7 +113,7 @@ workbench_track_mode_parts() {
 # workbench_resolve_module <name>
 # Prints "<tag-or-ref-label>|<sha>" on success. Uses the GitHub API for a
 # public repo on latest/tag/commit, `git ls-remote` for a private repo (any
-# mode) or ANY branch:-tracked repo — ARCHITECTURE.md §9.1.
+# mode) or ANY branch:-tracked repo — docs/architecture.md §9.1.
 workbench_resolve_module() {
     local name="$1"
     local url private mode ref_form ref_value
@@ -158,7 +158,7 @@ _wb_expand_dest() {
 # workbench_backup_existing_file <dest> [<module>]
 # Copies whatever currently exists at <dest> into the engine-computed
 # backup root before a force overwrite replaces or removes it
-# (ARCHITECTURE.md §12 D53) — the single choke point both
+# (docs/decisions-log.md D53) — the single choke point both
 # workbench_deploy_copy_file's and workbench_deploy_link_file's force
 # branches call through, so nothing that overwrites real content via
 # either path can do so unbacked-up.
@@ -212,13 +212,13 @@ workbench_deploy_copy_file() {
     # when force=true — but `cp -f` on a destination that's a symlink
     # follows it and overwrites whatever it points at, not the symlink
     # itself. For a stale `mode: link` destination migrating to `mode:
-    # copy` (ARCHITECTURE.md §12 D51), that target is the module's own
+    # copy` (docs/decisions-log.md D51), that target is the module's own
     # immutable snapshot file — silently corrupting it, not the user's
     # file, while leaving the destination still a symlink afterwards.
     # Remove the symlink first so cp always writes a real, detached file.
     [[ -L "${dest}" ]] && rm -f "${dest}"
     # Back up a real pre-existing file before a force overwrite actually
-    # changes its content (ARCHITECTURE.md §12 D53) — skipped when the
+    # changes its content (docs/decisions-log.md D53) — skipped when the
     # incoming content is byte-identical, so a re-deploy of an unchanged
     # force: true entry (e.g. workbench-git's generated direnv context
     # file, redeployed whenever that module's commit changes) never
@@ -244,7 +244,7 @@ workbench_deploy_link_file() {
     elif [[ -e "${dest}" ]]; then
         [[ "${force}" != "true" ]] && { log_warn "  ${dest} exists and is not a symlink — skipping"; return 0; }
         # rm -rf below can destroy a real file OR an entire real
-        # directory — back it up first (ARCHITECTURE.md §12 D53).
+        # directory — back it up first (docs/decisions-log.md D53).
         # Unconditional, no content comparison: replacing a real path
         # with a symlink is a type change worth preserving even when the
         # content happened to match, unlike the copy-mode case above.
@@ -299,10 +299,10 @@ workbench_deploy_module() {
         fi
     done < <(workbench_manifest_deploy_entries "${manifest}")
 
-    # ── overrides_src (ARCHITECTURE.md §12 D48) ───────────────────────────
+    # ── overrides_src (docs/decisions-log.md D48) ───────────────────────────
     # Engine-computed destination, always — never a manifest-declared
     # dest, same reasoning as register.shell[]'s engine-computed path
-    # (§12 D16). force is hardcoded "false", never read from the
+    # (docs/decisions-log.md D16). force is hardcoded "false", never read from the
     # manifest: this file is deployed once and is the user's from that
     # point on, permanently — there is deliberately no force: true
     # escape hatch for it, unlike an ordinary deploy[] entry.
@@ -320,8 +320,8 @@ workbench_deploy_module() {
 }
 
 # workbench_module_reset_targets <name>
-# Lists every deploy[] entry eligible for `wb module reset` (ARCHITECTURE.md
-# §12 D51) — one line per entry, `basename(real_dest)|src|real_dest`.
+# Lists every deploy[] entry eligible for `wb module reset`
+# (docs/decisions-log.md D51) — one line per entry, `basename(real_dest)|src|real_dest`.
 # Copy-mode only (mode: copy, or mode omitted — copy is the deploy[]
 # default): a `mode: link` destination is already kept in sync on every
 # update, so there is nothing to "reset" for it. Single-file entries only
@@ -400,7 +400,7 @@ workbench_render_register_list() {
     done < <(workbench_manifest_register_shell_entries "${manifest}")
 }
 
-# ── installers.list rendering (ARCHITECTURE.md §12 D23) ───────────────────────
+# ── installers.list rendering (docs/decisions-log.md D23) ───────────────────────
 # workbench_render_installers_list <name>
 # The tool-registry framework's discovery half: rewrites
 # <module>/installers.list from the module's manifest register.installers[]
@@ -587,8 +587,8 @@ workbench_sync_module() {
     # Checked against the newly-fetched snapshot itself, before it becomes
     # `current` — a refusal here must leave whatever was previously synced
     # (current symlink, RESOLVED_SHA) untouched, not swap unsupported
-    # content live and then merely skip re-rendering it (ARCHITECTURE.md
-    # §12 D30). Deliberately re-checked every cycle a mismatch persists
+    # content live and then merely skip re-rendering it
+    # (docs/decisions-log.md D30). Deliberately re-checked every cycle a mismatch persists
     # (RESOLVED_SHA is never advanced past it), unlike the core_api gate's
     # once-per-change frequency — going quiet on a module stuck on an
     # unsupported version would be a worse silence than a repeated log line.

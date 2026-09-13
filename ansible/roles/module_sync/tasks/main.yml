@@ -5,14 +5,14 @@
 # resolve, or deploy logic — every task here just invokes `bin/wb add`,
 # the exact same hot-path entry point a human runs directly, which in turn
 # calls the exact same lib/sync/engine.sh functions the timer calls
-# (ARCHITECTURE.md §8's "Ansible never re-implements the deploy loop
+# (docs/architecture.md §8's "Ansible never re-implements the deploy loop
 # itself," extended here from the deploy step to the fetch/distribution
 # step too, per the build brief's Phase 8).
 #
 # register.list/deploy resolution themselves are read live from each
 # module's manifest at sync time (lib/manifest/parse.sh, lib/sync/engine.sh)
 # rather than pre-rendered into separate deploy.list/hooks.list files by
-# this role — see ARCHITECTURE.md §12 for why (parse.sh is already pure
+# this role — see docs/decisions-log.md for why (parse.sh is already pure
 # bash/awk and hot-path-safe, so there is nothing left for Ansible to usefully
 # pre-flatten).
 #

@@ -20,16 +20,16 @@ WORKBENCH_CORE_SEMVER=0.1.0
 ```
 
 See `contracts/core-api.md` for what each value gates (`CORE_API_VERSION`
-is `X.Y`, not a bare integer — see ARCHITECTURE.md §12 D29).
+is `X.Y`, not a bare integer — see docs/decisions-log.md D29).
 `STATE_SCHEMA_VERSION` bumped `1` → `2` when `installers.list` (below) was
 added — purely additive, so an existing `1` value on disk is migrated to
 `2` in place by `wb install`/`wb apply` (`_workbench_migrate_state_schema`),
 never left stale. `CORE_API_VERSION` is unconditionally resynced to the
 running release's value on every `wb install`/`wb apply`
 (`_workbench_sync_version_facts`) rather than migrated — see
-`contracts/core-api.md`'s Versioning section (ARCHITECTURE.md §12 D36). A
+`contracts/core-api.md`'s Versioning section (docs/decisions-log.md D36). A
 fourth field, `MANIFEST_SCHEMA_VERSION`, previously lived here but has
-been retired as dead (ARCHITECTURE.md §12 D37) — `wb apply` strips it from
+been retired as dead (docs/decisions-log.md D37) — `wb apply` strips it from
 any existing host's file.
 
 ## Module state root
@@ -78,7 +78,7 @@ against that module's `current` snapshot, by the sync engine after every
 successful fetch, by `wb add` on initial registration, and — unconditionally,
 every run, regardless of whether anything changed — by `wb install`/`wb
 apply` for every loadable module (`_wb_converge_module_registrations`,
-`bin/wb`). This last one closed a confirmed regression (ARCHITECTURE.md §12
+`bin/wb`). This last one closed a confirmed regression (docs/decisions-log.md
 D21): a `bootstrap.sh`-driven install left it entirely unrendered, since
 neither `_wb_bootstrap_core_module`'s early-return path nor anything else in
 `wb install`/`wb apply`/`wb update` called this unconditionally before —
@@ -100,7 +100,7 @@ empty.
 
 ### `installers.list`
 
-The tool-updating framework's discovery artifact (ARCHITECTURE.md §12
+The tool-updating framework's discovery artifact (docs/decisions-log.md
 D23) — rendered at exactly the same points `register.list` is, from the
 module's manifest `register.installers[].src` entries: each declared file
 is introspected as plain text (`_extract_function_names`,
@@ -128,7 +128,7 @@ ${XDG_CONFIG_HOME:-~/.config}/workbench/user/*.sh
 ```
 
 `workbench/local/` replaces the old single-file `90-local.sh`
-(ARCHITECTURE.md §12 D22). `settings.sh` is the one reserved filename in
+(docs/decisions-log.md D22). `settings.sh` is the one reserved filename in
 that directory, keeping exactly `90-local.sh`'s old two-pass semantics:
 sourced first (so flags it sets gate later tiers) and again at the very end
 (so it wins over anything a tier also touched) — this is where the
@@ -182,7 +182,7 @@ immediately before `workbench_deploy_copy_file` or
 `workbench_deploy_link_file` overwrites or removes a real (non-symlink)
 pre-existing file or directory under `force: true` — this covers both
 `wb module reset` and any manifest `deploy[]` entry that sets
-`force: true` directly (see `ARCHITECTURE.md` §12 D53). Never written for
+`force: true` directly (see `docs/decisions-log.md` D53). Never written for
 a symlink destination — that's the engine's own pointer, never user
 content.
 
@@ -206,10 +206,10 @@ revisit only if volume ever actually becomes a problem.
 ## What is deliberately NOT here
 
 - No persistent, incrementally-`git pull`-updated working tree anywhere,
-  for any module, under any `TRACK_MODE` — see `ARCHITECTURE.md` principle
+  for any module, under any `TRACK_MODE` — see `docs/architecture.md` principle
   6 / D5. Every module directory's only `git`-shaped artifact, ever, is the
   ephemeral scratch clone `lib/distribution/fetch-git-snapshot.sh` deletes
   before the tree reaches `snapshots/`.
 - No single flat `~/.config/shell/` (or equivalent) root — every module
   gets its own `snapshots/`/`current`, and the loader enumerates all of them
-  (`ARCHITECTURE.md` §3).
+  (`docs/architecture.md` §3).

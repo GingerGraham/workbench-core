@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/check-prompt-reset-on-reload.sh — ARCHITECTURE.md §12 D50
+# tests/check-prompt-reset-on-reload.sh — docs/decisions-log.md D50
 # acceptance check.
 #
 # Two synthetic prompt-owning modules, each appending to PROMPT_COMMAND

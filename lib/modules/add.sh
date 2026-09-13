@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lib/modules/add.sh — `wb add` (ARCHITECTURE.md §9/§10).
+# lib/modules/add.sh — `wb add` (docs/architecture.md §9/§10).
 #
 # Hot-path registration: writes sync.conf, bootstraps SSH if private, then
 # runs one real sync cycle immediately (workbench_sync_module) — the exact

@@ -4,7 +4,7 @@
 # Ported from workbench-precursor's install.sh Phase 3 (generate_deploy_key,
 # _write_ssh_host_entry, ensure_ssh_config_include, setup_ssh_keys),
 # generalised from a fixed EXTERNAL_REPO_* array collected interactively to
-# any currently-registered private module (ARCHITECTURE.md §3/D1). This now
+# any currently-registered private module (docs/architecture.md §3/D1). This now
 # serves two purposes, not the original one: the original bootstrap use case
 # (a private repo needs a deploy key before anything can sync it at all),
 # and it is the direct dependency of Phase 5's private-repo distribution

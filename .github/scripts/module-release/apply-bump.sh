@@ -5,7 +5,7 @@
 # rewrite only -- no per-file version bump, no VERSION file (the release
 # branch name release/v<version> carries the version; module-release-
 # finalize.yml reads it back from there rather than from a repo-local
-# VERSION file, ARCHITECTURE.md S12 D40). Gated on a non-empty CHANGELOG
+# VERSION file, docs/decisions-log.md D40). Gated on a non-empty CHANGELOG
 # [Unreleased] section.
 #
 # <overall-line> is compute-bump.sh's own `OVERALL|<old>|<new>|<sev>|<reason>`

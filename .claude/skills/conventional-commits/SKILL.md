@@ -34,7 +34,7 @@ before you write the message, not after.
 3. **Unsure?** Omit the scope. Auto-detection is always safe; an explicit
    scope is never required for a bump to happen.
 
-## The failure mode this exists to prevent (real incident: PR #58/#59, ARCHITECTURE.md §12 D55)
+## The failure mode this exists to prevent (real incident: PR #58/#59, docs/decisions-log.md D55)
 
 ```
 feat(core): backup-before-overwrite for force copy/link deploys
@@ -69,7 +69,7 @@ This repo squash-merges every PR. GitHub's squash commit message is the PR
 `type[(scope)][!]: subject` grammar, and the same `core`-vs-registered-file
 rule above applies to it, checked against the PR's overall diff. A
 perfectly-formatted commit inside a badly-titled PR still lands on `main`
-unparseable (ARCHITECTURE.md §12 D47).
+unparseable (docs/decisions-log.md D47).
 
 ## Before opening the PR
 
@@ -87,5 +87,5 @@ unparseable (ARCHITECTURE.md §12 D47).
       one.
 
 Full rationale and the release pipeline's mechanics:
-`docs/release-process.md`. Decision history: `ARCHITECTURE.md` §12 (D27,
+`docs/release-process.md`. Decision history: `docs/decisions-log.md` (D27,
 D42, D47, D55).

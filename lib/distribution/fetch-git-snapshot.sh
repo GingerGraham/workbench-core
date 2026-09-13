@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # lib/distribution/fetch-git-snapshot.sh — shallow-clone-and-discard.
 #
-# ARCHITECTURE.md §9.1/D5: used for (a) any private repo, every TRACK_MODE,
+# docs/architecture.md §9.1/D5: used for (a) any private repo, every TRACK_MODE,
 # via the SSH deploy key from Phase 6, and (b) any branch:-tracked repo,
 # public or private, re-run fresh on every sync cycle. Either way the
 # result is the same as the tarball path: an immutable, atomic snapshot —
 # `git` is transport only, never a persisted incrementally-pulled working
 # tree, and `.git` is discarded before the tree ever reaches snapshots/.
 #
-# Form used (ARCHITECTURE.md §12 D12): `git init` + `git remote add` +
+# Form used (docs/decisions-log.md D12): `git init` + `git remote add` +
 # `git fetch --depth 1 origin <ref>` + `git checkout FETCH_HEAD`, rather than
 # `git clone --depth 1 --branch <ref>` directly — this form works uniformly
 # whether <ref> is a branch name, a tag, or a full commit sha. A depth-1

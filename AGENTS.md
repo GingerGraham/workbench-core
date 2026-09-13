@@ -7,16 +7,20 @@ repository-root `AGENTS.md`. Keep this file itself short; put anything
 substantial in the documents it points to, not here — this repo already
 has a stated principle for that ("The Claude Project's own instructions
 stay short and point here rather than duplicating it",
-`ARCHITECTURE.md` preamble), and this file follows the same rule.
+`docs/architecture.md` preamble), and this file follows the same rule.
 
 ## Read first
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — full design rationale, repo
-  topology, and the §12 decisions log. Read this, and specifically
-  check §12, before proposing or making anything that touches repo
-  structure, the manifest schema, or the sync engine. Log a new
-  decision there (never rewrite an existing one) rather than letting an
-  implementation drift from what's documented.
+- [`docs/architecture.md`](docs/architecture.md) — full design rationale,
+  repo topology, and rollout plan. Read this before proposing or making
+  anything that touches repo structure, the manifest schema, or the
+  sync engine.
+- [`docs/decisions-log.md`](docs/decisions-log.md) — the full, numbered
+  decisions log referenced from `docs/architecture.md` §12. Check it
+  before proposing or making anything that touches repo structure, the
+  manifest schema, or the sync engine. Log a new decision there (never
+  rewrite an existing one) rather than letting an implementation drift
+  from what's documented.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — dev setup, commit/CHANGELOG
   discipline, the PR checklist.
 - [`docs/release-process.md`](docs/release-process.md) — the exact
@@ -41,7 +45,7 @@ than silently reinterpreting one of these away:
 - **Destinations for module-authored content are always
   engine-computed**, never left to the module author to specify — this
   is a trust-boundary property, not a style preference
-  (`ARCHITECTURE.md` principle 1).
+  (`docs/architecture.md` principle 1).
 - **One generalised sync/install engine.** Core is "module zero," not a
   special case; a new bundle or capability is sugar over the engine,
   never a hardcoded branch inside it.
@@ -49,7 +53,7 @@ than silently reinterpreting one of these away:
   permanent and unchanged. `version: 2` (`workbench.yml`/`workbench.yaml`/
   `wb.yml`/`wb.yaml`) is the preferred name for new/migrating repos,
   carrying the identical field set — filename and version are a bound
-  pair; see `ARCHITECTURE.md` §12 D46.
+  pair; see `docs/decisions-log.md` D46.
 - **`dotfiles` (the original monolith) is frozen at `v1.10.0`** — no
   feature work or refactors there; it auto-deploys unattended via a
   live timer on a real machine. `workbench-precursor` is a

@@ -56,7 +56,7 @@ echo "[]" > "${WORK}/tags-empty.json"
 # Deliberately mixed set: v1.9.0 vs v1.10.0 is the naive-lexical-sort trap
 # ("9" > "1" as a bare string compare would wrongly pick v1.9.0); v1.10.0
 # is the correct numeric winner. v1.10.0-rc1 is a pre-release and must be
-# excluded from `latest` resolution entirely (ARCHITECTURE.md §9.2).
+# excluded from `latest` resolution entirely (docs/architecture.md §9.2).
 cat > "${WORK}/tags-mixed.json" <<'EOF'
 [
   {"name":"v1.10.0-rc1","commit":{"sha":"1111111111111111111111111111111111111111"}},

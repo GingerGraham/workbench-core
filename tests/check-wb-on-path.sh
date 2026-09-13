@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/check-wb-on-path.sh — verifies `wb` is exposed on PATH after
 # install/apply (bin/wb was never symlinked anywhere on PATH; see
-# ARCHITECTURE.md §12 D19).
+# docs/decisions-log.md D19).
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

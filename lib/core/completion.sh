@@ -3,7 +3,7 @@
 #
 # Generates bash/zsh tab-completion scripts for the 'wb' CLI itself
 # (Phase 1: top-level subcommand completion only — no argument-level
-# completion of module/tool/bundle names yet; see ARCHITECTURE.md §12
+# completion of module/tool/bundle names yet; see docs/decisions-log.md
 # D44 for the follow-up this deliberately defers). Command names are
 # never hand-maintained here: they're introspected straight out of
 # bin/wb's own dispatch case statement, the same plain-text-introspection
@@ -78,7 +78,7 @@ _wb_completion_subdispatch_commands() {
 
 # _wb_cmd_complete <kind>
 # Hidden, internal-only fast path consumed by the generated bash/zsh
-# completion scripts at keystroke time (Phase 2, ARCHITECTURE.md §12
+# completion scripts at keystroke time (Phase 2, docs/decisions-log.md
 # D54) — never meant to be typed by a person, and deliberately absent
 # from any help text. An identifier starting with '_' can't match
 # _wb_completion_dispatch_commands' own '[a-z]'-leading regex, so
@@ -287,7 +287,7 @@ _wb_cmd_completion() {
             return 2
             ;;
         *)
-            log_error "wb completion: unsupported shell '${shell}' — only bash and zsh are supported (ARCHITECTURE.md D4: no Windows/PowerShell)"
+            log_error "wb completion: unsupported shell '${shell}' — only bash and zsh are supported (docs/architecture.md D4: no Windows/PowerShell)"
             return 2
             ;;
     esac

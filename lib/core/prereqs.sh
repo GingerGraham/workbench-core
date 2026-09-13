@@ -2,7 +2,7 @@
 # lib/core/prereqs.sh — prerequisite detection and (optional) installation
 # for `wb install`.
 #
-# Confirmed gap fixed here (ARCHITECTURE.md §7 item 1, build brief §2/Phase
+# Confirmed gap fixed here (docs/architecture.md §7 item 1, build brief §2/Phase
 # 1): the donor codebase's install.sh only ever checked git/python3/
 # ansible-core — awk (a hard dependency of dedupe-path() and the host-vars
 # reader) was never checked at all, and is confirmed absent on minimal
@@ -10,7 +10,7 @@
 # function or the distribution engine calls.
 #
 # Two independent lists, checked separately, because they gate different
-# things (ARCHITECTURE.md §8):
+# things (docs/architecture.md §8):
 #   - shell prereqs   — needed for the Core API library and the hot sync
 #     path (register.shell/loader/wb add/wb track/timer). Required always.
 #   - convergence prereqs (python3, ansible-core) — needed only for the
@@ -137,7 +137,7 @@ workbench_install_shell_prereqs() {
 
 # workbench_check_convergence_prereqs
 # Checks python3 >= 3.9 and ansible-core >= 2.14 — needed only for
-# `wb install`/`wb apply`, never for the hot/unattended path (ARCHITECTURE.md
+# `wb install`/`wb apply`, never for the hot/unattended path (docs/architecture.md
 # §8). Prints the count of unmet requirements.
 workbench_check_convergence_prereqs() {
     local unmet=0

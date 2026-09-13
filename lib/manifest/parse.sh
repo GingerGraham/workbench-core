@@ -26,7 +26,7 @@ command -v _workbench_register_script_version &>/dev/null && _workbench_register
 # _WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED — that script runs standalone
 # without this file loaded; this constant is the hot-path's own answer to
 # "what do I actually know how to process," checked live at sync time
-# rather than at manifest-authoring time. See ARCHITECTURE.md §12 D30/D46.
+# rather than at manifest-authoring time. See docs/decisions-log.md D30/D46.
 _WB_MANIFEST_SCHEMA_VERSIONS_SUPPORTED="1 2"
 
 # _wb_manifest_schema_supported <version>
@@ -42,7 +42,7 @@ _wb_manifest_schema_supported() {
 # The manifest filenames this running core will discover, in the order
 # they are checked. .dotfiles-sync.yml is always last and is never
 # sniff-checked below — it has been the trusted, permanent name since
-# before this function existed (ARCHITECTURE.md §5.2). See §12 D46.
+# before this function existed (docs/architecture.md §5.2). See docs/decisions-log.md D46.
 _WB_MANIFEST_CANDIDATE_NAMES="workbench.yml workbench.yaml wb.yml wb.yaml .dotfiles-sync.yml"
 
 # workbench_resolve_manifest_path <dir>

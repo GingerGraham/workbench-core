@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/check-scheduler-install.sh — ARCHITECTURE.md §12 D38 acceptance
+# tests/check-scheduler-install.sh — docs/decisions-log.md D38 acceptance
 # check: default-off behaviour, the enable/disable/status command family,
 # and the upgrade-safety migration for a pre-existing Ansible-era timer.
 set -uo pipefail

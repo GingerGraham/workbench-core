@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # lib/modules/sync-toggle.sh — `wb sync enable|disable [<name>]`
-# (ARCHITECTURE.md §9.7/§10). Independent of TRACK_MODE — toggling this
+# (docs/architecture.md §9.7/§10). Independent of TRACK_MODE — toggling this
 # never changes what a module tracks, only whether the timer/bulk
 # `wb update` touches it. No argument means core's own toggle (module zero,
 # no special-casing beyond "core" being the default name).

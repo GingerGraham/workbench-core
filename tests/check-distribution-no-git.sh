@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/check-distribution-no-git.sh — Phase 5a acceptance check.
 #
-# ARCHITECTURE.md §9.1/D5: a public repo's fetch, any TRACK_MODE, must never
+# docs/architecture.md §9.1/D5: a public repo's fetch, any TRACK_MODE, must never
 # invoke `git`. Proven by scrubbing `git` from PATH entirely and confirming
 # the fetch still succeeds. Requires network access to codeload.github.com;
 # skips (not fails) if that's unreachable, since some execution

@@ -8,7 +8,7 @@ on:
     # title changes — without it, a title edited after the check last ran
     # (in either direction: fixed post-open, or broken pre-merge after
     # passing) leaves a stale result instead of re-validating what will
-    # actually become the squash commit's subject (ARCHITECTURE.md §12 D47).
+    # actually become the squash commit's subject (docs/decisions-log.md D47).
     types: [opened, edited, synchronize, reopened]
 
 jobs:
@@ -40,9 +40,9 @@ jobs:
       # message uses the PR *title* as the resulting commit's subject —
       # not any individual commit's message. An unparseable title silently
       # drops that merge's release severity even when every commit inside
-      # the PR was itself correctly formatted (ARCHITECTURE.md §12 D47).
+      # the PR was itself correctly formatted (docs/decisions-log.md D47).
       # Also checked here: a 'core'-scoped title whose PR diff touches a
-      # registered file (ARCHITECTURE.md §12 D55) — needs fetch-depth: 0
+      # registered file (docs/decisions-log.md D55) — needs fetch-depth: 0
       # so BASE_SHA/HEAD_SHA are both reachable for the diff.
       # PR_TITLE is untrusted, contributor-controlled text, so it's passed
       # through env indirection rather than interpolated into `run:`.

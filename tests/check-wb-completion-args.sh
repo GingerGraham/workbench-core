@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/check-wb-completion-args.sh — Phase 2 'wb completion' acceptance
-# check (ARCHITECTURE.md §12 D54): sub-command completion for each
+# check (docs/decisions-log.md D54): sub-command completion for each
 # command group, and argument-level completion against what's actually
 # registered/cataloged/discovered on this host via the hidden
 # 'wb __complete <kind>' dispatcher. Kept as a sibling of

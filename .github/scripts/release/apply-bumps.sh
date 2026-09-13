@@ -9,7 +9,7 @@
 #
 # A no-op (exit 0, nothing written) when the plan's OVERALL severity is
 # "none" — so this is always safe to call, even if the caller's own gate
-# didn't already skip it. ARCHITECTURE.md §12 D27.
+# didn't already skip it. docs/decisions-log.md D27.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

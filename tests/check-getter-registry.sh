@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/check-getter-registry.sh — Phase 9 acceptance check.
 #
-# ARCHITECTURE.md §3/§5: get-functions/get-installers/domain getters are
+# docs/architecture.md §3/§5: get-functions/get-installers/domain getters are
 # driven by each registered module's register.getters[] declarations, not a
 # hardcoded registry inside core. Verified two ways: (1) `wb functions`
 # lists a getter declared by a synthetic module with no core code change,

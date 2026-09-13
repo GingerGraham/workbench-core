@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lib/distribution/resolve.sh — ref -> commit resolution.
 #
-# ARCHITECTURE.md §9.1/D5: public repos resolve via GitHub's unauthenticated
+# docs/architecture.md §9.1/D5: public repos resolve via GitHub's unauthenticated
 # API (no git anywhere in this path); private repos and any branch:-tracked
 # repo (public or private) resolve via `git ls-remote` — cheap, read-only,
 # does not require the full shallow-clone-and-discard fetch just to answer
@@ -40,7 +40,7 @@ workbench_parse_github_url() {
 # without one is rejected outright, independent of rate limiting). Prints
 # the response body on stdout; returns non-zero on any failure (network,
 # 4xx/5xx, rate limit) without ever calling exit — callers treat resolution
-# failure as "skip this cycle, retry later" (ARCHITECTURE.md §9.4's
+# failure as "skip this cycle, retry later" (docs/architecture.md §9.4's
 # rate-limit note), never fatal.
 _wb_gh_curl() {
     curl -fsSL -H "Accept: application/vnd.github+json" -A "workbench-core" "$1" 2>/dev/null
@@ -49,7 +49,7 @@ _wb_gh_curl() {
 # _wb_gh_tags_json <owner> <repo>
 # Raw JSON body of the tags list (single page, up to 100 — see the
 # per-page note in contracts/tracking-spec.md; sufficient for personal-scale
-# repos, and consistent with ARCHITECTURE.md §9.4's documented decision not
+# repos, and consistent with docs/architecture.md §9.4's documented decision not
 # to pre-engineer around GitHub's rate limit further than needed).
 _wb_gh_tags_json() {
     local owner="$1" repo="$2"
@@ -120,7 +120,7 @@ workbench_resolve_branch_public() {
 # workbench_resolve_commit_public <owner> <repo> <sha>
 # Verifies (does not "resolve" — the ref already is a commit) that <sha>
 # exists upstream. Prints <sha> back on success. This is the defensive,
-# not-normally-expected check ARCHITECTURE.md §9.2 describes for
+# not-normally-expected check docs/architecture.md §9.2 describes for
 # commit:<sha> pins.
 workbench_resolve_commit_public() {
     local owner="$1" repo="$2" sha="$3" body
@@ -132,7 +132,7 @@ workbench_resolve_commit_public() {
 
 # ── Private / dev (git ls-remote) resolution ─────────────────────────────────
 # Cheap, read-only — no clone. Used for any private repo (all track modes)
-# and any branch:-tracked repo, public or private (ARCHITECTURE.md §9.1).
+# and any branch:-tracked repo, public or private (docs/architecture.md §9.1).
 
 # workbench_resolve_branch_ls_remote <git_url> <branch>
 workbench_resolve_branch_ls_remote() {
@@ -161,7 +161,7 @@ workbench_resolve_tag_ls_remote() {
 # the full tag ref list via `git ls-remote --tags` instead of the GitHub
 # API — works for any git host, not just GitHub, which matters here because
 # private independent tools are not required to be on GitHub specifically
-# even though the tarball-only public path is (ARCHITECTURE.md §9.1 ties
+# even though the tarball-only public path is (docs/architecture.md §9.1 ties
 # the no-git path to GitHub's codeload specifically; the private path has no
 # such constraint).
 workbench_resolve_latest_tag_ls_remote() {

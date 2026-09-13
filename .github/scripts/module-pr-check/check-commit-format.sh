@@ -3,8 +3,8 @@
 #
 # Module-repo simplification of core's own
 # .github/scripts/release/check-commit-format.sh: module repos carry no
-# _workbench_register_script_version per-file convention (ARCHITECTURE.md
-# S12 D40), so there is no basis to exempt any commit on content grounds --
+# _workbench_register_script_version per-file convention
+# (docs/decisions-log.md D40), so there is no basis to exempt any commit on content grounds --
 # every non-merge commit in the PR's range must parse as a Conventional
 # Commit, full stop. Merge commits ARE exempt (see below) since they're not
 # something a contributor writes by hand.

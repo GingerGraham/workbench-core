@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # .github/scripts/module-release/lib.sh -- shared primitives for the
-# module-repo release pipeline (ARCHITECTURE.md S12 D40). Deliberately a
+# module-repo release pipeline (docs/decisions-log.md D40). Deliberately a
 # separate, smaller copy of core's own .github/scripts/release/lib.sh
 # rather than a re-source of it: that file's REPO_ROOT/registered-file
 # machinery is wired to core's own bin/lib tree and its per-file
