@@ -14,6 +14,14 @@ All notable changes to `workbench-core` are documented here.
   module repo now carries, porting this repo's own D32 topology across
   the ecosystem. See `docs/decisions-log.md` D58.
 
+- **Canonical repo-governance templates for module repos.**
+  `docs/module-authoring.md` gains a new "Governance files for module
+  repos" section holding the seven files (`.github/PULL_REQUEST_TEMPLATE.md`,
+  three `.github/ISSUE_TEMPLATE/*.yml`, `.github/CODEOWNERS`,
+  `CONTRIBUTING.md`, `SECURITY.md`) every `workbench-*` module repo now
+  carries, porting this repo's own D31 governance-file topology across
+  the ecosystem. See `docs/decisions-log.md` D60.
+
 ## [2.8.0] - 2026-09-14
 
 ### Added
