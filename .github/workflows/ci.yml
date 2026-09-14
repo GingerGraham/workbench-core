@@ -70,3 +70,24 @@ jobs:
           name: test-output-${{ matrix.os }}
           path: test-output.log
           if-no-files-found: warn
+
+  secrets-scan:
+    name: secrets (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/scan-secrets
+
+  malware-scan:
+    name: malware (clamav)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/scan-malware
+
+  pattern-scan:
+    name: dangerous patterns
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/scan-patterns

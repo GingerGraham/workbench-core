@@ -1,0 +1,4 @@
+curl[^|]*\|\s*(sudo\s+)?(bash|sh)\b	remote script piped directly into a shell — fetch, verify, then execute instead
+wget[^|]*\|\s*(sudo\s+)?(bash|sh)\b	remote script piped directly into a shell — fetch, verify, then execute instead
+chmod\s+(-R\s+)?0?777\b	world-writable permissions
+chmod\s+(-R\s+)?a\+w\b	world-writable permissions
