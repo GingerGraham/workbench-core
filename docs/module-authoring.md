@@ -496,8 +496,8 @@ agent working in this repo — Claude Code reads it via `CLAUDE.md`'s
 repository-root `AGENTS.md`. Keep this file itself short; anything
 substantial belongs in the docs it points to.
 
-This is a `workbench` ecosystem module — meaningless standalone. It
-exists to be installed by `workbench-core`'s `wb add <module>`.
+This is a `workbench` ecosystem module — it's meaningless standalone.
+It exists to be installed by `workbench-core`'s `wb add <module>`.
 
 ## Read first
 
@@ -618,7 +618,8 @@ description: Use before writing any commit message or PR title in this module re
 
 # Conventional Commits & PR titles — workbench module repos
 
-This repo's release pipeline (`module-release.yml`, `workbench-core`'s
+This repo's release pipeline (its own thin `.github/workflows/release.yml`,
+calling `workbench-core`'s reusable `module-release.yml` and
 `.github/scripts/module-release/`) parses every commit and the PR title
 as a Conventional Commit and takes the highest severity of any commit
 since the last tag. There's a single overall module version — no
