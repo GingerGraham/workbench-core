@@ -10,9 +10,9 @@ set -euo pipefail
 rules_file="${1:?usage: pattern-scan.sh <rules-file>}"
 failed=0
 
-while IFS=$'\t' read -r pattern description; do
+while IFS=$'\t' read -r pattern description || [[ -n "${pattern}" ]]; do
     [[ -z "${pattern}" || "${pattern}" == \#* ]] && continue
-    while IFS=: read -r file line_no line; do
+    while IFS=: read -r file line_no line || [[ -n "${file:-}" ]]; do
         [[ -z "${file:-}" ]] && continue
         [[ "${line}" == *"pattern-scan:ignore"* ]] && continue
         echo "::error file=${file},line=${line_no}::${description} (matched: ${pattern})"
