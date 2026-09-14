@@ -48,6 +48,29 @@ namespace, a way to get arbitrary content sourced without going through
 `register:`, a gap in the no-`git`-in-production guarantee — that's
 exactly what this policy wants reported privately first.
 
+## Automated PR checks
+
+Every pull request to `workbench-core` and to the eleven canonical
+`workbench-*` module repos runs three automated checks before merge:
+
+- **Secrets** (gitleaks) — hardcoded credentials, tokens, keys.
+- **Malware signatures** (clamav) — known-malicious content via ClamAV's
+  signature database.
+- **Dangerous shell patterns** — a maintained list of known-bad
+  constructs (remote-pipe-to-shell, world-writable permissions, etc),
+  shipped from `workbench-core` (`.github/actions/scan-*`) so every
+  module stays on the same list.
+
+These run alongside the existing shellcheck lint and structural tests
+already required on every PR. See `docs/decisions-log.md` D59.
+
+This pipeline only runs against code in these twelve repos. It says
+nothing about modules obtained from anywhere else. workbench has no
+community module submission or validation pipeline (deliberately, for
+now) — installing a module written outside these repos means reviewing
+that code yourself first, the same as installing any unaudited script
+from the internet.
+
 ## Out of scope
 
 The frozen `dotfiles` repo (`v1.10.0`, no further feature work) isn't
