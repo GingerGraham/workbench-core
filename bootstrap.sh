@@ -16,9 +16,9 @@
 # don't let it grow beyond that.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh | bash  # pattern-scan:ignore -- documented install command in a comment, not executed code
 #   curl -fsSLO https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh && bash bootstrap.sh
-#   curl -fsSL .../bootstrap.sh | bash -s -- --bundle <name>   # args pass through to `wb install`
+#   curl -fsSL .../bootstrap.sh | bash -s -- --bundle <name>   # args pass through to `wb install`  # pattern-scan:ignore -- documented install command in a comment, not executed code
 #
 # More cautious than piping straight to bash? Download first, read it, then
 # run it: `curl -fsSLO .../bootstrap.sh && less bootstrap.sh && bash bootstrap.sh`
