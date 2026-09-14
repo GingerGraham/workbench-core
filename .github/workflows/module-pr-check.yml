@@ -63,8 +63,12 @@ jobs:
     needs: resolve-core-ref
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout calling repo
-        uses: actions/checkout@v7
+      # No checkout of the calling repo -- unlike commit-format (which
+      # walks commits in the calling repo's own history) and unlike core's
+      # own pr-title-format job (which diffs base/head for the
+      # core-scope-vs-registered-file rule, D55), the module-repo check is
+      # grammar-only against PR_TITLE alone (D40 -- no scope resolution to
+      # diff against), so there's nothing here for a checkout to provide.
 
       # This repo squash-merges PRs, and GitHub's default squash commit
       # message uses the PR *title* as the resulting commit's subject --
