@@ -512,8 +512,9 @@ It exists to be installed by `workbench-core`'s `wb add <module>`.
   documented.
 - [`workbench-core`'s `docs/module-authoring.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/module-authoring.md) —
   the manifest contract: what `register:`, `deploy:`, and `hooks:` in
-  this repo's manifest can and can't do, and what `module-ci.yml`'s
-  "add to core" check actually verifies.
+  this repo's manifest can and can't do, and what `workbench-core`'s
+  reusable `module-ci.yml` "add to core" check (called from this repo's
+  own `.github/workflows/ci.yml`) actually verifies.
 - [`README.md`](README.md) — what this module actually installs/gives
   you.
 - [`.claude/skills/conventional-commits/SKILL.md`](.claude/skills/conventional-commits/SKILL.md) —
@@ -565,6 +566,9 @@ so this is a deliberate, maintained duplicate — see `workbench-core`'s
 canonical, current version; if the two ever disagree, update this file
 to match it rather than treating the drift as acceptable.
 
+This is a `workbench` ecosystem module — it's meaningless standalone.
+It exists to be installed by `workbench-core`'s `wb add <module>`.
+
 ## Read first
 
 - [`workbench-core`'s `docs/architecture.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/architecture.md) —
@@ -578,14 +582,18 @@ to match it rather than treating the drift as acceptable.
   documented.
 - [`workbench-core`'s `docs/module-authoring.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/module-authoring.md) —
   the manifest contract: what `register:`, `deploy:`, and `hooks:` in
-  this repo's manifest can and can't do, and what `module-ci.yml`'s
-  "add to core" check actually verifies.
+  this repo's manifest can and can't do, and what `workbench-core`'s
+  reusable `module-ci.yml` "add to core" check (called from this repo's
+  own `.github/workflows/ci.yml`) actually verifies.
 - [`README.md`](../README.md) — what this module actually
   installs/gives you.
 - [`.claude/skills/conventional-commits/SKILL.md`](../.claude/skills/conventional-commits/SKILL.md) —
   read before writing any commit message or PR title in this repo.
 
 ## Non-negotiables
+
+These hold regardless of how a request is phrased — flag back rather
+than silently reinterpreting one of these away:
 
 - **Bash 3.2 compatible**: everything under `shell/`, `hooks/`,
   `tests/`. No associative arrays, no `${var,,}`/`${var^^}`, no
@@ -646,8 +654,10 @@ PR *title*, not any individual commit's message — so the title needs
 `type[(scope)][!]: subject` grammar too. A perfectly-formatted commit
 inside a badly-titled PR still lands on `main` unparseable, and that
 merge's severity is silently dropped — no version bump, no release, for
-a real change. `pr-check.yml`'s "PR title format" job catches this
-before merge; don't rely on it as the first time you check the title.
+a real change. This repo's own `.github/workflows/pr-check.yml`
+(`commit-format` job, calling `workbench-core`'s reusable
+`module-pr-check.yml`) catches this before merge; don't rely on it
+as the first time you check the title.
 
 ## Before opening the PR
 
