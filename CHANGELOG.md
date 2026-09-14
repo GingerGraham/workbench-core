@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-09-14
+
 ### Added
 
 - **`module-pr-check.yml` gains a "PR title format" job.** Module repos
