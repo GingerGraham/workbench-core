@@ -718,7 +718,25 @@ Two path lists below (the PR template's `shellcheck` line and
 `module-ci.yml` lint job (which globs `shell/**/*.sh hooks/*.sh` —
 `tests/*.sh` is deliberately excluded from shellcheck, run instead
 under "structural tests"). Adjust a specific repo's copy if its layout
-genuinely differs — don't carry that assumption forward silently.
+genuinely differs — don't carry that assumption forward silently. The
+PR template's `shellcheck` line uses `find shell hooks -name '*.sh'
+-exec shellcheck {} +` rather than `module-ci.yml`'s own
+`shell/**/*.sh` glob: `**` needs Bash's `globstar` enabled (which
+`module-ci.yml` does via `shopt -s globstar` before it globs, running
+on a modern Actions-runner Bash) and isn't available in Bash 3.2 at
+all, so a contributor pasting the glob form into their own shell can
+silently shellcheck fewer files than CI does, or nothing at all — a
+correctness gap `find` doesn't have (caught by automated review during
+the ten-repo batch rollout). Drop `hooks` from the `find` invocation
+for a repo with no `hooks/` directory, same as the `feature_request.yml`
+option above.
+`.github/ISSUE_TEMPLATE/feature_request.yml`'s "Area" dropdown has the
+same assumption baked into its "Hooks (hooks.post_deploy)" option:
+drop that option for a
+repo with no `hooks/` directory and no `hooks:` declared in its
+manifest (caught by automated review during the ten-repo batch
+rollout — nine of the eleven module repos turned out not to have
+`hooks/` at all, only `workbench-git` and `workbench-ssh` do).
 
 ### `.github/PULL_REQUEST_TEMPLATE.md`
 
@@ -750,7 +768,7 @@ genuinely differs — don't carry that assumption forward silently.
       a release with an empty one.
 - [ ] `tests/check-*.sh` pass locally, if this module has any, and a
       new/updated suite exists if behaviour changed.
-- [ ] `shellcheck shell/**/*.sh hooks/*.sh` is clean.
+- [ ] `find shell hooks -name '*.sh' -exec shellcheck {} +` is clean.
 - [ ] Everything under `shell/`, `hooks/`, `tests/` stays Bash 3.2
       compatible — see [`CONTRIBUTING.md`](../CONTRIBUTING.md#bash-32-compatibility).
 - [ ] If this touches repo structure, the manifest schema, or the sync
