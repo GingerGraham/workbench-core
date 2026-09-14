@@ -681,7 +681,7 @@ D31, D60): `.github/PULL_REQUEST_TEMPLATE.md`, three
 `feature_request.yml`, `config.yml`), `.github/CODEOWNERS`,
 `CONTRIBUTING.md`, and `SECURITY.md`.
 
-Two differences from core's own versions, not oversights:
+Three differences from core's own versions, not oversights:
 
 - **No `module_proposal.yml`.** Proposing a brand-new `workbench-*`
   module is a decision about `workbench-core`'s own catalog — it
