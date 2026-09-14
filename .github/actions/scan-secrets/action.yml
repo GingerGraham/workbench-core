@@ -1,0 +1,28 @@
+name: Scan for secrets
+description: >
+  Runs gitleaks against the checked-out working tree (not git history) to
+  catch hardcoded credentials before merge. CLI installed directly rather
+  than gitleaks-action, which requires a paid GITLEAKS_LICENSE for
+  organization accounts — irrelevant today, but this avoids ever depending
+  on it. See docs/decisions-log.md D59.
+runs:
+  using: composite
+  steps:
+    - name: Install gitleaks
+      shell: bash
+      env:
+        # Verify this is still current at https://github.com/gitleaks/gitleaks/releases
+        GITLEAKS_VERSION: "8.30.1"
+      run: |
+        set -euo pipefail
+        tmp="$(mktemp -d)"
+        cd "${tmp}"
+        curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+        curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+        sha256sum --ignore-missing -c "gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+        tar -xzf "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks
+        sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+
+    - name: Run gitleaks against working tree
+      shell: bash
+      run: gitleaks detect --source "${GITHUB_WORKSPACE}" --no-git --redact -v

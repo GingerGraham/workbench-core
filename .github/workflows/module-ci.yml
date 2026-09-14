@@ -185,3 +185,24 @@ jobs:
           name: add-to-core-${{ matrix.os }}
           path: add-to-core-output.log
           if-no-files-found: warn
+
+  secrets-scan:
+    name: secrets (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: GingerGraham/workbench-core/.github/actions/scan-secrets@main
+
+  malware-scan:
+    name: malware (clamav)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: GingerGraham/workbench-core/.github/actions/scan-malware@main
+
+  pattern-scan:
+    name: dangerous patterns
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: GingerGraham/workbench-core/.github/actions/scan-patterns@main

@@ -1,0 +1,13 @@
+name: Scan for dangerous shell patterns
+description: >
+  Greps this repo's tracked shell content against a maintained list of
+  known-dangerous patterns (remote-pipe-to-shell, world-writable
+  permissions, etc), shipped centrally so every module stays on the same
+  list. Complements shellcheck, which checks correctness more than intent.
+  See docs/decisions-log.md D59.
+runs:
+  using: composite
+  steps:
+    - name: Run pattern scan
+      shell: bash
+      run: bash "${{ github.action_path }}/pattern-scan.sh" "${{ github.action_path }}/dangerous-patterns.txt"
