@@ -4,6 +4,16 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Canonical agent-instruction templates for module repos.**
+  `docs/module-authoring.md` gains a new "Agent instructions for module
+  repos" section holding the four files (`AGENTS.md`, `CLAUDE.md`,
+  `.github/copilot-instructions.md`,
+  `.claude/skills/conventional-commits/SKILL.md`) every `workbench-*`
+  module repo now carries, porting this repo's own D32 topology across
+  the ecosystem. See `docs/decisions-log.md` D58.
+
 ## [2.8.0] - 2026-09-14
 
 ### Added

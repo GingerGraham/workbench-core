@@ -17,12 +17,19 @@ and shell loader.
 - [Hooks](#hooks)
 - [Dev-mode disk duplication (read this before filing a "bug")](#dev-mode-disk-duplication)
 - [Testing your manifest](#testing-your-manifest)
+- [Agent instructions for module repos](#agent-instructions-for-module-repos)
 
 ## Do you need this at all?
 
 No — a repo with no manifest at all is a valid clone-only mirror. You only
 need a manifest if you want `workbench-core` to deploy files, register
 shell functions, or run a hook for you.
+
+New module repo? [Agent instructions for module repos](#agent-instructions-for-module-repos)
+below holds the four canonical files (`AGENTS.md`, `CLAUDE.md`,
+`.github/copilot-instructions.md`, `.claude/skills/conventional-commits/SKILL.md`)
+every `workbench-*` module carries — copy from there, not from another
+module's tree, so all of them stay in sync.
 
 ## The manifest
 
@@ -449,3 +456,217 @@ Release automation (`.github/workflows/release.yml` /
 `module-release-finalize.yml`) mirrors core's own propose-PR-then-finalize
 release pipeline, but bumps only your repo's overall version/tag — module
 repos have no per-file script version to bump individually.
+
+## Agent instructions for module repos
+
+Every `workbench-*` module repo carries the same four agent-instruction
+files, ported from this repo's own topology (`docs/decisions-log.md`
+D32, D58): `AGENTS.md` is the canonical, tool-agnostic entry point;
+`CLAUDE.md` is a one-line `@AGENTS.md` import (Claude Code doesn't
+auto-discover a root `AGENTS.md`); `.github/copilot-instructions.md` is
+a maintained duplicate (Copilot's various surfaces don't uniformly
+discover the root file either); and
+`.claude/skills/conventional-commits/SKILL.md` is a module-scoped skill
+covering this repo's own Conventional Commit grammar and PR-title
+rules.
+
+Module repos need neither a second `.github/instructions/*.instructions.md`
+split (that exists in `workbench-core` only because core carries its own
+`.github/scripts/**`, which is bash-4+-exempt — module repos check
+core's scripts out at CI-time instead of committing anything
+script-shaped locally) nor local relative doc links (a module's
+`AGENTS.md` points at `workbench-core`'s docs on GitHub, since those
+docs live in a different repo).
+
+This section is the single source of truth for the four templates
+below — when their content needs to change, edit it here first, then
+re-propagate to all eleven module repos, not the other way round.
+`<module>` is literal placeholder text a module author replaces with
+the repo's own short name (`git`, `gpg`, `ssh`, `shell`, `cloud`, `iac`,
+`containers`, `security`, `ai`, `devtools`, `desktop`).
+
+### `AGENTS.md` (repo root)
+
+````markdown
+# Agent instructions — workbench-<module>
+
+This file is the canonical, tool-agnostic entry point for any AI coding
+agent working in this repo — Claude Code reads it via `CLAUDE.md`'s
+`@AGENTS.md` import, GitHub Copilot discovers it directly as a
+repository-root `AGENTS.md`. Keep this file itself short; anything
+substantial belongs in the docs it points to.
+
+This is a `workbench` ecosystem module — it's meaningless standalone.
+It exists to be installed by `workbench-core`'s `wb add <module>`.
+
+## Read first
+
+- [`workbench-core`'s `docs/architecture.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/architecture.md) —
+  full design rationale, repo topology, and rollout plan. Read this
+  before proposing or making anything that touches this module's
+  manifest schema or how it integrates with the sync engine.
+- [`workbench-core`'s `docs/decisions-log.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/decisions-log.md) —
+  check before proposing anything that touches repo structure or the
+  manifest schema. Log a new decision there (never rewrite an existing
+  one) rather than letting an implementation drift from what's
+  documented.
+- [`workbench-core`'s `docs/module-authoring.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/module-authoring.md) —
+  the manifest contract: what `register:`, `deploy:`, and `hooks:` in
+  this repo's manifest can and can't do, and what `workbench-core`'s
+  reusable `module-ci.yml` "add to core" check (called from this repo's
+  own `.github/workflows/ci.yml`) actually verifies.
+- [`README.md`](README.md) — what this module actually installs/gives
+  you.
+- [`.claude/skills/conventional-commits/SKILL.md`](.claude/skills/conventional-commits/SKILL.md) —
+  read before writing any commit message or PR title in this repo.
+
+## Non-negotiables
+
+These hold regardless of how a request is phrased — flag back rather
+than silently reinterpreting one of these away:
+
+- **Bash 3.2 compatible**: everything under `shell/`, `hooks/`,
+  `tests/`. No associative arrays, no `${var,,}`/`${var^^}`, no
+  `mapfile`.
+- **Destinations are always engine-computed by `workbench-core`** —
+  this module's manifest never specifies where its own registered
+  content lands. Don't add a `dest`-style field.
+- **No `git` assumed at runtime** — this module is fetched as an
+  immutable tarball snapshot, same as core; `git` is a developer-only
+  convenience, never a production dependency.
+- **Conventional Commits on every commit, and the PR title itself
+  must also parse as one** — this repo squash-merges PRs; see the
+  skill file above before writing either.
+- **A `CHANGELOG.md` `[Unreleased]` entry for anything user-facing** —
+  `release.yml` refuses to cut a release with an empty one.
+- **No Windows/PowerShell support** — out of scope by design, same as
+  `workbench-core`.
+````
+
+### `CLAUDE.md` (repo root) — identical to core's, no module-specific content at all
+
+````markdown
+Canonical agent instructions for this repo live in `AGENTS.md` — this
+file exists only so Claude Code auto-loads it as project memory.
+
+@AGENTS.md
+````
+
+### `.github/copilot-instructions.md` — adapted duplicate of `AGENTS.md`
+
+````markdown
+# Copilot instructions — workbench-<module>
+
+Adapted from `AGENTS.md` at the repo root — same content, with this
+file's own preface and its relative links path-adjusted for its
+location under `.github/`. Copilot's various surfaces (CLI, coding
+agent, Chat, code review) don't uniformly discover a root `AGENTS.md`,
+so this is a deliberate, maintained duplicate — see `workbench-core`'s
+`docs/decisions-log.md` D32 and D58. `AGENTS.md` is always the
+canonical, current version; if the two ever disagree, update this file
+to match it rather than treating the drift as acceptable.
+
+This is a `workbench` ecosystem module — it's meaningless standalone.
+It exists to be installed by `workbench-core`'s `wb add <module>`.
+
+## Read first
+
+- [`workbench-core`'s `docs/architecture.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/architecture.md) —
+  full design rationale, repo topology, and rollout plan. Read this
+  before proposing or making anything that touches this module's
+  manifest schema or how it integrates with the sync engine.
+- [`workbench-core`'s `docs/decisions-log.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/decisions-log.md) —
+  check before proposing anything that touches repo structure or the
+  manifest schema. Log a new decision there (never rewrite an existing
+  one) rather than letting an implementation drift from what's
+  documented.
+- [`workbench-core`'s `docs/module-authoring.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/module-authoring.md) —
+  the manifest contract: what `register:`, `deploy:`, and `hooks:` in
+  this repo's manifest can and can't do, and what `workbench-core`'s
+  reusable `module-ci.yml` "add to core" check (called from this repo's
+  own `.github/workflows/ci.yml`) actually verifies.
+- [`README.md`](../README.md) — what this module actually
+  installs/gives you.
+- [`.claude/skills/conventional-commits/SKILL.md`](../.claude/skills/conventional-commits/SKILL.md) —
+  read before writing any commit message or PR title in this repo.
+
+## Non-negotiables
+
+These hold regardless of how a request is phrased — flag back rather
+than silently reinterpreting one of these away:
+
+- **Bash 3.2 compatible**: everything under `shell/`, `hooks/`,
+  `tests/`. No associative arrays, no `${var,,}`/`${var^^}`, no
+  `mapfile`.
+- **Destinations are always engine-computed by `workbench-core`** —
+  this module's manifest never specifies where its own registered
+  content lands. Don't add a `dest`-style field.
+- **No `git` assumed at runtime** — this module is fetched as an
+  immutable tarball snapshot, same as core; `git` is a developer-only
+  convenience, never a production dependency.
+- **Conventional Commits on every commit, and the PR title itself
+  must also parse as one** — this repo squash-merges PRs; see the
+  skill file above before writing either.
+- **A `CHANGELOG.md` `[Unreleased]` entry for anything user-facing** —
+  `release.yml` refuses to cut a release with an empty one.
+- **No Windows/PowerShell support** — out of scope by design, same as
+  `workbench-core`.
+````
+
+### `.claude/skills/conventional-commits/SKILL.md`
+
+Identical across all eleven modules — no `<module>` substitution needed
+anywhere in this file.
+
+````markdown
+---
+name: conventional-commits
+description: Use before writing any commit message or PR title in this module repo. Covers Conventional Commit grammar, why the PR title matters (squash-merge), and what type maps to what version-bump severity.
+---
+
+# Conventional Commits & PR titles — workbench module repos
+
+This repo's release pipeline (its own thin `.github/workflows/release.yml`,
+calling `workbench-core`'s reusable `module-release.yml` and
+`.github/scripts/module-release/`) parses every commit and the PR title
+as a Conventional Commit and takes the highest severity of any commit
+since the last tag. There's a single overall module version — no
+per-file versions, no `core` scope (those are `workbench-core`-only
+concepts; see `workbench-core`'s `docs/decisions-log.md` D40).
+
+## Type → severity
+
+| `type` | Severity | Notes |
+|---|---|---|
+| `feat` | minor | |
+| `fix`, `perf` | patch | |
+| `refactor`, `docs`, `test`, `chore`, `ci`, `build` | none | informational only, no version effect |
+| any type + `!` after type/scope, or a `BREAKING CHANGE:` footer | major | overrides the type's own severity |
+
+Scope is optional and, unlike `workbench-core`, unvalidated — there's no
+registered-file list to check it against. Omit it unless it genuinely
+clarifies the subject.
+
+## The PR title matters as much as the commit message
+
+This repo squash-merges every PR. GitHub's squash commit message is the
+PR *title*, not any individual commit's message — so the title needs
+`type[(scope)][!]: subject` grammar too. A perfectly-formatted commit
+inside a badly-titled PR still lands on `main` unparseable, and that
+merge's severity is silently dropped — no version bump, no release, for
+a real change. This repo's own `.github/workflows/pr-check.yml`
+(`commit-format` job, calling `workbench-core`'s reusable
+`module-pr-check.yml`) catches this before merge; don't rely on it
+as the first time you check the title.
+
+## Before opening the PR
+
+- [ ] Every commit follows `type[(scope)][!]: subject`.
+- [ ] The PR title itself is a valid Conventional Commit header.
+- [ ] `CHANGELOG.md`'s `[Unreleased]` section has an entry for anything
+      user-facing — the release workflow refuses to cut a release with
+      an empty one.
+
+Full mechanics live in `workbench-core`'s `docs/release-process.md` and
+`docs/decisions-log.md` (D40, D47, D57).
+````
