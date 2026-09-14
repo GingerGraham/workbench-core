@@ -730,8 +730,9 @@ correctness gap `find` doesn't have (caught by automated review during
 the ten-repo batch rollout). Drop `hooks` from the `find` invocation
 for a repo with no `hooks/` directory, same as the `feature_request.yml`
 option above.
-`feature_request.yml`'s "Area" dropdown has the same assumption baked
-into its "Hooks (hooks.post_deploy)" option: drop that option for a
+`.github/ISSUE_TEMPLATE/feature_request.yml`'s "Area" dropdown has the
+same assumption baked into its "Hooks (hooks.post_deploy)" option:
+drop that option for a
 repo with no `hooks/` directory and no `hooks:` declared in its
 manifest (caught by automated review during the ten-repo batch
 rollout — nine of the eleven module repos turned out not to have
