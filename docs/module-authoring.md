@@ -719,6 +719,12 @@ Two path lists below (the PR template's `shellcheck` line and
 `tests/*.sh` is deliberately excluded from shellcheck, run instead
 under "structural tests"). Adjust a specific repo's copy if its layout
 genuinely differs — don't carry that assumption forward silently.
+`feature_request.yml`'s "Area" dropdown has the same assumption baked
+into its "Hooks (hooks.post_deploy)" option: drop that option for a
+repo with no `hooks/` directory and no `hooks:` declared in its
+manifest (caught by automated review during the ten-repo batch
+rollout — nine of the eleven module repos turned out not to have
+`hooks/` at all, only `workbench-git` and `workbench-ssh` do).
 
 ### `.github/PULL_REQUEST_TEMPLATE.md`
 
