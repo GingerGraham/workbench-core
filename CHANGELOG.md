@@ -4,6 +4,18 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`module-pr-check.yml` gains a "PR title format" job.** Module repos
+  squash-merge PRs the same way `workbench-core` does, so an unparseable
+  PR title silently dropped that merge's release severity with no check
+  to catch it before merge — the same hazard D47 closed for this repo's
+  own PRs. `.github/scripts/module-pr-check/check-pr-title-format.sh`
+  (grammar-only; module repos have no scope-vs-registered-file rule to
+  check) plus a new `pr-title-format` job propagate automatically to all
+  eleven `workbench-*` module repos via the reusable workflow — no
+  per-module edits required. See `docs/decisions-log.md` D57.
+
 ### Changed
 
 - **Docs reorg.** `ARCHITECTURE.md` moved to `docs/architecture.md`, and
