@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.9.1] - 2026-09-15
+
 ### Fixed
 
 - **`wb functions` now lists `tier: lazy` registered functions.** Previously
