@@ -6,6 +6,12 @@ All notable changes to `workbench-core` are documented here.
 
 ### Added
 
+- **`plain-shell`/`pretty-shell`/`cheat`** (`lib/core/functions.sh`) —
+  ports the last three functions from workbench-precursor's
+  `core/functions.sh` that hadn't yet landed. `plain-shell`/`pretty-shell`
+  wire into `WORKBENCH_PLAIN_SHELL`, which `lib/loader.sh` has supported
+  since Wave B but nothing set until now. See workbench-shell#8.
+
 - **Canonical agent-instruction templates for module repos.**
   `docs/module-authoring.md` gains a new "Agent instructions for module
   repos" section holding the four files (`AGENTS.md`, `CLAUDE.md`,
