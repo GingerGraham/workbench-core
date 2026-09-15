@@ -147,6 +147,69 @@ detect-package-manager() {
     log_info "Using package manager: ${PACKAGE_MANAGER}"
 }
 
+# ── Plain shell ─────────────────────────────────────────────────────────
+# Re-exec the current shell with prompt styling and colour disabled.
+# Useful when capturing terminal output for pasting elsewhere: no prompt
+# escapes, no SGR sequences from NO_COLOR-aware tools.
+#
+# exec REPLACES this process rather than nesting it — the plain shell is
+# not a child of the styled one, it takes over the same PID. There is no
+# styled shell left to fall back to: `exit` here ends the session (closes
+# the terminal, or drops an SSH connection), the same as `exit` in any
+# top-level shell. To get back to a styled shell, open a new session.
+# Background jobs in the pre-exec shell are also lost — same as any exec.
+#
+# WORKBENCH_PLAIN_SHELL=true is the only var this sets — lib/loader.sh's
+# behaviour-flags block derives NO_COLOR and WORKBENCH_SHOW_FUNCTIONS=false
+# from it on the run that follows, same as any other flag read at loader
+# start; nothing here duplicates that.
+#
+# The interpreter is resolved from WORKBENCH_SHELL (the shell actually
+# running, a Core API fact) rather than $SHELL (the passwd login shell),
+# which can differ.
+#
+# `exec env VAR=... cmd` rather than a `VAR=... exec cmd` assignment
+# prefix: assignment prefixes on special builtins behave inconsistently
+# across bash and zsh, whereas env(1) is unambiguous in both. Ported from
+# workbench-precursor's core/functions.sh.
+plain-shell() {
+    local _sh
+    _sh="$(command -v "${WORKBENCH_SHELL:-bash}" 2>/dev/null)"
+    [[ -z "${_sh}" ]] && _sh="${SHELL:-/bin/bash}"
+    log_warn "Re-execing ${_sh} with prompt styling and colour disabled (plain mode). Use 'pretty-shell' to restore normal prompt behaviour. This shell will exit normally when you type 'exit'."
+    exec env WORKBENCH_PLAIN_SHELL=true "${_sh}" -i
+}
+
+# ── Pretty shell ────────────────────────────────────────────────────────
+# Re-exec the current shell with prompt styling and colour restored — the
+# counterpart to plain-shell(). Same exec-replace semantics: this takes
+# over the current PID rather than nesting, so there's no lingering
+# plain-mode process left behind either.
+#
+# WORKBENCH_PLAIN_SHELL was exported by plain-shell(), so a bare
+# `exec zsh -i` would inherit it and lib/loader.sh would stay in plain
+# mode — that's the actual cause of "subshells retain plain status".
+# Explicitly setting WORKBENCH_PLAIN_SHELL=false and stripping NO_COLOR
+# from the child's environment is what lets the normal prompt-engine
+# election chain run again.
+#
+# NO_COLOR is unset rather than restored to a prior value: if it's set
+# permanently in settings.sh, lib/loader.sh re-applies it at the end of
+# the normal run anyway, so there's nothing to lose by clearing it here.
+# Ported from workbench-precursor's core/functions.sh.
+pretty-shell() {
+    local _sh
+    _sh="$(command -v "${WORKBENCH_SHELL:-bash}" 2>/dev/null)"
+    [[ -z "${_sh}" ]] && _sh="${SHELL:-/bin/bash}"
+    log_info "Re-execing ${_sh} with prompt styling and colour restored (pretty mode). This shell will exit normally when you type 'exit'."
+    exec env -u NO_COLOR WORKBENCH_PLAIN_SHELL=false "${_sh}" -i
+}
+
+# ── cheat.sh lookup ────────────────────────────────────────────────────
+cheat() {
+    curl "https://cheat.sh/$1"
+}
+
 # ── Privilege elevation helpers ───────────────────────────────────────────
 # _workbench_current_user
 # Resolves the invoking user without depending on $USER being exported —
