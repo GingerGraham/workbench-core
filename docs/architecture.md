@@ -217,7 +217,7 @@ its own module namespace, so no denylist is needed for it at all.
 | `core_api` | no | — | Semver range this module targets. Absent = treated as deploy/sync-only (legacy behaviour); `register:` is ignored without it. |
 | `sync.enabled` | no | `true` | Module-level opt-out. Machine-side state can further override — see §9. |
 | `register.shell[].src` | yes, per entry | — | Path within repo, validated like `deploy[].src`. |
-| `register.shell[].tier` | no | `tools` | Loader tier — governs load order and eagerness. |
+| `register.shell[].tier` | no | `tools` | Loader tier — governs load order. Only `platform`/`distro` are conditionally sourced (by host match); every other tier, `lazy` included, is sourced unconditionally on every shell start. |
 | `register.installers[].src` | no | — | Files scanned for `install-*` functions, folded into the generalised tool registry. |
 | `register.getters[]` | no | — | Declares a domain getter (`get-<n>-functions`) so `wb functions` can enumerate it without a hardcoded registry. |
 

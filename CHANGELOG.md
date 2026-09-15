@@ -4,6 +4,14 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`wb functions` now lists `tier: lazy` registered functions.** Previously
+  excluded from the "Loaded functions" section under a stale assumption
+  that lazy-tier files aren't eagerly sourced — they are (`lib/loader.sh`
+  sources every tier unconditionally except `platform`/`distro`). See
+  workbench-gpg#7.
+
 ## [2.9.0] - 2026-09-15
 
 ### Added
