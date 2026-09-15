@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-09-15
+
 ### Added
 
 - **`plain-shell`/`pretty-shell`/`cheat`** (`lib/core/functions.sh`) —
