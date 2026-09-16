@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.10.0] - 2026-09-16
+
 ### Added
 
 - **Function/alias availability gating for `wb functions` and module
