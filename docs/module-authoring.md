@@ -12,6 +12,7 @@ and shell loader.
 - [Registering shell content](#registering-shell-content)
 - [Shipping overridable defaults (`overrides_src`)](#shipping-overridable-defaults-overrides_src)
 - [Declaring installers (`wb tools`)](#declaring-installers-wb-tools)
+- [Declaring function availability (optional but recommended)](#declaring-function-availability-optional-but-recommended)
 - [Publishing module info & docs (optional but recommended)](#publishing-module-info--docs-optional-but-recommended)
 - [The arch-normalization snippet](#the-arch-normalization-snippet)
 - [Hooks](#hooks)
@@ -276,6 +277,91 @@ redesign exists to guarantee, not a degraded outcome.
 This predicate should be cheap and side-effect-free (typically a single
 `command -v`/file-existence check) — it may run once per tool on every
 `wb tools list --status` or `wb tools upgrade` invocation.
+
+## Declaring function availability (optional but recommended)
+
+Declare `_<name>-available` in the **same file** as `<name>` (no manifest
+entry needed) to let `<name>` be hidden from every listing surface —
+`wb functions` and your own `get-<domain>-functions` getter alike —
+whenever it can't actually be used:
+
+```sh
+# shell/aws.sh
+aws-update() {
+    install-aws
+}
+
+_aws-update-available() {
+    command -v aws &>/dev/null
+}
+```
+
+The contract is the same shape as `installed-<name>`: **exit 0 means
+available, exit 1 means unavailable.** No predicate declared is not a
+third state here — it means always available, since most functions have
+nothing to gate and shouldn't need one. This predicate should be cheap
+and side-effect-free (typically a single `command -v`), same as
+`installed-<name>` — it may run once per function on every `wb functions`
+invocation. Auth status, network calls, and hardware/state checks belong
+in your function's own runtime preflight, never here.
+
+Three ways to declare one, in order of preference:
+
+**Several names share one simple check** — `_wb_declare_availability
+<command> <name> [<name> ...]` (Core API, `lib/core/functions.sh`):
+
+```sh
+# shell/gpg.sh
+_wb_declare_availability gh gpg-github-keys gpg-push-github
+```
+
+**Several names share an existing, more complex check** —
+`_wb_alias_availability <check-function> <name> [<name> ...]`. If you
+already have a loud `_xxx_require_yyy`-style preflight helper, extract a
+quiet, boolean-returning twin it can call internally, and wire that twin
+instead of duplicating the check:
+
+```sh
+# shell/disk-encryption.sh
+_tpm_tools_present() {
+    local cmd
+    for cmd in "${_tpm_required_tools[@]}"; do
+        command -v "${cmd}" &>/dev/null || return 1
+    done
+}
+_wb_alias_availability _tpm_tools_present enroll-luks-tpm2 rotate-luks-key
+```
+
+**Anything else** — an OR of several tools, or a genuinely one-off
+check — hand-write `_<name>-available` directly:
+
+```sh
+# shell/editors.sh
+_open-workspace-available() {
+    command -v code &>/dev/null || command -v code-insiders &>/dev/null
+}
+```
+
+If your function already has its own loud preflight for the same
+dependency, have it call the same quiet check as its first step instead
+of re-testing `command -v` inline — one check, used by both the
+function's own guard and every listing surface, never written twice.
+
+Predicate functions are excluded from every listing automatically — the
+leading underscore puts them in the same "private, never extracted"
+class as every other `_`-prefixed function in this codebase.
+
+### Discoverability
+
+Gating hides genuinely-unusable commands from day-to-day listings, but
+nothing is ever permanently lost. Whenever a listing hides at least one
+name, it prints a one-line summary underneath — a count, plus the
+specific missing command(s) where that can be recovered mechanically
+from a `_wb_declare_availability`-generated predicate, or just the count
+otherwise. `wb functions --all`, or `WORKBENCH_FUNCTIONS_SHOW_ALL=true`
+in front of any getter, shows everything regardless of gating. You don't
+need to do anything for your module to get this — it's automatic once
+you're using the predicate convention above.
 
 ## Publishing module info & docs (optional but recommended)
 
