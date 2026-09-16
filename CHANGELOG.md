@@ -4,6 +4,24 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Function/alias availability gating for `wb functions` and module
+  getters.** A function or alias can now declare an optional
+  `_<name>-available` predicate (same contract shape as `installed-<name>`
+  — exit 0 means available, exit 1 means hidden) to be excluded from every
+  listing surface when a dependency it needs isn't actually present on
+  this host. `_wb_declare_availability`/`_wb_alias_availability`
+  (`lib/core/functions.sh`) bulk-declare predicates for the common cases;
+  `_get_functions_in`/`_get_aliases_in` apply the filter automatically, so
+  every current and future `get-<domain>-functions` getter inherits it
+  with no code changes. `wb functions --all` (or
+  `WORKBENCH_FUNCTIONS_SHOW_ALL=true` in front of any getter) shows
+  everything regardless of gating, and a hint line under any listing that
+  hid something reports a count and, where mechanically recoverable, the
+  specific missing command. See `docs/module-authoring.md` "Declaring
+  function availability".
+
 ## [2.9.1] - 2026-09-15
 
 ### Fixed

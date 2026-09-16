@@ -562,6 +562,13 @@ _wb_cmd_functions() {
     # module authors can still use it to keep advanced/dangerous
     # functions out of a getter's own default grouping — it just no
     # longer hides them from this top-level view.
+    if [[ "${1:-}" == "--all" ]]; then
+        # shellcheck disable=SC2034  # read by _wb_function_available
+        # (lib/core/functions.sh), a different file shellcheck can't see
+        # into from here — not actually unused.
+        WORKBENCH_FUNCTIONS_SHOW_ALL="true"
+    fi
+
     local name reglist filepath tier base
     local -a eager_files=()
 
@@ -578,6 +585,26 @@ _wb_cmd_functions() {
             eager_files+=("${filepath}")
         done < "${reglist}"
     done < <(workbench_list_loadable_modules)
+
+    # ── Source eager_files once so any "_<name>-available" predicates they
+    # declare (docs/module-authoring.md "Declaring function availability")
+    # are callable by _wb_filter_available_names below. A module's own
+    # getter runs inside the interactive shell, where the loader has
+    # already sourced everything, so it needs nothing extra — this step
+    # exists only for `wb functions` itself, which runs as its own
+    # subprocess and has sourced nothing yet. Same lazy, on-demand
+    # sourcing _wb_tools_check_installed already does for installed-<name>,
+    # just walking the whole eager_files list instead of one file at a
+    # time. Output is discarded, not just errors — a file that
+    # unconditionally echoes or log_infos at source time must not leak
+    # into this command's own formatted listing. A file that fails to
+    # source is skipped, not fatal: its statically extracted function
+    # names still show, just without gating, same as before this change.
+    local _src_file
+    for _src_file in "${eager_files[@]}"; do
+        # shellcheck disable=SC1090
+        source "${_src_file}" &>/dev/null || true
+    done
 
     if [[ ${#eager_files[@]} -eq 0 ]]; then
         echo
@@ -1341,11 +1368,18 @@ EOF
 
 _wb_help_functions() {
     cat <<'EOF'
-Usage: wb functions
+Usage: wb functions [--all]
 
 Lists every registered shell function/getter/installer, grouped by the
 module that declared it (via that module's manifest register: block).
 Read-only.
+
+A function whose declared "_<name>-available" predicate reports it can't
+actually be used on this host (a required CLI is missing, say) is hidden
+from this listing — see docs/module-authoring.md "Declaring function
+availability". --all (or WORKBENCH_FUNCTIONS_SHOW_ALL=true, which also
+works in front of any module's own get-<domain>-functions getter) shows
+every function regardless of availability.
 
 Confused with 'wb tools'? This lists the raw register.installers[] src
 paths a manifest declares; 'wb tools' lists (and can invoke) the actual
