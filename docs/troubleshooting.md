@@ -44,6 +44,20 @@ Install it yourself with your distro's package manager, then re-run
   the background timer instead of a command you ran yourself. Run
   `wb reload` (or open a new shell) to pick it up.
 
+## A function I expected isn't showing up in `wb functions` or a module's getter
+
+Check the hint line printed under the listing first — `N more hidden
+(missing: ...)` or `N more hidden` on its own. A function can declare an
+optional `_<name>-available` predicate (`docs/module-authoring.md`
+"Declaring function availability") that hides it from every listing
+whenever a dependency it needs isn't actually present — the function
+itself is unaffected, it just isn't listed. Run `wb functions --all`, or
+`WORKBENCH_FUNCTIONS_SHOW_ALL=true` in front of any
+`get-<domain>-functions` getter, to see every function regardless of
+gating. If the hint line names a missing command, installing it (and
+opening a new shell, or re-running the getter) is usually all that's
+needed.
+
 ## A `wb update` isn't picking up a new release
 
 - `latest` and `branch:` re-check every cycle; `tag:`/`commit:` pins are

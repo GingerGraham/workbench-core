@@ -52,7 +52,24 @@ once core's own `core`-tier registration is sourced:
 - `_extract_function_names` / `_extract_alias_names` / `_get_functions_in`
   / `_get_aliases_in` — the getter-introspection primitives every
   `get-<domain>-functions` getter (declared via a module's
-  `register.getters[]`) is built from.
+  `register.getters[]`) is built from. `_get_functions_in`/
+  `_get_aliases_in` also filter on the `_<name>-available` predicate
+  convention below and print a hidden-count hint line — additive,
+  script-transparent to a getter that never declares any predicates.
+- `_wb_declare_availability <command> <name> [<name> ...]` /
+  `_wb_alias_availability <check-function> <name> [<name> ...]` —
+  bulk-declare a `_<name>-available` predicate for one or more
+  function/alias names, backed by a `command -v <command>` check or an
+  existing boolean-returning `<check-function>` respectively. **New in
+  `CORE_API_VERSION` 1.2.** A module may also hand-write `_<name>-available`
+  directly for anything more specific — that's a naming convention
+  `_get_functions_in`/`_get_aliases_in` read, not a function this contract
+  needs to declare. Exit 0 means the paired `<name>` is available/shown,
+  exit 1 hides it from every listing surface; a `<name>` with no predicate
+  declared is always shown. `wb functions --all` /
+  `WORKBENCH_FUNCTIONS_SHOW_ALL=true` bypasses gating regardless of any
+  predicate. See `docs/module-authoring.md`, "Declaring function
+  availability", for the full contract.
 
 ## Install-helper functions (`lib/core/installers-common.sh`)
 
