@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.10.1] - 2026-09-16
+
 ### Fixed
 
 - **`wb functions` no longer crashes when a registered module has a
