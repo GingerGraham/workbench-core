@@ -606,12 +606,29 @@ _wb_cmd_functions() {
     # own `set -u` (line 9) — a real, reachable case here, since
     # eager_files is legitimately empty on a fresh host before its first
     # `wb apply`. Fixed in bash 4.4+, but this file has to work on 3.2 too.
+    # set +u/-u around the sourcing itself, not just the array guard above:
+    # every module's shell/*.sh is written and tested only against
+    # lib/loader.sh's own sourcing, which never sets -u — an unquoted
+    # reference to a genuinely-unset var (e.g. a bare "${DISPLAY}") is
+    # completely fine there. This file's own `set -u` (line 9) is new to
+    # every module the instant this eager-source step runs, and under
+    # nounset a non-interactive shell doesn't just fail that one
+    # expansion, it exits the whole process outright — confirmed
+    # regression: workbench-shell's shell/editors.sh references a bare
+    # "${DISPLAY}" (fine under lib/loader.sh, never set -u there), and
+    # once this eager-source step started running it under this file's
+    # own set -u, `wb functions` crashed silently (no output, exit 1),
+    # taking out every other module's listing in the same run along with
+    # it. `|| true` guards a file's own command failures; it cannot catch
+    # this, since the shell is gone before it would run.
     if [[ ${#eager_files[@]} -gt 0 ]]; then
         local _src_file
+        set +u
         for _src_file in "${eager_files[@]}"; do
             # shellcheck disable=SC1090
             source "${_src_file}" &>/dev/null || true
         done
+        set -u
     fi
 
     if [[ ${#eager_files[@]} -eq 0 ]]; then
