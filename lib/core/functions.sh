@@ -365,7 +365,17 @@ _wb_function_missing_reason() {
     _predicate="_${_name}-available"
     command -v "${_predicate}" &>/dev/null || return 0
     _norm="$(declare -f "${_predicate}" 2>/dev/null | tr '\n' ' ' | tr -s '[:space:]' ' ')"
-    if [[ "${_norm}" =~ ^[a-zA-Z0-9_-]+\ \(\)\ \{\ command\ -v\ \"([A-Za-z0-9_./-]+)\"\ \&\>\ /dev/null\ \}\ $ ]]; then
+    # Two alternatives for the redirect, not one: bash 3.2 (macOS's default
+    # /bin/bash) reprints a parsed "&>word" redirection as the older
+    # two-token "> word 2>&1" form when declare -f serializes it back out,
+    # while bash 4+ reprints it as "&> word" — same redirection, different
+    # text, depending only on which bash is running this check, not on
+    # anything the predicate itself did differently. Confirmed via a real
+    # macOS CI run (workbench-core#75) after the single-form version of
+    # this regex silently matched nothing there. Both alternatives are
+    # still anchored to the exact rest of the shape, so this stays a
+    # read-back of what we generated, not a loosened guess.
+    if [[ "${_norm}" =~ ^[a-zA-Z0-9_-]+\ \(\)\ \{\ command\ -v\ \"([A-Za-z0-9_./-]+)\"\ (\&\>\ ?/dev/null|\>\ ?/dev/null\ ?2\>\&1)\ \}\ $ ]]; then
         printf '%s' "${BASH_REMATCH[1]}"
     fi
 }
