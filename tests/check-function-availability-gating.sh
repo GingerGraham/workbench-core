@@ -27,8 +27,16 @@ WB="${REPO_ROOT}/bin/wb"
 
 # ── Synthetic module: a plain function, one gated off (via
 #    _wb_declare_availability, on a binary guaranteed absent), one gated
-#    on (present binary), and one gated off via a hand-written predicate
-#    (to confirm the hint line's reason stays mechanical-only). ─────────
+#    on (present binary), one gated off via a hand-written predicate (to
+#    confirm the hint line's reason stays mechanical-only), and two more
+#    (named to sort *after* the first two alphabetically — the real
+#    _extract_function_names traversal order) sharing a *second* missing
+#    binary between them. That last pair specifically exercises reason
+#    dedup for a repeat of a NON-first entry: the first entry is always
+#    bounded by a bare "," on both sides even with later entries
+#    present, but a later entry is preceded by ", " (comma-space) from
+#    the join separator, which a bare-comma boundary check never
+#    matches — see check [8] below. ───────────────────────────────────
 SRC="${WORK}/src"
 BARE="${WORK}/bare.git"
 mkdir -p "${SRC}"
@@ -50,6 +58,12 @@ _wb_declare_availability bash sprocket-gated-on
 
 sprocket-hand-gated() { :; }
 _sprocket-hand-gated-available() { [[ -n "${SOME_VAR:-}" ]] || command -v false-binary-xyz &>/dev/null; }
+
+sprocket-m-second-reason() { :; }
+_wb_declare_availability false-binary-abc sprocket-m-second-reason
+
+sprocket-n-second-reason-again() { :; }
+_wb_declare_availability false-binary-abc sprocket-n-second-reason-again
 SH
     cat > .dotfiles-sync.yml <<'EOF'
 version: 1
@@ -103,15 +117,27 @@ else
     echo "${functions_all_out}"
 fi
 
-if echo "${functions_out}" | grep -q "more hidden (missing: false-binary-xyz)"; then
+missing_clause="$(echo "${functions_out}" | grep -oE 'missing: [^)]*')"
+
+if [[ "${missing_clause}" == *"false-binary-xyz"* ]]; then
     ok "hint line reports the specific missing command for a _wb_declare_availability predicate"
 else
     fail "hint line did not report the mechanically-recoverable reason"
     echo "${functions_out}"
 fi
 
-if echo "${functions_out}" | grep -qE "more hidden \(missing: [^)]*false-binary-xyz, false-binary-xyz"; then
-    fail "hint line duplicated the same reason instead of deduplicating"
+# sprocket-m-second-reason and sprocket-n-second-reason-again both need
+# false-binary-abc, and sort after the xyz-gated names above — so by the
+# time the second one is checked, false-binary-abc is no longer the
+# *first* entry in the accumulated reasons list. That's the exact case
+# the join-vs-boundary mismatch broke: a repeat of any entry but the
+# first was never recognised as already present.
+abc_count="$(grep -o "false-binary-abc" <<< "${missing_clause}" | wc -l | tr -d ' ')"
+if [[ "${abc_count}" -eq 1 ]]; then
+    ok "hint line mentions a reason shared by two functions exactly once, not duplicated"
+else
+    fail "hint line mentioned false-binary-abc ${abc_count} time(s) instead of once — reason dedup is broken for a non-first entry"
+    echo "${functions_out}"
 fi
 
 echo

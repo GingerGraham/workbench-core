@@ -408,7 +408,17 @@ _wb_print_hidden_hint() {
         [[ "${_is_shown}" == "true" ]] && continue
         _hidden_count=$((_hidden_count + 1))
         _reason="$(_wb_function_missing_reason "${_n}")"
-        if [[ -n "${_reason}" ]] && [[ ",${_reasons}," != *",${_reason},"* ]]; then
+        # Membership check against a space-stripped copy of _reasons, not
+        # _reasons itself: _reasons is joined with ", " (comma-space) for
+        # display, but wrapping it in bare commas here for a substring
+        # test only produces a reliable ",<reason>," boundary for the
+        # first entry — every later entry is preceded by ", " (comma-
+        # space), not "," alone, so the bare-comma wrap never matches and
+        # a repeat gets appended again (confirmed: aws, aws, gh, gh
+        # produced "aws, gh, gh", not "aws, gh"). Stripping spaces before
+        # the check keeps the comma-only boundary correct at every
+        # position while leaving the human-readable _reasons untouched.
+        if [[ -n "${_reason}" ]] && [[ ",${_reasons// /}," != *",${_reason},"* ]]; then
             _reasons="${_reasons:+${_reasons}, }${_reason}"
         fi
     done <<< "${_all}"
