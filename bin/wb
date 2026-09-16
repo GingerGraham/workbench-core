@@ -600,11 +600,19 @@ _wb_cmd_functions() {
     # into this command's own formatted listing. A file that fails to
     # source is skipped, not fatal: its statically extracted function
     # names still show, just without gating, same as before this change.
-    local _src_file
-    for _src_file in "${eager_files[@]}"; do
-        # shellcheck disable=SC1090
-        source "${_src_file}" &>/dev/null || true
-    done
+    # ${#eager_files[@]} -gt 0 guards the loop itself, not just its body:
+    # bash 3.2 (macOS's default /bin/bash) treats "${eager_files[@]}" on a
+    # genuinely empty array as an unbound-variable error under this file's
+    # own `set -u` (line 9) — a real, reachable case here, since
+    # eager_files is legitimately empty on a fresh host before its first
+    # `wb apply`. Fixed in bash 4.4+, but this file has to work on 3.2 too.
+    if [[ ${#eager_files[@]} -gt 0 ]]; then
+        local _src_file
+        for _src_file in "${eager_files[@]}"; do
+            # shellcheck disable=SC1090
+            source "${_src_file}" &>/dev/null || true
+        done
+    fi
 
     if [[ ${#eager_files[@]} -eq 0 ]]; then
         echo
