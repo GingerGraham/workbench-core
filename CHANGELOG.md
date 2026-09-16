@@ -4,6 +4,21 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`wb functions` no longer crashes when a registered module has a
+  shell file that references a genuinely-unset variable** (e.g. a bare
+  `${DISPLAY}`, confirmed in `workbench-shell`'s `shell/editors.sh`).
+  2.10.0's eager-source step (for `_<name>-available` predicates) ran
+  every registered file inside `bin/wb`'s own `set -u` — every module's
+  shell files are written and tested only against `lib/loader.sh`'s own
+  sourcing, which never sets `-u`, so under `nounset` a non-interactive
+  shell doesn't just fail that one expansion, it exits the whole
+  process outright, silently (no output, exit 1), taking out every
+  other module's listing in the same run along with it. The
+  eager-source loop now runs with `set +u`, matching the guarantee
+  every module has always had.
+
 ## [2.10.0] - 2026-09-16
 
 ### Added
