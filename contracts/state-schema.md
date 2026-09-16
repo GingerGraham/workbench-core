@@ -14,7 +14,7 @@ Plain `KEY=VALUE`, readable via `grep`/`cut` alone — no core library needs
 to be loadable to check it:
 
 ```
-CORE_API_VERSION=1.1
+CORE_API_VERSION=1.2
 STATE_SCHEMA_VERSION=2
 WORKBENCH_CORE_SEMVER=0.1.0
 ```

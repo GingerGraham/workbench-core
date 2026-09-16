@@ -20,7 +20,9 @@ All notable changes to `workbench-core` are documented here.
   everything regardless of gating, and a hint line under any listing that
   hid something reports a count and, where mechanically recoverable, the
   specific missing command. See `docs/module-authoring.md` "Declaring
-  function availability".
+  function availability". `_wb_declare_availability`/
+  `_wb_alias_availability` join the guaranteed Core API surface —
+  `CORE_API_VERSION` bumps `1.1` -> `1.2` (`contracts/core-api.md`).
 
 ## [2.9.1] - 2026-09-15
 
