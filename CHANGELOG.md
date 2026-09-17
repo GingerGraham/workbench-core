@@ -4,6 +4,21 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`docs/decisions-log.md` D63** — `GingerGraham/workbench-template`, a
+  GitHub template repository for scaffolding new `workbench-*` extension
+  modules, with a self-removing bootstrap workflow that fills in the new
+  module's name on first push.
+
+### Changed
+
+- **`docs/module-authoring.md`** — "Do you need this at all?" now points
+  new module repos at `workbench-template` (generate via "Use this
+  template") instead of copying an existing module's tree by hand;
+  `docs/module-authoring.md` remains the canonical source the template
+  is periodically re-snapshotted from.
+
 ## [2.10.1] - 2026-09-16
 
 ### Fixed

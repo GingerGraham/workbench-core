@@ -27,8 +27,17 @@ No — a repo with no manifest at all is a valid clone-only mirror. You only
 need a manifest if you want `workbench-core` to deploy files, register
 shell functions, or run a hook for you.
 
-New module repo? [Agent instructions for module repos](#agent-instructions-for-module-repos)
-below holds the four canonical files (`AGENTS.md`, `CLAUDE.md`,
+New module repo? Generate one from
+[`GingerGraham/workbench-template`](https://github.com/GingerGraham/workbench-template)
+(GitHub's "Use this template" button, or `gh repo create --template
+GingerGraham/workbench-template`) rather than starting from scratch or
+copying another module's tree — it carries the full directory skeleton,
+a manifest stub, and every file below, and fills in the new module's
+name for you on first push. [Agent instructions for module repos](#agent-instructions-for-module-repos)
+and [Governance files for module repos](#governance-files-for-module-repos)
+below remain the canonical source those files are periodically
+re-snapshotted from — the template itself is not where you'd change
+their content. The former holds the four canonical files (`AGENTS.md`, `CLAUDE.md`,
 `.github/copilot-instructions.md`, `.claude/skills/conventional-commits/SKILL.md`)
 every `workbench-*` module carries — copy from there, not from another
 module's tree, so all of them stay in sync.
