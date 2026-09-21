@@ -70,6 +70,27 @@ once core's own `core`-tier registration is sourced:
   `WORKBENCH_FUNCTIONS_SHOW_ALL=true` bypasses gating regardless of any
   predicate. See `docs/module-authoring.md`, "Declaring function
   availability", for the full contract.
+- `_wb_run_with_timeout <seconds> <command> [args...]` — portable
+  (bash-3.2-safe) watchdog: backgrounds `<command>`, races it against a
+  sleep/kill watchdog, and returns its real exit status if it finished in
+  time, or `124` (GNU `timeout`'s own convention) if it had to be killed.
+  `_wb_function_available` (above) now runs every `_<name>-available`
+  predicate through this, bounded to
+  `WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS` (default `1`, overridable) — a
+  predicate that hangs is killed and hidden, never blocks a listing
+  command indefinitely. **New in `CORE_API_VERSION` 1.3.**
+- `_wb_cache_bool <cache-key> -- <command> [args...]` — runs `<command>`
+  at most once per `<cache-key>` for the lifetime of the current
+  top-level process, returning the cached exit status on every later
+  call with the same key, even across the subprocess boundary
+  `_wb_run_with_timeout` introduces (file-backed, not an in-shell
+  variable, precisely so a predicate call backgrounded by
+  `_wb_run_with_timeout` still shares the cache). For a hand-written
+  predicate whose real check is expensive (a live agent/hardware/network
+  probe) but conceptually shared across several exposed names. `<cache-
+  key>` is the author's own choice, never derived from `<command>` — see
+  `docs/module-authoring.md`, "Declaring function availability", for a
+  worked example. **New in `CORE_API_VERSION` 1.3.**
 
 ## Install-helper functions (`lib/core/installers-common.sh`)
 

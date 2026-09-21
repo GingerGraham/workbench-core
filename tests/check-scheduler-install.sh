@@ -48,6 +48,11 @@ export PATH="${STUB_BIN}:${PATH}"
 
 # shellcheck source=bin/wb
 source "${WB}" >/tmp/wb-scheduler-source.log 2>&1
+# sync/scheduler.sh is lazy-loaded now (docs/decisions-log.md D65) — this
+# test calls workbench_scheduler_install/workbench_scheduler_cmd_*
+# directly, bypassing bin/wb's own dispatch (which requires it itself),
+# so require it explicitly here.
+_wb_require sync/scheduler.sh
 # shellcheck disable=SC2034 # read by workbench_scheduler_install, sourced from bin/wb above
 WORKBENCH_OS="Linux"
 

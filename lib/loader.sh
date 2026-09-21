@@ -549,7 +549,16 @@ wb() {
     command wb "$@" || _wb_wrapper_rc=$?
 
     case "${1:-}" in
-        status|functions|tools|version|completion|help|-h|--help|"") ;;
+        # __complete is the hidden dispatcher the generated bash/zsh
+        # completion scripts shell out to on every keystroke past the
+        # first TAB level (D54) — a read-only introspection call, exactly
+        # like the other entries here, and one that runs far too often to
+        # ever pay for a full shell reload. Omitting it was a gap, not a
+        # deliberate choice — see docs/decisions-log.md D65. It's also
+        # the single most expensive thing this wrapper could trigger now
+        # that a full reload means re-sourcing every tier of every
+        # loadable module under this environment's per-file-open cost.
+        status|functions|tools|version|completion|__complete|help|-h|--help|"") ;;
         *)
             # shellcheck disable=SC1090
             if source "${WORKBENCH_LOADER_PATH}"; then

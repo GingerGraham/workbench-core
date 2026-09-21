@@ -47,8 +47,8 @@ source "${WB}" >/tmp/wb-version-sync-source.log 2>&1
 
 _workbench_sync_version_facts
 
-if grep -q '^CORE_API_VERSION=1\.2$' "${VERSION_FILE}"; then
-    ok "CORE_API_VERSION synced from frozen '1' to current '1.2'"
+if grep -q '^CORE_API_VERSION=1\.3$' "${VERSION_FILE}"; then
+    ok "CORE_API_VERSION synced from frozen '1' to current '1.3'"
 else
     fail "CORE_API_VERSION not synced — got: $(grep '^CORE_API_VERSION=' "${VERSION_FILE}")"
 fi
@@ -85,7 +85,7 @@ if grep -q '^MANIFEST_SCHEMA_VERSION=' "${VERSION_FILE}"; then
 else
     ok "fresh bootstrap does not write MANIFEST_SCHEMA_VERSION"
 fi
-if grep -q '^CORE_API_VERSION=1\.2$' "${VERSION_FILE}"; then
+if grep -q '^CORE_API_VERSION=1\.3$' "${VERSION_FILE}"; then
     ok "fresh bootstrap starts at current CORE_API_VERSION"
 else
     fail "fresh bootstrap did not start at current CORE_API_VERSION"
@@ -100,7 +100,7 @@ STATE_SCHEMA_VERSION=2
 WORKBENCH_CORE_SEMVER=0.1.0
 EOF
 _wb_cmd_apply --skip-ansible >/tmp/wb-version-sync-apply.log 2>&1 || true
-if grep -q '^CORE_API_VERSION=1\.2$' "${VERSION_FILE}"; then
+if grep -q '^CORE_API_VERSION=1\.3$' "${VERSION_FILE}"; then
     ok "'wb apply' (via _wb_cmd_apply) syncs CORE_API_VERSION end-to-end"
 else
     fail "'wb apply' did not sync CORE_API_VERSION — see /tmp/wb-version-sync-apply.log"

@@ -360,6 +360,21 @@ Predicate functions are excluded from every listing automatically — the
 leading underscore puts them in the same "private, never extracted"
 class as every other `_`-prefixed function in this codebase.
 
+Predicates must be cheap, local discovery checks (`command -v`, a file
+test) — never a live hardware, agent, or network probe
+(`docs/decisions-log.md` D65). `wb functions` now enforces this: every
+predicate call is bounded to
+`WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS` (default 1s); one that's
+killed is reported by name and hidden, exactly as if it had returned
+non-zero. If several predicates genuinely need to share one expensive
+check, use `_wb_cache_bool <cache-key> -- <command...>` so the real
+check runs once per `wb functions` invocation, not once per name:
+
+```bash
+_gpg-card-status-available() { _wb_cache_bool gpg-card-live -- gpg --card-status; }
+_gpg-show-available()        { _wb_cache_bool gpg-card-live -- gpg --card-status; }
+```
+
 ### Discoverability
 
 Gating hides genuinely-unusable commands from day-to-day listings, but

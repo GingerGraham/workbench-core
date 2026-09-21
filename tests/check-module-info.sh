@@ -28,6 +28,12 @@ mkdir -p "${HOME}"
 
 # shellcheck source=bin/wb
 source "${WB}" >/tmp/wb-module-info-source.log 2>&1
+# modules/add.sh and modules/info.sh are lazy-loaded now
+# (docs/decisions-log.md D65) — this test calls workbench_cmd_add and
+# _wb_cmd_module_docs (which needs workbench_module_docs_path) directly,
+# bypassing bin/wb's own dispatch (which requires them itself), so
+# require them explicitly here.
+_wb_require modules/add.sh modules/info.sh
 
 # ── 1. wb module info/docs on an unregistered name. ─────────────────────────
 if _wb_cmd_module_info nonexistent >/tmp/wb-module-info-unreg.log 2>&1; then

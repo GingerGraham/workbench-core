@@ -27,6 +27,11 @@ mkdir -p "${HOME}"
 
 # shellcheck source=bin/wb
 source "${WB}" >/tmp/wb-completion-args-source.log 2>&1
+# modules/add.sh and modules/remove.sh are lazy-loaded now
+# (docs/decisions-log.md D65) — this test calls workbench_cmd_add/
+# workbench_cmd_remove directly, bypassing bin/wb's own dispatch (which
+# requires them itself), so require them explicitly here.
+_wb_require modules/add.sh modules/remove.sh
 
 # ── 1-4. _wb_completion_subdispatch_commands against the four real
 #    sub-dispatchers — exact word lists, in source order. Check #4 (sync)

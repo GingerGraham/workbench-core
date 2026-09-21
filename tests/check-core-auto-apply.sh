@@ -45,6 +45,11 @@ mkdir -p "${HOME}"
 set --
 # shellcheck source=bin/wb
 source "${WB}" >/tmp/wb-core-auto-apply-source.log 2>&1
+# modules/track.sh and sync/scheduler.sh are lazy-loaded now
+# (docs/decisions-log.md D65) — this test calls workbench_cmd_track and
+# _workbench_scheduler_conf_set directly, bypassing bin/wb's own dispatch
+# (which requires them itself), so require them explicitly here.
+_wb_require modules/track.sh sync/scheduler.sh
 
 # 'wb sync run-if-due' is gated behind the opt-in, default-off scheduler
 # switch (docs/decisions-log.md D38) — orthogonal to what this suite tests

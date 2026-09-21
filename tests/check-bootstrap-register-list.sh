@@ -51,6 +51,10 @@ REGLIST="${MODULE_DIR}/register.list"
 mkdir -p "${MODULE_DIR}/snapshots"
 SNAPSHOT_DIR="${MODULE_DIR}/snapshots/main-0000000"
 ln -s "${REPO_ROOT}" "${SNAPSHOT_DIR}"
+# distribution/snapshot.sh is lazy-loaded now (docs/decisions-log.md D65) —
+# require it explicitly before calling workbench_snapshot_swap directly,
+# the same way workbench_sync_module itself does.
+_wb_require distribution/snapshot.sh
 workbench_snapshot_swap core "${SNAPSHOT_DIR}"
 
 workbench_module_conf_set core REPO_URL "https://github.com/GingerGraham/workbench-core.git"
@@ -158,6 +162,9 @@ EOF
     git tag v1.0.0 && git push -q origin v1.0.0
 )
 
+# modules/add.sh is lazy-loaded now (docs/decisions-log.md D65) — require
+# it explicitly before calling workbench_cmd_add directly.
+_wb_require modules/add.sh
 workbench_cmd_add widget "${BARE}" --private >/tmp/wb-bootstrap-reglist-add.log 2>&1
 WIDGET_REGLIST="${XDG_DATA_HOME}/workbench/modules/widget/register.list"
 
