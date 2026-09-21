@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.11.1] - 2026-09-21
+
 ### Added
 
 - **`docs/decisions-log.md` D65** — `_wb_run_with_timeout`/`_wb_cache_bool`

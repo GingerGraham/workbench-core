@@ -15,7 +15,7 @@
 # consumed by something else in the pipeline.
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/dev.sh" "0.2.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/dev.sh" "0.2.1" || true
 
 _wb_dev_prompt_one() {
     # modules/track.sh is lazy-loaded now (docs/decisions-log.md D65) —
