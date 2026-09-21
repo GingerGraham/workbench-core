@@ -10,7 +10,7 @@ Persisted per module in `sync.conf` (`contracts/state-schema.md`):
 
 | `TRACK_MODE` | Meaning | Re-checked every cycle? |
 |---|---|---|
-| `latest` (default) | Highest tag matching `vX.Y.Z` exactly | Yes |
+| `latest` (default) | Highest tag matching `X.Y.Z`, optionally `v`-prefixed | Yes |
 | `branch:<name>` | A branch's current tip | Yes (this is the point) |
 | `tag:<name>` | An exact tag, clean or pre-release | No — re-verified only, never re-resolved |
 | `commit:<sha>` | An exact commit | No — re-verified only |

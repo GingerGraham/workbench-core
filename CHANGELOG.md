@@ -4,6 +4,14 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **`docs/decisions-log.md` D66** — `TRACK_MODE=latest` tag resolution now
+  accepts bare `X.Y.Z` release tags, not just `vX.Y.Z` (`_wb_semver_is_clean_tag`,
+  `lib/core/semver.sh`, and its `bootstrap.sh` duplicate, `_is_clean_tag`).
+  A module tagged `2.5.6` with no leading `v` is now `latest`-trackable
+  without falling back to `--branch`.
+
 ## [2.11.1] - 2026-09-21
 
 ### Added
