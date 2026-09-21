@@ -65,14 +65,22 @@ register:
 ## The tag format contract
 
 `TRACK_MODE=latest` (the default for anything registered via `wb add`)
-resolves to the **highest tag matching exactly `vX.Y.Z`** — three numeric
-segments, `v`-prefixed, no pre-release or build suffix. To be
-`latest`-trackable, tag your releases this way: `v1.0.0`, `v1.4.12`,
-`v2.0.0`. Tags like `1.0.0` (no `v`), `v1.0` (two segments), or
-`v1.0.0-rc1` (pre-release suffix) are invisible to `latest` resolution —
-not an error, they're just skipped. A pre-release tag is still a perfectly
-valid input to an *explicit* pin (`wb track <name> --tag v1.0.0-rc1`); it's
-only excluded from the automatic `latest` chain.
+resolves to the **highest tag matching `X.Y.Z`, with an optional single
+leading `v`** — three numeric segments, no pre-release or build suffix.
+Both `v1.0.0` and `1.0.0` are `latest`-trackable; `v1.0` / `1.0` (two
+segments), `v1.0.0.0` / `1.0.0.0` (four segments), and `v1.0.0-rc1` /
+`1.0.0-rc1` (pre-release suffix) are all invisible to `latest`
+resolution — not an error, they're just skipped. A pre-release tag is
+still a perfectly valid input to an *explicit* pin
+(`wb track <name> --tag v1.0.0-rc1`); it's only excluded from the
+automatic `latest` chain.
+
+One caution: this means *any* tag shaped like three dot-separated numeric
+segments now participates in automatic `latest` resolution, whether or
+not it was meant as a release marker. If your repo tags anything else
+that way (a date-stamped tag, an unrelated numeric label), it will be
+swept into the `latest` candidate pool — avoid that shape for non-release
+tags if you don't want it picked up.
 
 This is published now, formally, as the contract every module author
 should follow — `workbench-core` does not (yet) validate compliance for

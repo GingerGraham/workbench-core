@@ -474,10 +474,15 @@ Four states, persisted per module as `TRACK_MODE`/`TRACK_REF`:
 | `tag:<name>` | Exact tag, clean or pre-release | No — static until explicitly changed |
 | `commit:<sha>` | Exact commit | No — static until explicitly changed |
 
-**Tag format contract:** only tags matching `vX.Y.Z` (three-segment,
-`v`-prefixed, no build metadata) participate in `latest` resolution.
-Non-conforming tags are simply invisible to `latest` resolution — not an
-error, just not counted. This is published now as the contract every
+**Tag format contract:** tags matching `X.Y.Z` or `vX.Y.Z` (three-segment,
+an optional single leading `v`, no pre-release or build metadata)
+participate in `latest` resolution. Non-conforming tags are simply
+invisible to `latest` resolution — not an error, just not counted.
+Comparison already normalises away a leading `v` (`_wb_semver_cmp`), so a
+repo whose tagging convention changes mid-history — bare before,
+`v`-prefixed after, or the reverse — still resolves and sorts correctly
+across the transition. See `docs/decisions-log.md` D66, amending D6. This
+is published now as the contract every
 module author must follow to be `latest`-trackable; formal validation of
 compliance is deferred to the future extension-validation work (out of
 scope here). Pre-release/RC-style tags (`v1.2.4-rc2`) are fully valid

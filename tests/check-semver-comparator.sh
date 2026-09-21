@@ -22,9 +22,13 @@ declare -A expect=(
     [v1.2.3]=clean
     [v1.10.0]=clean
     [v0.0.1]=clean
-    [1.2.3]=not
+    [1.2.3]=clean
+    [2.5.6]=clean
+    [1.2]=not
     [v1.2]=not
+    [1.2.3.4]=not
     [v1.2.3.4]=not
+    [1.2.3-rc1]=not
     [v1.2.3-rc1]=not
     [v1.2.3+build5]=not
     [vX.Y.Z]=not
@@ -33,7 +37,7 @@ declare -A expect=(
 for tag in "${!expect[@]}"; do
     if [[ "${expect[${tag}]}" == "clean" ]]; then
         if _wb_semver_is_clean_tag "${tag}"; then
-            ok "'${tag}' correctly recognised as a clean vX.Y.Z tag"
+            ok "'${tag}' correctly recognised as a clean tag"
         else
             fail "'${tag}' should be a clean tag but was rejected"
         fi
@@ -80,11 +84,18 @@ else
     fail "expected v1.10.0, got '${result2}'"
 fi
 
-result3="$(printf 'v1.10.0-rc1\nnot-a-tag\n1.2.3\n' | _wb_semver_highest)"
+result3="$(printf 'v1.10.0-rc1\nnot-a-tag\n1.2\n' | _wb_semver_highest)"
 if [[ -z "${result3}" ]]; then
     ok "a candidate set with no clean tags at all yields no highest (empty, not an error)"
 else
     fail "expected empty result for an all-dirty candidate set, got '${result3}'"
+fi
+
+result4="$(printf 'v1.9.0\n2.0.0\n1.10.0\n' | _wb_semver_highest)"
+if [[ "${result4}" == "2.0.0" ]]; then
+    ok "highest of a mixed prefixed/bare set {v1.9.0, 2.0.0, 1.10.0} is 2.0.0 (bare tag correctly beats prefixed ones)"
+else
+    fail "expected 2.0.0, got '${result4}'"
 fi
 
 # ── core_api range satisfaction ──────────────────────────────────────────────
