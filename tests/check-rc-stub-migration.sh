@@ -119,14 +119,33 @@ WARN_OUT="$(
         XDG_DATA_HOME="${XDG_DATA_HOME}" \
         XDG_CACHE_HOME="${XDG_CACHE_HOME}" \
         PATH="${PATH}" \
-        bash -c "source '${REPO_ROOT}/lib/loader.sh'" 2>&1
+        bash -i -c "source '${REPO_ROOT}/lib/loader.sh'" 2>&1
 )"
 if printf '%s\n' "${WARN_OUT}" | grep -q "Shell rc migration pending" \
     && printf '%s\n' "${WARN_OUT}" | grep -q "rc-stub-.bashrc.090000"; then
-    ok "the persistent migration warning fires and names the specific backup file"
+    ok "the persistent migration warning fires in an interactive shell and names the specific backup file"
 else
     fail "expected the migration warning naming the backup file, got:"
     printf '%s\n' "${WARN_OUT}"
+fi
+
+# ── 6b. The warning is gated on an interactive shell — a non-interactive
+#    run (matters now that .zshenv also gets the loader stub, and zsh
+#    sources .zshenv for every invocation, not just interactive ones)
+#    produces no warning at all. ────────────────────────────────────────
+WARN_OUT_NONINTERACTIVE="$(
+    env -i \
+        HOME="${HOME}" \
+        XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" \
+        XDG_DATA_HOME="${XDG_DATA_HOME}" \
+        XDG_CACHE_HOME="${XDG_CACHE_HOME}" \
+        PATH="${PATH}" \
+        bash -c "source '${REPO_ROOT}/lib/loader.sh'" 2>&1
+)"
+if ! printf '%s\n' "${WARN_OUT_NONINTERACTIVE}" | grep -q "Shell rc migration pending"; then
+    ok "the migration warning is suppressed in a non-interactive shell"
+else
+    fail "the migration warning fired in a non-interactive shell — this leaks onto stderr for scripts/ssh/zsh -c"
 fi
 
 rm -rf "${BACKUP_ROOT}"
@@ -137,7 +156,7 @@ WARN_OUT2="$(
         XDG_DATA_HOME="${XDG_DATA_HOME}" \
         XDG_CACHE_HOME="${XDG_CACHE_HOME}" \
         PATH="${PATH}" \
-        bash -c "source '${REPO_ROOT}/lib/loader.sh'" 2>&1
+        bash -i -c "source '${REPO_ROOT}/lib/loader.sh'" 2>&1
 )"
 if ! printf '%s\n' "${WARN_OUT2}" | grep -q "Shell rc migration pending"; then
     ok "removing the rc-stub-tagged backup clears the warning on the next shell start"

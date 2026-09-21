@@ -570,18 +570,25 @@ command -v dedupe-path &>/dev/null && dedupe-path 2>/dev/null
 # Fires while any rc-stub-tagged backup remains under the shared backup
 # root (docs/decisions-log.md D53/D64) — cheap on-disk check, no
 # subprocess beyond find. Clears itself once the user removes the file(s).
-_wb_migration_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/backups"
-_wb_migration_found=false
-while IFS= read -r _wb_bak; do
-    [[ -z "${_wb_bak}" ]] && continue
-    if [[ "${_wb_migration_found}" == "false" ]]; then
-        log_warn "Shell rc migration pending: workbench backed up pre-existing rc content before adding its loader stub."
-        log_warn "  Review the backup(s) below and copy anything you want to keep into a new file under \${XDG_CONFIG_HOME:-\${HOME}/.config}/workbench/local/, then remove the backup to clear this warning."
-        _wb_migration_found=true
-    fi
-    log_warn "  ${_wb_bak}"
-done < <(find "${_wb_migration_dir}" -maxdepth 3 -name 'rc-stub-*' -type f 2>/dev/null)
-unset _wb_migration_dir _wb_migration_found _wb_bak
+# Gated on an interactive shell, same as the "Interactive startup" block
+# just below — this PR also adds the loader stub to .zshenv, which zsh
+# sources for every invocation including non-interactive ones (ssh
+# host cmd, zsh -c, shebang scripts); without this gate the warning would
+# leak onto stderr there too (flagged in PR review).
+if [[ $- == *i* ]]; then
+    _wb_migration_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/backups"
+    _wb_migration_found=false
+    while IFS= read -r _wb_bak; do
+        [[ -z "${_wb_bak}" ]] && continue
+        if [[ "${_wb_migration_found}" == "false" ]]; then
+            log_warn "Shell rc migration pending: workbench backed up pre-existing rc content before adding its loader stub."
+            log_warn "  Review the backup(s) below and copy anything you want to keep into a new file under \${XDG_CONFIG_HOME:-\${HOME}/.config}/workbench/local/, then remove the backup to clear this warning."
+            _wb_migration_found=true
+        fi
+        log_warn "  ${_wb_bak}"
+    done < <(find "${_wb_migration_dir}" -maxdepth 3 -name 'rc-stub-*' -type f 2>/dev/null)
+    unset _wb_migration_dir _wb_migration_found _wb_bak
+fi
 
 # ── Interactive startup ───────────────────────────────────────────────────────
 if [[ $- == *i* ]] && [[ "${WORKBENCH_SHOW_FUNCTIONS}" == "true" ]] && command -v get-functions &>/dev/null; then
