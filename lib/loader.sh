@@ -24,6 +24,27 @@ if [[ -n "${BASH_VERSION:-}" ]]; then
     unset POSIXLY_CORRECT 2>/dev/null || true
 fi
 
+# ── Snapshot pre-existing prompt ownership ────────────────────────────────
+# Captured before any tier content (including a workbench module's own
+# prompt-owning tier) runs, so the fallback block further down can tell
+# "nothing has claimed the prompt yet" apart from "the rc file's own
+# pre-stub content (oh-my-zsh, p10k, starship, anything not
+# workbench-aware) already claimed it" — the same hook points
+# docs/decisions-log.md D50 already treats as the prompt-ownership
+# contract (bash PROMPT_COMMAND / zsh precmd_functions), just read here
+# before workbench has touched either. Deliberately not keyed on raw
+# PS1/PROMPT — those are frequently already non-empty from a distro's own
+# /etc/bashrc (confirmed on Fedora) regardless of any user customisation,
+# and keying on that would disable the fallback for the common case it
+# exists to serve. Known limitation: a bare custom PS1 with no prompt
+# manager behind it is not caught by this — see docs/decisions-log.md D64.
+_WB_LOADER_PROMPT_PRECLAIMED=false
+if [[ -n "${BASH_VERSION:-}" && -n "${PROMPT_COMMAND:-}" ]]; then
+    _WB_LOADER_PROMPT_PRECLAIMED=true
+elif [[ -n "${ZSH_VERSION:-}" && ${#precmd_functions[@]} -gt 0 ]]; then
+    _WB_LOADER_PROMPT_PRECLAIMED=true
+fi
+
 # ── Ensure ~/.local/bin is on PATH ────────────────────────────────────────
 # Some distros only add this conditionally in their default .bashrc/.zshrc,
 # gated on the directory existing at rc-parse time — not guaranteed the
@@ -421,7 +442,7 @@ if [[ "${WORKBENCH_PLAIN_SHELL}" == "true" ]]; then
         PS1='\u@\h:\w\$ '
     fi
     export WORKBENCH_PROMPT_ENGINE="plain"
-elif [[ -z "${WORKBENCH_PROMPT_SET:-}" ]]; then
+elif [[ -z "${WORKBENCH_PROMPT_SET:-}" && "${_WB_LOADER_PROMPT_PRECLAIMED}" == "false" ]]; then
     if [[ -n "${BASH_VERSION:-}" ]]; then
         if [[ -x /usr/bin/tput ]] && tput setaf 1 &>/dev/null; then
             PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
@@ -434,6 +455,7 @@ elif [[ -z "${WORKBENCH_PROMPT_SET:-}" ]]; then
     fi
     export WORKBENCH_PROMPT_ENGINE="fallback"
 fi
+unset _WB_LOADER_PROMPT_PRECLAIMED
 
 # ── Local overrides, second pass (always wins) ────────────────────────────────
 # shellcheck disable=SC1090
@@ -543,6 +565,23 @@ wb() {
 
 # ── PATH deduplication ────────────────────────────────────────────────────────
 command -v dedupe-path &>/dev/null && dedupe-path 2>/dev/null
+
+# ── RC migration pending warning ──────────────────────────────────────────
+# Fires while any rc-stub-tagged backup remains under the shared backup
+# root (docs/decisions-log.md D53/D64) — cheap on-disk check, no
+# subprocess beyond find. Clears itself once the user removes the file(s).
+_wb_migration_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/backups"
+_wb_migration_found=false
+while IFS= read -r _wb_bak; do
+    [[ -z "${_wb_bak}" ]] && continue
+    if [[ "${_wb_migration_found}" == "false" ]]; then
+        log_warn "Shell rc migration pending: workbench backed up pre-existing rc content before adding its loader stub."
+        log_warn "  Review the backup(s) below and copy anything you want to keep into a new file under \${XDG_CONFIG_HOME:-\${HOME}/.config}/workbench/local/, then remove the backup to clear this warning."
+        _wb_migration_found=true
+    fi
+    log_warn "  ${_wb_bak}"
+done < <(find "${_wb_migration_dir}" -maxdepth 3 -name 'rc-stub-*' -type f 2>/dev/null)
+unset _wb_migration_dir _wb_migration_found _wb_bak
 
 # ── Interactive startup ───────────────────────────────────────────────────────
 if [[ $- == *i* ]] && [[ "${WORKBENCH_SHOW_FUNCTIONS}" == "true" ]] && command -v get-functions &>/dev/null; then
