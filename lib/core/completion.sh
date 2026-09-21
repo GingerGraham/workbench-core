@@ -17,7 +17,7 @@ _wb_completion_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 unset _wb_completion_dir
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/completion.sh" "0.3.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/completion.sh" "0.3.1" || true
 
 # _wb_completion_dispatch_commands
 # Prints one dispatch-case command per line, in source order, by reading
