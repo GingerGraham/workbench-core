@@ -156,7 +156,7 @@ PRECLAIM_OUT="$(
         PATH="${PATH}" \
         bash <<INNER_EOF
         PROMPT_COMMAND="my_preexisting_hook"
-        PS1="[preclaimed]\\\$ "
+        PS1='[preclaimed]\$ '
         source "${REPO_ROOT}/lib/loader.sh" >/dev/null 2>&1
         echo "\${PS1}"
 INNER_EOF
@@ -179,7 +179,7 @@ PLAIN_OUT="$(
         XDG_CACHE_HOME="${XDG_CACHE_HOME}" \
         PATH="${PATH}" \
         bash <<INNER_EOF
-        PS1="\\\\u@\\\\h \\\\\\\$ "  # /etc/bashrc's own default — PROMPT_COMMAND left unset
+        PS1='\u@\h \$ '
         source "${REPO_ROOT}/lib/loader.sh" >/dev/null 2>&1
         echo "ENGINE=\${WORKBENCH_PROMPT_ENGINE:-unset}"
 INNER_EOF
