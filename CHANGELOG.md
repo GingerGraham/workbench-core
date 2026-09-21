@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.11.2] - 2026-09-21
+
 ### Changed
 
 - **`docs/decisions-log.md` D66** — `TRACK_MODE=latest` tag resolution now

@@ -37,7 +37,7 @@ set -euo pipefail
 # This file's own script-local version (bootstrap-fix brief §5.2). Can't
 # call lib/core/version.sh's workbench_register_script_version — nothing to
 # source yet — so it just declares and logs its own inline constant.
-_WB_BOOTSTRAP_VERSION="0.1.0"
+_WB_BOOTSTRAP_VERSION="0.1.1"
 
 # D18 lists bootstrap.sh in the script-local version registry's scope, but
 # nothing ever actually called the registration function here — this line
