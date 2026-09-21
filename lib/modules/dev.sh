@@ -20,7 +20,7 @@ command -v _workbench_register_script_version &>/dev/null && _workbench_register
 _wb_dev_prompt_one() {
     # modules/track.sh is lazy-loaded now (docs/decisions-log.md D65) —
     # this function calls workbench_cmd_track directly. Guarded the same
-    # way this file's own _wb_maybe_reconverge_core call further down
+    # way lib/modules/track.sh:140's own _wb_maybe_reconverge_core call
     # already is, so this file stays sourceable standalone with no
     # dependency on bin/wb (tests/check-wb-dev-flow.sh sources
     # modules/track.sh directly instead, so workbench_cmd_track is
