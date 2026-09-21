@@ -30,7 +30,7 @@ _workbench_ensure_version_file() {
         cp "${_wb_version_lib_dir}/version-defaults.conf" "${file}"
     else
         cat > "${file}" <<'EOF'
-CORE_API_VERSION=1.2
+CORE_API_VERSION=1.3
 STATE_SCHEMA_VERSION=2
 WORKBENCH_CORE_SEMVER=0.1.0
 EOF
@@ -121,7 +121,7 @@ _workbench_version_remove_var() {
 # no self-healing path short of a manual file edit. Bump
 # _WB_CORE_API_VERSION_CURRENT by hand alongside future contracts/core-api.md
 # additions (same policy as D29/D34) — never anything in the function below.
-_WB_CORE_API_VERSION_CURRENT="1.2"
+_WB_CORE_API_VERSION_CURRENT="1.3"
 
 # _workbench_sync_version_facts
 # Called from `wb install`/`wb apply`, after _workbench_ensure_version_file
@@ -260,6 +260,22 @@ _workbench_register_script_version() {
     _WB_SCRIPT_VERSIONS+=("${path}|${version}")
 }
 
+# _workbench_script_version_registered <path>
+# True if <path> has already been registered via
+# _workbench_register_script_version this process — used by _wb_require
+# (bin/wb) to skip re-sourcing a lib file that's already loaded, whether
+# via bin/wb's own fixed always-load pass or an earlier _wb_require call
+# for the same path from a different dispatch arm. Same bash-3.2-safe
+# empty-array expansion as the two loops just above this file's own
+# registration function, and for the identical reason.
+_workbench_script_version_registered() {
+    local _path="$1" _entry
+    for _entry in "${_WB_SCRIPT_VERSIONS[@]+"${_WB_SCRIPT_VERSIONS[@]}"}"; do
+        [[ "${_entry}" == "${_path}|"* ]] && return 0
+    done
+    return 1
+}
+
 # _workbench_print_script_versions
 # One "  <path>  v<version>" line per registered entry, in registration
 # (i.e. bin/wb's own source-order) order. Same bash-3.2-safe empty-array
@@ -274,4 +290,4 @@ _workbench_print_script_versions() {
 }
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/version.sh" "0.4.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/version.sh" "0.5.0" || true

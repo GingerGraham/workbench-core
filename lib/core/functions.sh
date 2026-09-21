@@ -19,7 +19,7 @@ _wb_functions_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 unset _wb_functions_dir
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/functions.sh" "0.3.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/functions.sh" "0.4.0" || true
 
 # ── OS / WSL / Distro / Shell / Arch detection (run once per session) ───────
 # Reconciles loader.sh's inline detection block and functions.sh's separate
@@ -278,6 +278,136 @@ elevate-cmd() {
 }
 
 # ── Function/alias availability gating ───────────────────────────────────
+# _wb_run_with_timeout <seconds> <command> [args...]
+# Portable (bash-3.2-safe) watchdog: backgrounds <command>, races it
+# against a sleep/kill watchdog, and returns its real exit status if it
+# finished in time. Returns 124 (GNU timeout's own convention) if it had
+# to be killed, so callers can tell "ran and failed" from "never
+# returned" without a second code path. `disown` on both jobs keeps this
+# quiet under job control (an interactive caller, unlike bin/wb's own
+# non-interactive script context) — without it, bash prints an
+# unsolicited "Terminated" notification for the killed job at the next
+# prompt. Deliberately disowned AFTER each `wait`, not immediately after
+# backgrounding (an earlier version of this function did that and it's a
+# real, confirmed bug, not a style choice): once a job is disowned, bash
+# drops it from the job table, and `wait <pid>` on an already-disowned pid
+# no longer returns that process's real exit status — it silently returns
+# 0 instead, which made this wrapper report "available" for every
+# predicate regardless of what it actually returned (caught by
+# tests/check-function-availability-gating.sh). Disowning after `wait` has
+# already reaped the exit status keeps both properties: the real status is
+# captured, and the job is still removed from job control before an
+# interactive shell's next prompt could report on it. Not GNU `timeout`,
+# which is absent by default on macOS and this repo commits to bash 3.2
+# portability.
+_wb_run_with_timeout() {
+    local _wb_rwt_timeout="$1"; shift
+    "$@" &
+    local _wb_rwt_pid=$!
+    (
+        sleep "${_wb_rwt_timeout}"
+        kill -TERM "${_wb_rwt_pid}" 2>/dev/null
+    ) &
+    local _wb_rwt_watchdog=$!
+    local _wb_rwt_rc=0
+    wait "${_wb_rwt_pid}" 2>/dev/null || _wb_rwt_rc=$?
+    disown "${_wb_rwt_pid}" 2>/dev/null
+    kill "${_wb_rwt_watchdog}" 2>/dev/null
+    wait "${_wb_rwt_watchdog}" 2>/dev/null
+    disown "${_wb_rwt_watchdog}" 2>/dev/null
+    [[ "${_wb_rwt_rc}" -eq 143 ]] && return 124   # 128 + SIGTERM
+    return "${_wb_rwt_rc}"
+}
+
+# _wb_cache_bool <cache-key> -- <command> [args...]
+# Runs <command> at most once per <cache-key> for the lifetime of this
+# process, returning the cached exit status on every later call with the
+# same key. For a hand-written availability predicate whose real check is
+# expensive (a live agent/hardware/network probe) but conceptually shared
+# across several exposed names — e.g. several gpg-* predicates all really
+# asking "is a card present". <cache-key> is the author's own choice, not
+# derived from <command>: this file has no way to know two differently-
+# worded checks are "the same" probe, so it never guesses — the author
+# says so explicitly by reusing the same key.
+#
+# File-backed, not an in-shell eval-indexed variable (an earlier version
+# of this function used one, the same technique as
+# _wb_availability_reason_<key> above): every predicate call now runs
+# through _wb_run_with_timeout, which backgrounds it (`"$@" &`) to race it
+# against the watchdog — a real forked subprocess, not just a nested
+# shell. A variable set inside that fork via eval is gone the instant the
+# fork exits; it never makes it back to the caller's shell, so two
+# predicates sharing a cache key would each pay for the real check anyway
+# (confirmed by tests/check-availability-timeout.sh while building this).
+# One small file per <cache-key>, under a directory keyed by `$$` (stable
+# across forks — only $BASHPID changes there, not $$ — so every predicate
+# call anywhere in this same top-level process, `wb functions` or an
+# interactive shell alike, shares the same cache), holds the cached exit
+# status instead. Known, accepted limitation: nothing removes this
+# directory afterwards, so it's left for the OS's normal tmp-cleanup —
+# one tiny file per distinct cache key actually used, not worth a global
+# EXIT trap in a file this widely sourced (which could also silently
+# clobber a caller's own trap).
+: "${_wb_cache_bool_dir:=${TMPDIR:-/tmp}/.wb-cache-bool.$$}"
+
+_wb_cache_bool() {
+    local _key _sanitized _cache_file _rc
+    _key="$1"; shift
+    [[ "${1:-}" == "--" ]] && shift
+    _sanitized="$(printf '%s' "${_key}" | tr -c 'A-Za-z0-9_' '_')"
+    _cache_file="${_wb_cache_bool_dir}/${_sanitized}"
+    _rc=""
+    [[ -f "${_cache_file}" ]] && _rc="$(cat "${_cache_file}" 2>/dev/null)"
+    if [[ -z "${_rc}" ]]; then
+        "$@" &>/dev/null
+        _rc=$?
+        mkdir -p "${_wb_cache_bool_dir}" 2>/dev/null
+        printf '%s' "${_rc}" > "${_cache_file}" 2>/dev/null
+    fi
+    return "${_rc}"
+}
+
+# Per-predicate ceiling for _wb_function_available below. Overridable —
+# a real gpg/ssh-agent probe can legitimately take longer than a plain
+# command -v check, especially over WSL2's virtualised device path, so
+# this is a judgment call, not a measured figure. Tune it if a real
+# predicate in this repo starts getting falsely killed.
+WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS="${WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS:-1}"
+
+# Reset at the start of every `wb functions` run (bin/wb's
+# _wb_cmd_functions, via _wb_availability_timeout_reset below) and
+# appended to by _wb_function_available whenever a predicate hits the
+# timeout instead of returning normally. Space-separated, not an array —
+# bash-3.2 constraint again.
+#
+# File-backed as well as this in-shell variable, not just the variable
+# alone — same reasoning, and the same technique, as _wb_cache_bool's own
+# file-backed cache just above: _wb_function_available (via
+# _wb_filter_available_names) is always invoked from inside a `$(...)`
+# command substitution in _get_functions_in/_get_aliases_in/
+# _wb_print_live_names, which is itself a subshell — a plain variable
+# assignment made in there is gone the instant that subshell exits and
+# never reaches _wb_cmd_functions' own scope, so the warning line came up
+# empty even though a predicate genuinely timed out (confirmed by
+# tests/check-availability-timeout.sh while building this). A file write
+# is not scoped to the subshell that made it, so it survives that
+# boundary; _wb_print_timeout_warning reads the file back, not the
+# variable. The variable itself is kept for any caller that invokes
+# _wb_function_available directly, with no subshell in between (there is
+# no harm in updating both).
+: "${_wb_availability_timeout_log:=${TMPDIR:-/tmp}/.wb-availability-timeouts.$$}"
+_wb_availability_timed_out=""
+
+# _wb_availability_timeout_reset
+# Clears both the in-shell accumulator and its file backing — called at
+# the start of every `wb functions` run (bin/wb's _wb_cmd_functions)
+# rather than resetting the file inline there, since only this file knows
+# the file's own path.
+_wb_availability_timeout_reset() {
+    _wb_availability_timed_out=""
+    rm -f "${_wb_availability_timeout_log}" 2>/dev/null
+}
+
 # _wb_function_available <name>
 # Looks up an optional "_<name>-available" predicate and returns its exit
 # code. No predicate declared — the overwhelmingly common case, since most
@@ -288,16 +418,43 @@ elevate-cmd() {
 # every listing surface runs before printing a name, so there is exactly
 # one place "is this actually usable right now" gets decided
 # (docs/decisions-log.md D43 — never guess, an absent predicate is a
-# known state, not a failure).
+# known state, not a failure). The predicate call itself is bounded to
+# WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS (docs/decisions-log.md D65) so a
+# slow/hanging hand-written predicate (a live gpg/ssh-agent/network probe)
+# can never block a listing command indefinitely.
 _wb_function_available() {
     [[ "${WORKBENCH_FUNCTIONS_SHOW_ALL:-false}" == "true" ]] && return 0
-    local _name="$1" _predicate
+    local _name="$1" _predicate _rc
     _predicate="_${_name}-available"
     if command -v "${_predicate}" &>/dev/null; then
-        "${_predicate}" &>/dev/null
-        return $?
+        _wb_run_with_timeout "${WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS}" "${_predicate}" &>/dev/null
+        _rc=$?
+        if [[ "${_rc}" -eq 124 ]]; then
+            _wb_availability_timed_out="${_wb_availability_timed_out:+${_wb_availability_timed_out} }${_name}"
+            printf '%s\n' "${_name}" >> "${_wb_availability_timeout_log}" 2>/dev/null
+            return 1
+        fi
+        return "${_rc}"
     fi
     return 0
+}
+
+# _wb_print_timeout_warning
+# Prints one log_warn line naming every predicate that hit
+# WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS during this run, if any. Reads
+# the file-backed log, not the in-shell variable — see the comment above
+# _wb_availability_timeout_log for why that's the one guaranteed to have
+# survived every call site. A predicate that has to be killed is a bug in
+# whichever module declared it (docs/module-authoring.md, "Declaring
+# function availability": predicates must be cheap discovery checks,
+# never a live hardware/agent/network probe) — surfaced loudly, not
+# blended into the listing.
+_wb_print_timeout_warning() {
+    [[ -s "${_wb_availability_timeout_log}" ]] || return 0
+    local _names
+    _names="$(sort -u "${_wb_availability_timeout_log}" 2>/dev/null | tr '\n' ' ')"
+    _names="${_names% }"
+    log_warn "wb functions: predicate(s) for [${_names}] exceeded ${WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS}s and were killed — see docs/module-authoring.md 'Declaring function availability'"
 }
 
 # _wb_filter_available_names
@@ -489,6 +646,32 @@ _get_aliases_in() {
     elif [[ -n "${_pattern}" ]]; then
         _names="$(printf '%s\n' "${_names}" | grep -E "${_pattern}")"
     fi
+    local _names_all="${_names}"
+    _names="$(printf '%s\n' "${_names}" | _wb_filter_available_names)"
+    if [[ -z "${_names}" ]]; then
+        echo "  (none)"
+    else
+        printf '%s\n' "${_names}" | column
+    fi
+    _wb_print_hidden_hint "${_names_all}" "${_names}"
+    echo
+}
+
+# _wb_print_live_names <label> <newline-separated names>
+# Same output shape as _get_functions_in/_get_aliases_in (availability
+# gating, column formatting, hidden-count hint) but for a caller that
+# already has its candidate name list from live shell state rather than
+# a set of files to grep — used by _wb_cmd_functions' own top-level
+# listing (bin/wb) to avoid re-reading every eager file a second time
+# after already sourcing it once. Does not touch _extract_function_names/
+# _extract_alias_names/_get_functions_in/_get_aliases_in themselves —
+# those stay file-based and unchanged, since every existing
+# get-<domain>-functions getter across every module depends on that
+# exact, documented signature (contracts/core-api.md).
+_wb_print_live_names() {
+    local _label="$1" _names="$2"
+    echo
+    echo "[INFO] ${_label}:"
     local _names_all="${_names}"
     _names="$(printf '%s\n' "${_names}" | _wb_filter_available_names)"
     if [[ -z "${_names}" ]]; then

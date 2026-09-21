@@ -11,6 +11,15 @@
 # generalised from workbench-precursor's scripts/external-sync.sh, which
 # already guaranteed this for its own narrower scope.
 
+# distribution/{resolve,fetch-tarball,fetch-git-snapshot,snapshot}.sh are
+# deliberately NOT in this eager dependency block (docs/decisions-log.md
+# D65) — they're the heaviest, least-often-needed files this codebase has,
+# and this file is in bin/wb's always-load list, so unconditionally
+# sourcing them here would source them on every single `wb` invocation,
+# including `wb __complete`/`wb functions`, exactly the cost Fix 3 exists
+# to remove. workbench_sync_module (the only place in this file that
+# actually needs them) sources them itself, lazily, the moment a real
+# sync runs — see its own comment.
 _wb_engine_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 for _wb_engine_dep in \
     "${_wb_engine_lib_dir}/../core/log.sh" \
@@ -18,10 +27,6 @@ for _wb_engine_dep in \
     "${_wb_engine_lib_dir}/../core/semver.sh" \
     "${_wb_engine_lib_dir}/../core/version.sh" \
     "${_wb_engine_lib_dir}/../manifest/parse.sh" \
-    "${_wb_engine_lib_dir}/../distribution/resolve.sh" \
-    "${_wb_engine_lib_dir}/../distribution/fetch-tarball.sh" \
-    "${_wb_engine_lib_dir}/../distribution/fetch-git-snapshot.sh" \
-    "${_wb_engine_lib_dir}/../distribution/snapshot.sh" \
     "${_wb_engine_lib_dir}/state.sh"; do
     # shellcheck disable=SC1090
     [[ -f "${_wb_engine_dep}" ]] && source "${_wb_engine_dep}"
@@ -29,7 +34,7 @@ done
 unset _wb_engine_dep
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/sync/engine.sh" "0.3.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/sync/engine.sh" "0.4.0" || true
 
 # ── Cadence (docs/architecture.md §9.4/D8) ─────────────────────────────────────────
 : "${WORKBENCH_CADENCE_DEFAULT_SECONDS:=604800}"   # weekly
@@ -521,6 +526,31 @@ workbench_run_post_deploy_hook() {
 # changed), 1 on a resolution/fetch failure (logged, never fatal to the
 # caller's loop over other modules).
 workbench_sync_module() {
+    # Lazy-load the distribution primitives here, not at this file's own
+    # top (see the comment on the dependency block above) — the instant a
+    # real sync actually runs, not before. bin/wb's own _wb_require
+    # (lazy-source, idempotent per process, backed by the same
+    # _WB_SCRIPT_VERSIONS dedup core/version.sh already maintains) is used
+    # when available; when this file is sourced standalone — e.g.
+    # tests/check-sync-engine-isolation.sh, which exercises this function
+    # with no bin/wb in the picture at all — a private fallback sources
+    # them directly by path instead, keyed off the same dedup array, so
+    # this function keeps working with no dependency on bin/wb ever having
+    # run (module zero stays self-contained).
+    if command -v _wb_require &>/dev/null; then
+        _wb_require distribution/resolve.sh distribution/fetch-tarball.sh distribution/fetch-git-snapshot.sh distribution/snapshot.sh
+    else
+        local _wb_sm_dep
+        for _wb_sm_dep in resolve.sh fetch-tarball.sh fetch-git-snapshot.sh snapshot.sh; do
+            if command -v _workbench_script_version_registered &>/dev/null \
+                && _workbench_script_version_registered "lib/distribution/${_wb_sm_dep}"; then
+                continue
+            fi
+            # shellcheck disable=SC1090
+            source "${_wb_engine_lib_dir}/../distribution/${_wb_sm_dep}"
+        done
+    fi
+
     local name="$1" reason="${2:-scheduled}"
     local mode resolved current_sha module_dir
 

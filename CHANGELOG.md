@@ -4,6 +4,50 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`docs/decisions-log.md` D65** — `_wb_run_with_timeout`/`_wb_cache_bool`
+  (`lib/core/functions.sh`, `CORE_API_VERSION` 1.2 → 1.3): every
+  `_<name>-available` predicate `wb functions` runs is now bounded to
+  `WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS` (default 1s, overridable) — a
+  hand-written predicate that hangs is killed and hidden, named in a
+  warning line, instead of blocking the whole command indefinitely.
+  `_wb_cache_bool <cache-key> -- <command...>` lets several predicates
+  that really share one expensive check (a live agent/hardware probe) run
+  it once per `wb functions` invocation instead of once per name — see
+  `docs/module-authoring.md`, "Declaring function availability".
+
+### Changed
+
+- **`wb __complete <kind>`, the hidden dispatcher the generated bash/zsh
+  completion scripts shell out to on every keystroke past the first TAB
+  level, no longer triggers a full shell reload** (`lib/loader.sh`) — a
+  gap in the reload wrapper's read-only exclusion list, not a deliberate
+  choice. See `docs/decisions-log.md` D65.
+- **`bin/wb` now lazy-loads its heavier lib files** (`distribution/
+  resolve.sh`, `distribution/fetch-tarball.sh`, `distribution/fetch-git-
+  snapshot.sh`, `distribution/snapshot.sh`, `ssh/bootstrap.sh`, `sync/
+  scheduler.sh`, `modules/catalog.sh`, `modules/add.sh`, `modules/
+  remove.sh`, `modules/track.sh`, `modules/dev.sh`, `modules/sync-
+  toggle.sh`, `modules/info.sh`) via a new internal `_wb_require`
+  idempotent-source helper, instead of sourcing all 24 lib files
+  unconditionally on every invocation — a real cost on hosts where
+  opening a shell script file is expensive (e.g. some WSL2/AV
+  configurations), and previously paid on every single keystroke of
+  second-level tab completion (`wb __complete`) regardless of which
+  subcommand was actually being completed. No behavioural change to any
+  command's output. See `docs/decisions-log.md` D65.
+- **`wb functions` reads its "Loaded functions"/"Loaded aliases" listing
+  from live shell state after sourcing each registered file once, instead
+  of re-opening every file a second time to grep it** — removes a
+  redundant file read on a frequently-invoked command, and is also more
+  accurate: a function a module only conditionally defines (inside an
+  `if command -v <tool>; then ... fi` guard) now shows correctly instead
+  of always showing regardless of whether the guard actually passed.
+  Register-list and manifest-getter entries are also now gathered in one
+  walk of the loadable-module set instead of two. See
+  `docs/decisions-log.md` D65.
+
 ## [2.11.0] - 2026-09-21
 
 ### Added
