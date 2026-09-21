@@ -26,7 +26,7 @@
 # digit-only check, which behaves identically in both shells.
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/semver.sh" "0.1.1" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/semver.sh" "0.1.2" || true
 
 # _wb_semver_is_clean_tag <tag>
 # True iff <tag> is X.Y.Z, with an optional single leading 'v' — three
