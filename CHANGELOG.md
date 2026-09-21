@@ -6,6 +6,12 @@ All notable changes to `workbench-core` are documented here.
 
 ### Added
 
+- **`docs/decisions-log.md` D64** — `wb install`/`wb apply` now back up
+  pre-existing `.bashrc`/`.zshrc`/`.zshenv` content (tagged `rc-stub`,
+  reusing D53's backup mechanism) the first time the loader stub is
+  appended, and a persistent warning fires on every new interactive shell
+  until the backup is reviewed and cleared. See "Migrating from an
+  existing shell config" in `docs/getting-started.md`.
 - **`docs/decisions-log.md` D63** — `GingerGraham/workbench-template`, a
   GitHub template repository for scaffolding new `workbench-*` extension
   modules, with a self-removing bootstrap workflow that fills in the new
@@ -18,6 +24,15 @@ All notable changes to `workbench-core` are documented here.
   template") instead of copying an existing module's tree by hand;
   `docs/module-authoring.md` remains the canonical source the template
   is periodically re-snapshotted from.
+
+### Fixed
+
+- **`lib/loader.sh`'s prompt fallback no longer silently overwrites a
+  non-workbench-aware prompt tool** (starship, oh-my-posh, oh-my-zsh,
+  powerlevel10k) that already claimed the prompt from earlier rc content.
+  It now also checks whether `PROMPT_COMMAND` (bash) or
+  `precmd_functions` (zsh) is already non-empty the first time the loader
+  runs, and skips itself if so — see `docs/decisions-log.md` D64.
 
 ## [2.10.1] - 2026-09-16
 

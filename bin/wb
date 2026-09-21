@@ -235,6 +235,22 @@ _wb_write_rc_stub() {
     local loader_path="\${XDG_DATA_HOME:-\${HOME}/.local/share}/workbench/modules/core/current/lib/loader.sh"
     local stub_line="[ -f \"${loader_path}\" ] && source \"${loader_path}\"  ${marker}"
 
+    if [[ -s "${rc_file}" ]] && ! grep -qF "${marker}" "${rc_file}" 2>/dev/null; then
+        # First time workbench has ever touched this file, and it already
+        # has real content — back it up before appending anything, so a
+        # previous dotfiles setup, a distro default, or a custom prompt
+        # is never silently at risk. Reuses the same engine-computed
+        # backup root every force-overwrite deploy already uses
+        # (docs/decisions-log.md D53) — the "rc-stub" tag keeps these
+        # filterable without a second backup-directory convention.
+        if ! workbench_backup_existing_file "${rc_file}" "rc-stub"; then
+            log_error "wb install: could not back up ${rc_file} — leaving it untouched, not adding the loader stub"
+            return 1
+        fi
+        log_warn "wb install: ${rc_file} had existing content — backed up under \${XDG_DATA_HOME:-\${HOME}/.local/share}/workbench/backups/ before adding the loader stub."
+        log_warn "wb install: review the backup and copy anything you want to keep into a new file under \${XDG_CONFIG_HOME:-\${HOME}/.config}/workbench/local/ (e.g. 90-migrated.sh)."
+    fi
+
     touch "${rc_file}"
     if grep -qF "${marker}" "${rc_file}" 2>/dev/null; then
         return 0
@@ -330,6 +346,7 @@ _wb_cmd_install() {
     _wb_write_rc_stub "${HOME}/.bashrc"
     if [[ -n "${ZSH_VERSION:-}" || -f "${HOME}/.zshrc" ]]; then
         _wb_write_rc_stub "${HOME}/.zshrc"
+        _wb_write_rc_stub "${HOME}/.zshenv"
     fi
 
     if [[ -n "${bundle}" ]]; then
