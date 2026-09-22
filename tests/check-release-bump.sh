@@ -511,6 +511,45 @@ fi
     git checkout -q -B main v1.0.0
 )
 
+# 4m. Regression for a real incident: compute-bumps.sh invoked (e.g. via
+#     workflow_dispatch) while HEAD is itself the just-tagged release
+#     commit must resolve PREV_TAG to that same tag, not skip past it to
+#     an older one — `git describe ... HEAD^` walks past a tag that sits
+#     on HEAD itself, silently re-including every already-released commit
+#     back to the PREVIOUS tag in the diff range. Confirmed live: a manual
+#     'patch' dispatch run right after v2.12.0 was cut recomputed against
+#     (v2.11.2, HEAD] instead of (v2.12.0, HEAD], re-counting the
+#     already-released core-scoped feat commit and proposing v2.13.0
+#     instead of a clean v2.12.1.
+(
+    cd "${FIXTURE}" || exit 1
+    echo "# fix" >> lib/other/widget.sh
+    git add -A
+    git commit -q -m "fix: correct a bug in widget.sh"
+    printf '1.1.0\n' > VERSION
+    git add -A
+    git commit -q -m "chore(release): v1.1.0"
+    git tag -a v1.1.0 -m v1.1.0
+)
+PLAN_AT_TAG="$("${RELEASE_DIR}/compute-bumps.sh" 2>/dev/null)"
+if grep -q '^OVERALL|1\.1\.0|1\.1\.0|none|' <<< "${PLAN_AT_TAG}"; then
+    ok "compute-bumps.sh run with HEAD exactly on the just-cut tag finds no pending commits (PREV_TAG resolves to HEAD's own tag, not an older one)"
+else
+    fail "compute-bumps.sh run with HEAD exactly on the just-cut tag incorrectly found pending commits: ${PLAN_AT_TAG}"
+fi
+# shellcheck disable=SC2209
+PLAN_AT_TAG_FORCED="$(WB_RELEASE_FORCE_SEVERITY=patch "${RELEASE_DIR}/compute-bumps.sh" 2>/dev/null)"
+if grep -q "^OVERALL|1\.1\.0|1\.1\.1|patch|manual override (workflow_dispatch): requested at least 'patch'\$" <<< "${PLAN_AT_TAG_FORCED}"; then
+    ok "manual floor with HEAD on the just-cut tag proposes the correct next patch (1.1.1), not a version inflated by re-counting already-released commits"
+else
+    fail "manual floor with HEAD on the just-cut tag proposed the wrong version: ${PLAN_AT_TAG_FORCED}"
+fi
+
+(
+    cd "${FIXTURE}" || exit 1
+    git checkout -q -B main v1.0.0
+)
+
 # ── 9. PR title format check (docs/decisions-log.md D47) ───────────────────
 # The real-world incident this guards against: PR #46's title lacked a
 # Conventional Commit prefix, so the squash-merge commit that landed on

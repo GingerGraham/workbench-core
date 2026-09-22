@@ -4,6 +4,17 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`compute-bumps.sh` re-counted already-released commits when a manual
+  `workflow_dispatch` release was run with `HEAD` exactly on the just-cut
+  release commit** — the baseline-tag lookup used `HEAD^`, which walks
+  past a tag sitting on `HEAD` itself, silently widening the diff range
+  back to the *previous* release and re-including its commits. A manual
+  `patch` dispatch run right after a release could therefore propose a
+  version far higher than intended. Fixed by resolving the baseline tag
+  from `HEAD` instead. See `docs/decisions-log.md` D68.
+
 ## [2.12.0] - 2026-09-22
 
 ### Added
