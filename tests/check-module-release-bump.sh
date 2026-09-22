@@ -99,21 +99,59 @@ fi
     git checkout -q -B main v1.0.0
 )
 
-# 4. CHANGELOG gate still blocks apply-bump.sh on an empty [Unreleased],
-#    even for a manually-forced release.
+# 4. A fully manual, zero-qualifying-commit release auto-inserts a
+#    synthetic CHANGELOG entry instead of failing (docs/decisions-log.md
+#    D69, workbench-core).
 (
     cd "${FIXTURE}" || exit 1
-    printf '# Changelog\n\n## [Unreleased]\n' > CHANGELOG.md
+    # Realistic shape -- a previous release still sits below [Unreleased].
+    # Copilot review finding on PR #94: a fixture that always puts
+    # [Unreleased] at end-of-file hides a blank-line-eating bug in the
+    # insertion helper.
+    printf '# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n### Fixed\n\n- something\n' > CHANGELOG.md
     echo "docs update" >> README-placeholder.md
     git add -A
     git commit -q -m "docs: yet another unrelated tweak"
 )
 # shellcheck disable=SC2209
 PLAN_GATE="$(cd "${FIXTURE}" && WB_RELEASE_FORCE_SEVERITY=patch "${MODULE_RELEASE_DIR}/compute-bump.sh" 2>/dev/null)"
-if (cd "${FIXTURE}" && "${MODULE_RELEASE_DIR}/apply-bump.sh" "${PLAN_GATE}" 2>"${WORK}/manual-gate.log"); then
-    fail "apply-bump.sh did not fail with an empty [Unreleased] section on a manually-forced release"
+if (cd "${FIXTURE}" && WB_RELEASE_MANUAL_REASON="test reason" "${MODULE_RELEASE_DIR}/apply-bump.sh" "${PLAN_GATE}" 2>"${WORK}/manual-gate.log"); then
+    ok "apply-bump.sh auto-inserts a synthetic CHANGELOG entry for a manual, zero-qualifying-commit release instead of failing"
 else
-    ok "CHANGELOG gate still blocks a manually-forced release with an empty [Unreleased] section"
+    fail "apply-bump.sh failed on a manual, zero-qualifying-commit release: $(cat "${WORK}/manual-gate.log")"
+fi
+if grep -qF -- '- test reason' "${FIXTURE}/CHANGELOG.md"; then
+    ok "the synthetic CHANGELOG entry uses the dispatch's reason text"
+else
+    fail "the synthetic CHANGELOG entry did not contain the dispatch's reason text"
+fi
+SPACING_CHECK="$(awk '/^- test reason$/ { getline a; getline b; print (a == "" && b == "## [1.0.0] - 2026-01-01") ? "ok" : "bad: [" a "] [" b "]" }' "${FIXTURE}/CHANGELOG.md")"
+if [[ "${SPACING_CHECK}" == "ok" ]]; then
+    ok "a blank line separates the synthetic entry from the next release heading (no eaten blank line)"
+else
+    fail "the synthetic entry's spacing before the next release heading is wrong: ${SPACING_CHECK}"
+fi
+
+(
+    cd "${FIXTURE}" || exit 1
+    git checkout -q -f -B main v1.0.0
+)
+
+# 5. The gate still blocks when REAL qualifying commits exist and the
+#    CHANGELOG was simply left undocumented.
+(
+    cd "${FIXTURE}" || exit 1
+    printf '# Changelog\n\n## [Unreleased]\n' > CHANGELOG.md
+    echo "feat update" >> README-placeholder.md
+    git add -A
+    git commit -q -m "feat: a real bump with no changelog entry, dispatched manually too"
+)
+# shellcheck disable=SC2209
+PLAN_REAL_WORK="$(cd "${FIXTURE}" && WB_RELEASE_FORCE_SEVERITY=patch "${MODULE_RELEASE_DIR}/compute-bump.sh" 2>/dev/null)"
+if (cd "${FIXTURE}" && "${MODULE_RELEASE_DIR}/apply-bump.sh" "${PLAN_REAL_WORK}" 2>"${WORK}/manual-real-work.log"); then
+    fail "apply-bump.sh did not fail with an empty [Unreleased] section when real qualifying commits exist under manual dispatch"
+else
+    ok "CHANGELOG gate still blocks a manual dispatch when real qualifying commits exist and weren't documented"
 fi
 
 echo

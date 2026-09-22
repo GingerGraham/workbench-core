@@ -102,6 +102,8 @@ jobs:
 
       - name: Apply bump (CHANGELOG.md only)
         if: steps.compute.outputs.severity != 'none'
+        env:
+          WB_RELEASE_MANUAL_REASON: ${{ inputs.reason }}
         run: _core/.github/scripts/module-release/apply-bump.sh "$(cat bump-plan.txt)"
 
       - name: Build release notes

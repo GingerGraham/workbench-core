@@ -226,3 +226,29 @@ _rel_changelog_release() {
     ' "${file}" > "${tmp}"
     mv "${tmp}" "${file}"
 }
+
+# _rel_changelog_insert_manual_entry <changelog path> <text>
+# Inserts a synthetic "### Changed" bullet into an EMPTY [Unreleased]
+# section — only ever called when _rel_changelog_has_entries already
+# reported false AND the bump's sole reason was a manual workflow_dispatch
+# floor with no qualifying commits of its own (docs/decisions-log.md D69):
+# there's genuinely nothing else to describe, so requiring a human to
+# pre-edit CHANGELOG.md before dispatching is pure friction, not a real
+# safety net — unlike the same gate on an unforced release, or a forced
+# one where real qualifying commits exist and were simply left undocumented.
+_rel_changelog_insert_manual_entry() {
+    local file="$1" text="$2" tmp
+    tmp="$(mktemp)"
+    awk -v text="${text}" '
+        /^## \[Unreleased\]/ {
+            print
+            print ""
+            print "### Changed"
+            print ""
+            print "- " text
+            next
+        }
+        { print }
+    ' "${file}" > "${tmp}"
+    mv "${tmp}" "${file}"
+}

@@ -33,8 +33,20 @@ fi
 
 CHANGELOG="${REPO_ROOT}/CHANGELOG.md"
 if ! _rel_changelog_has_entries "${CHANGELOG}"; then
-    echo "apply-bumps: refusing to release ${OVERALL_NEW} — CHANGELOG.md's [Unreleased] section is empty. Add an entry before this can ship." >&2
-    exit 1
+    # A manual workflow_dispatch floor with no qualifying commits of its own
+    # (docs/decisions-log.md D69) is the one case with genuinely nothing to
+    # describe — auto-insert a synthetic entry instead of hard-failing.
+    # Anything else empty here (an unforced release, or a forced one where
+    # real qualifying commits exist and were simply left undocumented)
+    # still hits the gate exactly as before.
+    if [[ "${OVERALL_REASON}" == "manual override (workflow_dispatch)"* ]]; then
+        MANUAL_TEXT="${WB_RELEASE_MANUAL_REASON:-Manual release via workflow_dispatch — no functional changes.}"
+        echo "apply-bumps: [Unreleased] is empty, but this bump's sole reason is a manual workflow_dispatch floor with no qualifying commits — inserting a synthetic CHANGELOG entry: ${MANUAL_TEXT}" >&2
+        _rel_changelog_insert_manual_entry "${CHANGELOG}" "${MANUAL_TEXT}"
+    else
+        echo "apply-bumps: refusing to release ${OVERALL_NEW} — CHANGELOG.md's [Unreleased] section is empty. Add an entry before this can ship." >&2
+        exit 1
+    fi
 fi
 
 while IFS='|' read -r path old new severity; do
