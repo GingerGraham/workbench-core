@@ -246,11 +246,9 @@ _rel_changelog_insert_manual_entry() {
             print "### Changed"
             print ""
             print "- " text
-            skip_blank = 1
             next
         }
-        skip_blank && /^$/ { skip_blank = 0; next }
-        { skip_blank = 0; print }
+        { print }
     ' "${file}" > "${tmp}"
     mv "${tmp}" "${file}"
 }

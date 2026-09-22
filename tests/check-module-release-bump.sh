@@ -104,7 +104,11 @@ fi
 #    D69, workbench-core).
 (
     cd "${FIXTURE}" || exit 1
-    printf '# Changelog\n\n## [Unreleased]\n' > CHANGELOG.md
+    # Realistic shape -- a previous release still sits below [Unreleased].
+    # Copilot review finding on PR #94: a fixture that always puts
+    # [Unreleased] at end-of-file hides a blank-line-eating bug in the
+    # insertion helper.
+    printf '# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n### Fixed\n\n- something\n' > CHANGELOG.md
     echo "docs update" >> README-placeholder.md
     git add -A
     git commit -q -m "docs: yet another unrelated tweak"
@@ -120,6 +124,12 @@ if grep -qF -- '- test reason' "${FIXTURE}/CHANGELOG.md"; then
     ok "the synthetic CHANGELOG entry uses the dispatch's reason text"
 else
     fail "the synthetic CHANGELOG entry did not contain the dispatch's reason text"
+fi
+SPACING_CHECK="$(awk '/^- test reason$/ { getline a; getline b; print (a == "" && b == "## [1.0.0] - 2026-01-01") ? "ok" : "bad: [" a "] [" b "]" }' "${FIXTURE}/CHANGELOG.md")"
+if [[ "${SPACING_CHECK}" == "ok" ]]; then
+    ok "a blank line separates the synthetic entry from the next release heading (no eaten blank line)"
+else
+    fail "the synthetic entry's spacing before the next release heading is wrong: ${SPACING_CHECK}"
 fi
 
 (
