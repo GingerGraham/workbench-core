@@ -562,7 +562,7 @@ wb() {
         status|functions|tools|version|completion|__complete|help|-h|--help|"")
             _wb_should_reload=false
             ;;
-        # 'wb module info'/'wb module docs' are read-only (D45/D67) — same
+        # 'wb module info'/'wb module docs' are read-only (D45/D70) — same
         # exclusion reasoning as above, one level deeper since 'module' is
         # a command group, not a single subcommand. 'wb module reset'
         # genuinely writes to disk (force-redeploys a copy-mode deploy

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/check-wb-module-info-no-reload.sh — D67 acceptance check.
+# tests/check-wb-module-info-no-reload.sh — D70 acceptance check.
 #
 # lib/loader.sh's `wb` shell-function wrapper reloads the whole shell
 # (re-sources WORKBENCH_LOADER_PATH) after any subcommand it doesn't
