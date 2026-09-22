@@ -155,16 +155,21 @@ the overall `VERSION` is floored. If no commit touched any registered
 file, the resulting release PR has no per-file bump lines at all, the
 same shape as a pure `core`-scoped commit.
 
-The CHANGELOG discipline still applies in full: if `[Unreleased]` is
-empty, the run fails at `apply-bumps.sh` exactly as an automatic one
-would. Add an entry — even "no functional changes, cut manually for
-`<reason>`" — before dispatching.
+The CHANGELOG discipline still applies whenever real qualifying commits
+exist and were left undocumented — that case fails at `apply-bumps.sh`
+exactly as an automatic release would. But when the manual floor is the
+*sole* reason for the bump (severity was otherwise `none` — the main
+reason to dispatch manually in the first place), there's genuinely
+nothing else to describe: `apply-bumps.sh` auto-inserts a synthetic
+`[Unreleased]` entry from your `reason` input (or a default
+"no functional changes" note if you didn't give one) instead of failing.
+No CHANGELOG pre-edit is needed before a purely operational dispatch.
 
 Manual dispatch only runs from `main` — dispatching against any other ref
 fails immediately in a `guard` job, before CI even starts, to stop a
 release branch being cut from stale or divergent content.
 
-See `docs/decisions-log.md` D67.
+See `docs/decisions-log.md` D67, D69.
 
 ## The CHANGELOG discipline
 

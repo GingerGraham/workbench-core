@@ -4,6 +4,17 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Manual `workflow_dispatch` releases no longer require a pre-dispatch
+  CHANGELOG edit when there's genuinely nothing to describe.** When the
+  manual floor is the sole reason for a bump (no qualifying commits of
+  its own), `apply-bumps.sh`/`apply-bump.sh` now auto-insert a synthetic
+  `[Unreleased]` entry from the dispatch's `reason` input, or a default
+  note if none was given, instead of hard-failing. A manual dispatch with
+  real, undocumented qualifying commits still hits the CHANGELOG gate
+  exactly as before. See `docs/decisions-log.md` D69.
+
 ## [2.12.1] - 2026-09-22
 
 ### Fixed

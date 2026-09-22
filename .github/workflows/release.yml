@@ -103,6 +103,8 @@ jobs:
 
       - name: Apply bumps
         if: steps.compute.outputs.severity != 'none'
+        env:
+          WB_RELEASE_MANUAL_REASON: ${{ github.event.inputs.reason }}
         run: .github/scripts/release/apply-bumps.sh bump-plan.txt
 
       - name: Build release notes

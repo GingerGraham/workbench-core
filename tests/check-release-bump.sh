@@ -489,8 +489,11 @@ fi
     git checkout -q -B main v1.0.0
 )
 
-# 4l. CHANGELOG gate still applies to a fully manual, zero-qualifying-
-#     commit release -- forcing a bump doesn't bypass it.
+# 4l. A fully manual, zero-qualifying-commit release (nothing else to
+#     describe) auto-inserts a synthetic CHANGELOG entry instead of
+#     hard-failing (docs/decisions-log.md D69) -- real usability gap
+#     reported live: a one-click manual dispatch shouldn't need a
+#     separate PR just to pre-write a placeholder CHANGELOG line.
 (
     cd "${FIXTURE}" || exit 1
     printf '# Changelog\n\n## [Unreleased]\n' > CHANGELOG.md
@@ -500,10 +503,66 @@ fi
 )
 # shellcheck disable=SC2209
 WB_RELEASE_FORCE_SEVERITY=patch "${RELEASE_DIR}/compute-bumps.sh" > "${FIXTURE}/plan-manual-gate.txt" 2>/dev/null
-if "${RELEASE_DIR}/apply-bumps.sh" "${FIXTURE}/plan-manual-gate.txt" 2>"${WORK}/manual-gate.log"; then
-    fail "apply-bumps.sh did not fail with an empty [Unreleased] section on a manually-forced release"
+if WB_RELEASE_MANUAL_REASON="test reason" "${RELEASE_DIR}/apply-bumps.sh" "${FIXTURE}/plan-manual-gate.txt" 2>"${WORK}/manual-gate.log"; then
+    ok "apply-bumps.sh auto-inserts a synthetic CHANGELOG entry for a manual, zero-qualifying-commit release instead of failing"
 else
-    ok "CHANGELOG gate still blocks a manually-forced release with an empty [Unreleased] section"
+    fail "apply-bumps.sh failed on a manual, zero-qualifying-commit release: $(cat "${WORK}/manual-gate.log")"
+fi
+if grep -qF -- '- test reason' "${FIXTURE}/CHANGELOG.md"; then
+    ok "the synthetic CHANGELOG entry uses the dispatch's reason text"
+else
+    fail "the synthetic CHANGELOG entry did not contain the dispatch's reason text"
+fi
+
+(
+    cd "${FIXTURE}" || exit 1
+    git checkout -q -f -B main v1.0.0
+)
+
+# 4l-2. Same scenario, but no reason given -- falls back to a default,
+#       still auto-inserted rather than failing.
+(
+    cd "${FIXTURE}" || exit 1
+    printf '# Changelog\n\n## [Unreleased]\n' > CHANGELOG.md
+    echo "docs update" >> README-placeholder.md
+    git add -A
+    git commit -q -m "docs: yet another unrelated tweak"
+)
+# shellcheck disable=SC2209
+WB_RELEASE_FORCE_SEVERITY=patch "${RELEASE_DIR}/compute-bumps.sh" > "${FIXTURE}/plan-manual-gate-noreason.txt" 2>/dev/null
+if "${RELEASE_DIR}/apply-bumps.sh" "${FIXTURE}/plan-manual-gate-noreason.txt" 2>"${WORK}/manual-gate-noreason.log"; then
+    ok "apply-bumps.sh auto-inserts a default CHANGELOG entry when no reason was given"
+else
+    fail "apply-bumps.sh failed on a manual, zero-qualifying-commit release with no reason given"
+fi
+if grep -qF -- '- Manual release via workflow_dispatch' "${FIXTURE}/CHANGELOG.md"; then
+    ok "the default synthetic CHANGELOG entry text is present when no reason was given"
+else
+    fail "no default synthetic CHANGELOG entry text found"
+fi
+
+(
+    cd "${FIXTURE}" || exit 1
+    git checkout -q -f -B main v1.0.0
+)
+
+# 4l-3. The gate still blocks when REAL qualifying commits exist and the
+#       CHANGELOG was simply left undocumented -- the manual floor must be
+#       the *sole* reason for auto-insertion to kick in, never a blanket
+#       bypass for every workflow_dispatch run.
+(
+    cd "${FIXTURE}" || exit 1
+    printf '# Changelog\n\n## [Unreleased]\n' > CHANGELOG.md
+    echo "# fix" >> lib/other/widget.sh
+    git add -A
+    git commit -q -m "fix: a real bump with no changelog entry, dispatched manually too"
+)
+# shellcheck disable=SC2209
+WB_RELEASE_FORCE_SEVERITY=patch "${RELEASE_DIR}/compute-bumps.sh" > "${FIXTURE}/plan-manual-real-work.txt" 2>/dev/null
+if "${RELEASE_DIR}/apply-bumps.sh" "${FIXTURE}/plan-manual-real-work.txt" 2>"${WORK}/manual-real-work.log"; then
+    fail "apply-bumps.sh did not fail with an empty [Unreleased] section when real qualifying commits exist under manual dispatch"
+else
+    ok "CHANGELOG gate still blocks a manual dispatch when real qualifying commits exist and weren't documented"
 fi
 
 (
