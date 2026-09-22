@@ -4,6 +4,15 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Manual `workflow_dispatch` release override.** `release.yml` (and the
+  reusable `module-release.yml`) now accept a `bump_type`
+  (patch/minor/major) input to force a release regardless of what
+  Conventional Commits since the last tag would compute — a floor, never
+  a downgrade of a higher severity already pending. Manual dispatch only
+  runs from `main`. See `docs/decisions-log.md` D67.
+
 ## [2.11.2] - 2026-09-21
 
 ### Changed

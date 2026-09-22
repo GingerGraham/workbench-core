@@ -576,6 +576,19 @@ Release automation (`.github/workflows/release.yml` /
 release pipeline, but bumps only your repo's overall version/tag — module
 repos have no per-file script version to bump individually.
 
+Each module repo's own thin `release.yml` also carries a
+`workflow_dispatch` trigger (`bump_type`: patch/minor/major, optional
+`reason`), passed straight through to the reusable `module-release.yml`'s
+own `bump_type`/`reason` inputs — see `workbench-core`'s
+`docs/release-process.md#manual-releases-workflow_dispatch` and
+`docs/decisions-log.md` D67 for the full mechanics (a floor on the
+computed severity, never a downgrade; the CHANGELOG gate still applies in
+full). The trigger itself has to be declared in each module's own
+workflow file — `workflow_call` doesn't inherit triggers — so a new
+module scaffolded from `workbench-template` should carry it from the
+start; check `workbench-template`'s own `release.yml` is current before
+assuming a fresh module already has it.
+
 ## Agent instructions for module repos
 
 Every `workbench-*` module repo carries the same four agent-instruction

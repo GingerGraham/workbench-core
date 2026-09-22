@@ -15,6 +15,16 @@ on:
         required: false
         type: string
         default: ""
+      bump_type:
+        description: "Force a release at this minimum semver severity (patch/minor/major), regardless of what Conventional Commits since the last tag would compute. Empty (default) leaves severity fully commit-driven. See docs/decisions-log.md D67."
+        required: false
+        type: string
+        default: ""
+      reason:
+        description: "Optional human note for why this release is being forced manually, appended to the release PR notes only — never the PR title or commit headline."
+        required: false
+        type: string
+        default: ""
     secrets:
       RELEASE_APP_PRIVATE_KEY:
         description: "Private key for the release GitHub App (RELEASE_APP_ID var + this secret, same App as core's own release pipeline, D28)."
@@ -80,6 +90,8 @@ jobs:
 
       - name: Compute bump
         id: compute
+        env:
+          WB_RELEASE_FORCE_SEVERITY: ${{ inputs.bump_type }}
         run: |
           overall_line="$(_core/.github/scripts/module-release/compute-bump.sh | tee bump-plan.txt)"
           IFS='|' read -r _ old_version new_version severity reason <<< "${overall_line}"
@@ -98,9 +110,14 @@ jobs:
           OLD_VERSION: ${{ steps.compute.outputs.old_version }}
           NEW_VERSION: ${{ steps.compute.outputs.new_version }}
           SEVERITY: ${{ steps.compute.outputs.severity }}
+          MANUAL_REASON: ${{ inputs.reason }}
         run: |
           {
             echo "**Version:** ${OLD_VERSION} -> ${NEW_VERSION} (${SEVERITY})"
+            if [[ -n "${MANUAL_REASON}" ]]; then
+              echo
+              echo "**Manual release note:** ${MANUAL_REASON}"
+            fi
             echo
             echo "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md) for the human-readable detail -- this PR's diff includes the heading rename."
           } > release-notes.md
