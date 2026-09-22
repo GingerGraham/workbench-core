@@ -50,9 +50,31 @@ while IFS= read -r sha; do
     OVERALL_SEV="$(_rel_max_sev "${OVERALL_SEV}" "${severity}")"
 done < <(commit_list)
 
+REASON="highest-severity qualifying commit"
+
+# Manual workflow_dispatch floor (docs/decisions-log.md D64) -- same
+# mechanism and rationale as workbench-core's own compute-bumps.sh; this
+# is the module-repo simplification (single OVERALL severity, no per-file
+# rollup to consider).
+FORCE_SEV="${WB_RELEASE_FORCE_SEVERITY:-}"
+if [[ -n "${FORCE_SEV}" ]]; then
+    case "${FORCE_SEV}" in
+        patch|minor|major) ;;
+        *)
+            echo "compute-bump: invalid WB_RELEASE_FORCE_SEVERITY '${FORCE_SEV}' -- must be patch, minor, or major." >&2
+            exit 1
+            ;;
+    esac
+    FORCED_OVERALL="$(_rel_max_sev "${OVERALL_SEV}" "${FORCE_SEV}")"
+    if [[ "${FORCED_OVERALL}" != "${OVERALL_SEV}" ]]; then
+        REASON="manual override (workflow_dispatch): requested at least '${FORCE_SEV}'"
+    fi
+    OVERALL_SEV="${FORCED_OVERALL}"
+fi
+
 if [[ "${OVERALL_SEV}" == "none" ]]; then
     echo "OVERALL|${OLD_VERSION}|${OLD_VERSION}|none|no qualifying commit this cycle"
 else
     NEW_VERSION="$(_rel_bump_semver "${OLD_VERSION}" "${OVERALL_SEV}")"
-    echo "OVERALL|${OLD_VERSION}|${NEW_VERSION}|${OVERALL_SEV}|highest-severity qualifying commit"
+    echo "OVERALL|${OLD_VERSION}|${NEW_VERSION}|${OVERALL_SEV}|${REASON}"
 fi

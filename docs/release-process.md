@@ -132,6 +132,40 @@ The `chore(release):` commit-message prefix guards `release.yml` against
 re-triggering its own bump computation when that squash-merge commit lands
 back on `main`.
 
+## Manual releases (`workflow_dispatch`)
+
+`release.yml` also accepts a manual trigger, from the Actions tab or
+`gh workflow run release.yml -f bump_type=<patch|minor|major> [-f reason=<text>]`.
+This exists for releases that don't have anything to do with what
+Conventional Commits since the last tag would compute — an operational
+need to cut a release right now, at a bump level you choose yourself.
+
+`bump_type` is a floor, not an override: the pipeline still walks every
+commit since the last tag exactly as it does on a normal push, and takes
+the higher of that computed severity and whatever you asked for. A manual
+`patch` run against a `main` that already has a `feat:` commit pending
+still ships a minor release — the commit history is a more reliable
+signal than a dropdown selection, so this never quietly ships something
+smaller than what's actually pending. It can, however, force a release
+when nothing would otherwise qualify (severity `none`) — that's the main
+reason to reach for it.
+
+Per-file script-local version bumps are untouched by the override — only
+the overall `VERSION` is floored. If no commit touched any registered
+file, the resulting release PR has no per-file bump lines at all, the
+same shape as a pure `core`-scoped commit.
+
+The CHANGELOG discipline still applies in full: if `[Unreleased]` is
+empty, the run fails at `apply-bumps.sh` exactly as an automatic one
+would. Add an entry — even "no functional changes, cut manually for
+`<reason>`" — before dispatching.
+
+Manual dispatch only runs from `main` — dispatching against any other ref
+fails immediately in a `guard` job, before CI even starts, to stop a
+release branch being cut from stale or divergent content.
+
+See `docs/decisions-log.md` D64.
+
 ## The CHANGELOG discipline
 
 Nothing here writes changelog prose for you — it only renames the heading.
@@ -174,3 +208,5 @@ write the changelog entry, not something the pipeline can paper over.
   completion attempt. Also allow a short delay: GitHub completes
   auto-merge asynchronously after the check suite finishes, not the
   instant it goes green.
+- **Manual dispatch refused at the `guard` job**: you ran it against a
+  ref other than `main` — re-run with "Use workflow from" set to `main`.

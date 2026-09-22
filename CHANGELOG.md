@@ -11,6 +11,13 @@ All notable changes to `workbench-core` are documented here.
   modules, with a self-removing bootstrap workflow that fills in the new
   module's name on first push.
 
+- **Manual `workflow_dispatch` release override.** `release.yml` (and the
+  reusable `module-release.yml`) now accept a `bump_type`
+  (patch/minor/major) input to force a release regardless of what
+  Conventional Commits since the last tag would compute — a floor, never
+  a downgrade of a higher severity already pending. Manual dispatch only
+  runs from `main`. See `docs/decisions-log.md` D64.
+
 ### Changed
 
 - **`docs/module-authoring.md`** — "Do you need this at all?" now points

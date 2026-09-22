@@ -3,6 +3,20 @@ name: Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: "Force a release at this minimum semver severity, regardless of what Conventional Commits since the last tag would compute. Never downgrades a higher severity already implied by pending commits — only raises the floor. See docs/decisions-log.md D64."
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      reason:
+        description: "Optional note for why this release is being forced manually (included in the release PR notes only — never the PR title or commit headline)."
+        required: false
+        type: string
 
 # Serialize releases: two merges landing close together must not run two
 # `propose` jobs at once and race on pushing a release branch. Never cancel
@@ -18,13 +32,43 @@ concurrency:
 # PR's checks pass, not by a push this workflow can attribute to a known
 # bot identity.
 jobs:
+  guard:
+    name: guard release trigger
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.decide.outputs.proceed }}
+    steps:
+      - name: Refuse manual dispatch from a non-main ref
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Manual release dispatch must be run from main (got ${{ github.ref }}). Set 'Use workflow from' to main when dispatching."
+          exit 1
+
+      - name: Decide whether this run should proceed
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          if [[ "${EVENT_NAME}" == "push" && "${HEAD_COMMIT_MESSAGE}" == chore\(release\):* ]]; then
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          fi
+
   ci:
-    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    name: ci
+    needs: guard
+    if: needs.guard.outputs.proceed == 'true'
     uses: ./.github/workflows/ci.yml
 
   propose:
     name: propose release
-    needs: ci
+    # Explicit `if:` below overrides the implicit needs-success gate, so
+    # ci's result has to be checked by hand — a job with its own `if:`
+    # is NOT automatically ANDed with "all needed jobs succeeded".
+    needs: [guard, ci]
+    if: needs.guard.outputs.proceed == 'true' && needs.ci.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Mint release App token
@@ -48,6 +92,8 @@ jobs:
 
       - name: Compute bump plan
         id: compute
+        env:
+          WB_RELEASE_FORCE_SEVERITY: ${{ inputs.bump_type }}
         run: |
           .github/scripts/release/compute-bumps.sh | tee bump-plan.txt
           overall_line="$(grep -m 1 '^OVERALL|' bump-plan.txt)"
@@ -63,6 +109,7 @@ jobs:
         if: steps.compute.outputs.severity != 'none'
         env:
           NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+          MANUAL_REASON: ${{ inputs.reason }}
         run: |
           {
             echo "## Version bumps"
@@ -76,6 +123,10 @@ jobs:
             overall_line="$(grep -m 1 '^OVERALL|' bump-plan.txt)"
             IFS='|' read -r _ overall_old overall_new overall_sev overall_reason <<< "${overall_line}"
             echo "**Overall:** ${overall_old} → ${overall_new} (${overall_sev} — ${overall_reason})"
+            if [[ -n "${MANUAL_REASON}" ]]; then
+              echo
+              echo "**Manual release note:** ${MANUAL_REASON}"
+            fi
             echo
             echo "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md) for the human-readable detail — this PR's diff includes the heading rename."
           } > release-notes.md

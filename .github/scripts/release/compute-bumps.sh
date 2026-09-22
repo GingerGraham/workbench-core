@@ -138,6 +138,27 @@ if [[ "${OVERALL_SEV}" != "none" ]]; then
     fi
 fi
 
+# Manual workflow_dispatch floor (docs/decisions-log.md D64): raises
+# OVERALL_SEV to at least WB_RELEASE_FORCE_SEVERITY, never downgrades a
+# higher severity already implied by pending commits — a real
+# commit-driven reason is always the more accurate signal when it already
+# meets or exceeds what was requested.
+FORCE_SEV="${WB_RELEASE_FORCE_SEVERITY:-}"
+if [[ -n "${FORCE_SEV}" ]]; then
+    case "${FORCE_SEV}" in
+        patch|minor|major) ;;
+        *)
+            echo "compute-bumps: invalid WB_RELEASE_FORCE_SEVERITY '${FORCE_SEV}' — must be patch, minor, or major." >&2
+            exit 1
+            ;;
+    esac
+    FORCED_OVERALL="$(_rel_max_sev "${OVERALL_SEV}" "${FORCE_SEV}")"
+    if [[ "${FORCED_OVERALL}" != "${OVERALL_SEV}" ]]; then
+        REASON="manual override (workflow_dispatch): requested at least '${FORCE_SEV}'"
+    fi
+    OVERALL_SEV="${FORCED_OVERALL}"
+fi
+
 for line in "${BUMP_PLAN[@]+"${BUMP_PLAN[@]}"}"; do
     echo "${line}"
 done
