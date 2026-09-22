@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.13.0] - 2026-09-22
+
 ### Changed
 
 - **Manual `workflow_dispatch` releases no longer require a pre-dispatch
