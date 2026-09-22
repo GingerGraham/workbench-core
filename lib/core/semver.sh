@@ -9,7 +9,8 @@
 #
 # Three independent uses:
 #   1. Tag format filtering/comparison for TRACK_MODE=latest resolution
-#      (docs/architecture.md §9.2) — only clean vX.Y.Z tags participate.
+#      (docs/architecture.md §9.2) — only clean X.Y.Z tags, optionally
+#      v-prefixed, participate.
 #   2. core_api range satisfaction for manifest gating (docs/architecture.md §6) —
 #      e.g. does CORE_API_VERSION=1 satisfy a module's declared
 #      core_api: ">=1.0 <2.0"?
@@ -25,20 +26,20 @@
 # digit-only check, which behaves identically in both shells.
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/semver.sh" "0.1.1" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/semver.sh" "0.1.2" || true
 
 # _wb_semver_is_clean_tag <tag>
-# True iff <tag> is exactly vX.Y.Z — three numeric segments, v-prefixed, no
-# pre-release/build suffix. Anything else (missing 'v', two segments,
-# "-rc1" suffix, non-numeric segment) is rejected. A rejected tag is not an
-# error — it simply doesn't participate in `latest` resolution; it remains a
-# perfectly valid explicit `tag:<name>` pin.
+# True iff <tag> is X.Y.Z, with an optional single leading 'v' — three
+# numeric segments, no pre-release/build suffix. Anything else (two
+# segments, "-rc1" suffix, non-numeric segment) is rejected. A rejected tag
+# is not an error — it simply doesn't participate in `latest` resolution; it
+# remains a perfectly valid explicit `tag:<name>` pin.
 _wb_semver_is_clean_tag() {
     local tag="$1"
-    case "${tag}" in
-        v*) : ;;
-        *) return 1 ;;
-    esac
+    # Optional single leading 'v' — vX.Y.Z and bare X.Y.Z both qualify
+    # (docs/decisions-log.md D66, amending D6). _wb_semver_cmp already
+    # strips 'v' from both operands, so the two forms sort correctly
+    # against each other with no further change needed here.
     local rest="${tag#v}"
     local -a parts
     IFS='.' read -r -a parts <<< "${rest}"

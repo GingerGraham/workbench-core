@@ -65,14 +65,22 @@ register:
 ## The tag format contract
 
 `TRACK_MODE=latest` (the default for anything registered via `wb add`)
-resolves to the **highest tag matching exactly `vX.Y.Z`** — three numeric
-segments, `v`-prefixed, no pre-release or build suffix. To be
-`latest`-trackable, tag your releases this way: `v1.0.0`, `v1.4.12`,
-`v2.0.0`. Tags like `1.0.0` (no `v`), `v1.0` (two segments), or
-`v1.0.0-rc1` (pre-release suffix) are invisible to `latest` resolution —
-not an error, they're just skipped. A pre-release tag is still a perfectly
-valid input to an *explicit* pin (`wb track <name> --tag v1.0.0-rc1`); it's
-only excluded from the automatic `latest` chain.
+resolves to the **highest tag matching `X.Y.Z`, with an optional single
+leading `v`** — three numeric segments, no pre-release or build suffix.
+Both `v1.0.0` and `1.0.0` are `latest`-trackable; `v1.0` / `1.0` (two
+segments), `v1.0.0.0` / `1.0.0.0` (four segments), and `v1.0.0-rc1` /
+`1.0.0-rc1` (pre-release suffix) are all invisible to `latest`
+resolution — not an error, they're just skipped. A pre-release tag is
+still a perfectly valid input to an *explicit* pin
+(`wb track <name> --tag v1.0.0-rc1`); it's only excluded from the
+automatic `latest` chain.
+
+One caution: this means *any* tag shaped like three dot-separated numeric
+segments now participates in automatic `latest` resolution, whether or
+not it was meant as a release marker. If your repo tags anything else
+that way (a date-stamped tag, an unrelated numeric label), it will be
+swept into the `latest` candidate pool — avoid that shape for non-release
+tags if you don't want it picked up.
 
 This is published now, formally, as the contract every module author
 should follow — `workbench-core` does not (yet) validate compliance for
@@ -360,6 +368,21 @@ Predicate functions are excluded from every listing automatically — the
 leading underscore puts them in the same "private, never extracted"
 class as every other `_`-prefixed function in this codebase.
 
+Predicates must be cheap, local discovery checks (`command -v`, a file
+test) — never a live hardware, agent, or network probe
+(`docs/decisions-log.md` D65). `wb functions` now enforces this: every
+predicate call is bounded to
+`WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS` (default 1s); one that's
+killed is reported by name and hidden, exactly as if it had returned
+non-zero. If several predicates genuinely need to share one expensive
+check, use `_wb_cache_bool <cache-key> -- <command...>` so the real
+check runs once per `wb functions` invocation, not once per name:
+
+```bash
+_gpg-card-status-available() { _wb_cache_bool gpg-card-live -- gpg --card-status; }
+_gpg-show-available()        { _wb_cache_bool gpg-card-live -- gpg --card-status; }
+```
+
 ### Discoverability
 
 Gating hides genuinely-unusable commands from day-to-day listings, but
@@ -558,7 +581,7 @@ Each module repo's own thin `release.yml` also carries a
 `reason`), passed straight through to the reusable `module-release.yml`'s
 own `bump_type`/`reason` inputs — see `workbench-core`'s
 `docs/release-process.md#manual-releases-workflow_dispatch` and
-`docs/decisions-log.md` D64 for the full mechanics (a floor on the
+`docs/decisions-log.md` D67 for the full mechanics (a floor on the
 computed severity, never a downgrade; the CHANGELOG gate still applies in
 full). The trigger itself has to be declared in each module's own
 workflow file — `workflow_call` doesn't inherit triggers — so a new

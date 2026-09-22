@@ -10,7 +10,7 @@
 # second implementation of "fetch and register a module."
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/add.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/add.sh" "0.2.1" || true
 
 # workbench_cmd_add <name> [url] [--private] [--allow-hooks]
 workbench_cmd_add() {
@@ -51,6 +51,7 @@ workbench_cmd_add() {
     fi
 
     if [[ -z "${url}" ]]; then
+        _wb_require modules/catalog.sh
         local catalog_entry catalog_url catalog_private
         catalog_entry="$(workbench_catalog_lookup "${name}")" || {
             log_error "wb add: '${name}' has no url given and is not in the known-modules catalog — pass a url explicitly"
@@ -70,6 +71,7 @@ workbench_cmd_add() {
     workbench_module_conf_set "${name}" ALLOW_HOOKS "${allow_hooks}"
 
     if [[ "${private}" == "true" ]]; then
+        _wb_require ssh/bootstrap.sh
         workbench_ssh_bootstrap_module "${name}"
     fi
 

@@ -164,7 +164,7 @@ Manual dispatch only runs from `main` — dispatching against any other ref
 fails immediately in a `guard` job, before CI even starts, to stop a
 release branch being cut from stale or divergent content.
 
-See `docs/decisions-log.md` D64.
+See `docs/decisions-log.md` D67.
 
 ## The CHANGELOG discipline
 

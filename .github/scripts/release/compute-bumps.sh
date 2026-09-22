@@ -138,7 +138,7 @@ if [[ "${OVERALL_SEV}" != "none" ]]; then
     fi
 fi
 
-# Manual workflow_dispatch floor (docs/decisions-log.md D64): raises
+# Manual workflow_dispatch floor (docs/decisions-log.md D67): raises
 # OVERALL_SEV to at least WB_RELEASE_FORCE_SEVERITY, never downgrades a
 # higher severity already implied by pending commits — a real
 # commit-driven reason is always the more accurate signal when it already

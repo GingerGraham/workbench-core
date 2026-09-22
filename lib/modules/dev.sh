@@ -15,9 +15,17 @@
 # consumed by something else in the pipeline.
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/dev.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/dev.sh" "0.2.1" || true
 
 _wb_dev_prompt_one() {
+    # modules/track.sh is lazy-loaded now (docs/decisions-log.md D65) —
+    # this function calls workbench_cmd_track directly. Guarded the same
+    # way lib/modules/track.sh:140's own _wb_maybe_reconverge_core call
+    # already is, so this file stays sourceable standalone with no
+    # dependency on bin/wb (tests/check-wb-dev-flow.sh sources
+    # modules/track.sh directly instead, so workbench_cmd_track is
+    # already defined there regardless).
+    command -v _wb_require &>/dev/null && _wb_require modules/track.sh
     local name="$1" current answer
 
     current="$(workbench_module_conf_get "${name}" TRACK_MODE latest)"

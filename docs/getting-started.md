@@ -30,7 +30,9 @@ real engine code exists locally to run):
    - Checks and (with your permission) installs any remaining missing
      prerequisites.
    - Writes the version taxonomy file (`~/.config/workbench/core/version`).
-   - Adds a loader stub to `~/.bashrc` (and `~/.zshrc` if present).
+   - Adds a loader stub to `~/.bashrc` (and `~/.zshrc`/`~/.zshenv` if
+     present) — see "Migrating from an existing shell config" below if
+     any of those already had real content.
    - Runs the Ansible convergence pass (if `ansible-playbook` is available
      — see below if it isn't).
    - Sets up SSH deploy keys for any private module you've already
@@ -158,6 +160,32 @@ and flat.
 (This is separate from `~/.config/workbench/user/*.sh`, which is for
 hand-authored "pseudo-module" extensions rather than personal overrides —
 see `contracts/state-schema.md` if you need the distinction.)
+
+## Migrating from an existing shell config
+
+`wb install`/`wb apply` never overwrite `.bashrc`/`.zshrc`/`.zshenv` — they
+only append a loader stub line, once, the first time each file gets one. If
+any of those files already had real content the very first time this ran
+(a previous dotfiles setup, a distro default, your own prompt tooling), that
+content is left in place but also backed up first, under
+`${XDG_DATA_HOME:-~/.local/share}/workbench/backups/`, tagged `rc-stub-*` —
+the same backup mechanism `wb module reset` uses. Re-running `wb
+install`/`wb apply` afterward never backs the file up again; the marker
+already being present is what gates it.
+
+While any `rc-stub`-tagged backup remains under that path, every new
+interactive shell prints a warning naming it. To clear the warning: open the
+backup, copy anything you want to keep into a new file under
+`~/.config/workbench/local/` (any filename ending `.sh`, e.g.
+`90-migrated.sh` — see "Personal shell overrides" above), then delete the
+backup file. There's no auto-merge — same discipline this project already
+applies to `starship.toml`/`direnv.toml`-style opinionated defaults.
+
+Separately: if your rc file already ran its own prompt tool (starship,
+oh-my-posh, oh-my-zsh, powerlevel10k) before workbench's stub line, the
+loader detects that (via `PROMPT_COMMAND`/`precmd_functions` already being
+non-empty when it first runs) and skips its own bare fallback prompt rather
+than silently overwriting it.
 
 ## Uninstalling a module cleanly
 

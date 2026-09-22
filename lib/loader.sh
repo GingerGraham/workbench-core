@@ -24,6 +24,27 @@ if [[ -n "${BASH_VERSION:-}" ]]; then
     unset POSIXLY_CORRECT 2>/dev/null || true
 fi
 
+# ── Snapshot pre-existing prompt ownership ────────────────────────────────
+# Captured before any tier content (including a workbench module's own
+# prompt-owning tier) runs, so the fallback block further down can tell
+# "nothing has claimed the prompt yet" apart from "the rc file's own
+# pre-stub content (oh-my-zsh, p10k, starship, anything not
+# workbench-aware) already claimed it" — the same hook points
+# docs/decisions-log.md D50 already treats as the prompt-ownership
+# contract (bash PROMPT_COMMAND / zsh precmd_functions), just read here
+# before workbench has touched either. Deliberately not keyed on raw
+# PS1/PROMPT — those are frequently already non-empty from a distro's own
+# /etc/bashrc (confirmed on Fedora) regardless of any user customisation,
+# and keying on that would disable the fallback for the common case it
+# exists to serve. Known limitation: a bare custom PS1 with no prompt
+# manager behind it is not caught by this — see docs/decisions-log.md D64.
+_WB_LOADER_PROMPT_PRECLAIMED=false
+if [[ -n "${BASH_VERSION:-}" && -n "${PROMPT_COMMAND:-}" ]]; then
+    _WB_LOADER_PROMPT_PRECLAIMED=true
+elif [[ -n "${ZSH_VERSION:-}" && ${#precmd_functions[@]} -gt 0 ]]; then
+    _WB_LOADER_PROMPT_PRECLAIMED=true
+fi
+
 # ── Ensure ~/.local/bin is on PATH ────────────────────────────────────────
 # Some distros only add this conditionally in their default .bashrc/.zshrc,
 # gated on the directory existing at rc-parse time — not guaranteed the
@@ -394,7 +415,7 @@ fi
 # (lib/core/version.sh via register.list), so neither is available until
 # that content has actually been sourced.
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/loader.sh" "0.3.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/loader.sh" "0.4.1" || true
 # Gated on WORKBENCH_DEBUG explicitly, before ever calling
 # _workbench_release_version — not just left to log_debug's own internal
 # gate. Bash evaluates a command's arguments (the $(...) substitution)
@@ -421,7 +442,7 @@ if [[ "${WORKBENCH_PLAIN_SHELL}" == "true" ]]; then
         PS1='\u@\h:\w\$ '
     fi
     export WORKBENCH_PROMPT_ENGINE="plain"
-elif [[ -z "${WORKBENCH_PROMPT_SET:-}" ]]; then
+elif [[ -z "${WORKBENCH_PROMPT_SET:-}" && "${_WB_LOADER_PROMPT_PRECLAIMED}" == "false" ]]; then
     if [[ -n "${BASH_VERSION:-}" ]]; then
         if [[ -x /usr/bin/tput ]] && tput setaf 1 &>/dev/null; then
             PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
@@ -434,6 +455,7 @@ elif [[ -z "${WORKBENCH_PROMPT_SET:-}" ]]; then
     fi
     export WORKBENCH_PROMPT_ENGINE="fallback"
 fi
+unset _WB_LOADER_PROMPT_PRECLAIMED
 
 # ── Local overrides, second pass (always wins) ────────────────────────────────
 # shellcheck disable=SC1090
@@ -527,7 +549,16 @@ wb() {
     command wb "$@" || _wb_wrapper_rc=$?
 
     case "${1:-}" in
-        status|functions|tools|version|completion|help|-h|--help|"") ;;
+        # __complete is the hidden dispatcher the generated bash/zsh
+        # completion scripts shell out to on every keystroke past the
+        # first TAB level (D54) — a read-only introspection call, exactly
+        # like the other entries here, and one that runs far too often to
+        # ever pay for a full shell reload. Omitting it was a gap, not a
+        # deliberate choice — see docs/decisions-log.md D65. It's also
+        # the single most expensive thing this wrapper could trigger now
+        # that a full reload means re-sourcing every tier of every
+        # loadable module under this environment's per-file-open cost.
+        status|functions|tools|version|completion|__complete|help|-h|--help|"") ;;
         *)
             # shellcheck disable=SC1090
             if source "${WORKBENCH_LOADER_PATH}"; then
@@ -543,6 +574,30 @@ wb() {
 
 # ── PATH deduplication ────────────────────────────────────────────────────────
 command -v dedupe-path &>/dev/null && dedupe-path 2>/dev/null
+
+# ── RC migration pending warning ──────────────────────────────────────────
+# Fires while any rc-stub-tagged backup remains under the shared backup
+# root (docs/decisions-log.md D53/D64) — cheap on-disk check, no
+# subprocess beyond find. Clears itself once the user removes the file(s).
+# Gated on an interactive shell, same as the "Interactive startup" block
+# just below — this PR also adds the loader stub to .zshenv, which zsh
+# sources for every invocation including non-interactive ones (ssh
+# host cmd, zsh -c, shebang scripts); without this gate the warning would
+# leak onto stderr there too (flagged in PR review).
+if [[ $- == *i* ]]; then
+    _wb_migration_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/backups"
+    _wb_migration_found=false
+    while IFS= read -r _wb_bak; do
+        [[ -z "${_wb_bak}" ]] && continue
+        if [[ "${_wb_migration_found}" == "false" ]]; then
+            log_warn "Shell rc migration pending: workbench backed up pre-existing rc content before adding its loader stub."
+            log_warn "  Review the backup(s) below and copy anything you want to keep into a new file under \${XDG_CONFIG_HOME:-\${HOME}/.config}/workbench/local/, then remove the backup to clear this warning."
+            _wb_migration_found=true
+        fi
+        log_warn "  ${_wb_bak}"
+    done < <(find "${_wb_migration_dir}" -maxdepth 3 -name 'rc-stub-*' -type f 2>/dev/null)
+    unset _wb_migration_dir _wb_migration_found _wb_bak
+fi
 
 # ── Interactive startup ───────────────────────────────────────────────────────
 if [[ $- == *i* ]] && [[ "${WORKBENCH_SHOW_FUNCTIONS}" == "true" ]] && command -v get-functions &>/dev/null; then

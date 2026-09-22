@@ -16,7 +16,7 @@ on:
         type: string
         default: ""
       bump_type:
-        description: "Force a release at this minimum semver severity (patch/minor/major), regardless of what Conventional Commits since the last tag would compute. Empty (default) leaves severity fully commit-driven. See docs/decisions-log.md D64."
+        description: "Force a release at this minimum semver severity (patch/minor/major), regardless of what Conventional Commits since the last tag would compute. Empty (default) leaves severity fully commit-driven. See docs/decisions-log.md D67."
         required: false
         type: string
         default: ""

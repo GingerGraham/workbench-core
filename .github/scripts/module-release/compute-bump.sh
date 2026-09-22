@@ -52,7 +52,7 @@ done < <(commit_list)
 
 REASON="highest-severity qualifying commit"
 
-# Manual workflow_dispatch floor (docs/decisions-log.md D64) -- same
+# Manual workflow_dispatch floor (docs/decisions-log.md D67) -- same
 # mechanism and rationale as workbench-core's own compute-bumps.sh; this
 # is the module-repo simplification (single OVERALL severity, no per-file
 # rollup to consider).

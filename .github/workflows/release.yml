@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       bump_type:
-        description: "Force a release at this minimum semver severity, regardless of what Conventional Commits since the last tag would compute. Never downgrades a higher severity already implied by pending commits — only raises the floor. See docs/decisions-log.md D64."
+        description: "Force a release at this minimum semver severity, regardless of what Conventional Commits since the last tag would compute. Never downgrades a higher severity already implied by pending commits — only raises the floor. See docs/decisions-log.md D67."
         required: true
         type: choice
         options:

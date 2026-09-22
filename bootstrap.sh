@@ -37,7 +37,7 @@ set -euo pipefail
 # This file's own script-local version (bootstrap-fix brief §5.2). Can't
 # call lib/core/version.sh's workbench_register_script_version — nothing to
 # source yet — so it just declares and logs its own inline constant.
-_WB_BOOTSTRAP_VERSION="0.1.0"
+_WB_BOOTSTRAP_VERSION="0.1.1"
 
 # D18 lists bootstrap.sh in the script-local version registry's scope, but
 # nothing ever actually called the registration function here — this line
@@ -99,11 +99,11 @@ _gh_curl() {
 }
 
 # _is_clean_tag / _cmp — duplicated (minimal) from lib/core/semver.sh's
-# _wb_semver_is_clean_tag / _wb_semver_cmp: only clean, three-segment,
-# v-prefixed tags participate in `latest` resolution (docs/architecture.md §9.2).
+# _wb_semver_is_clean_tag / _wb_semver_cmp: only clean, three-segment tags,
+# optionally v-prefixed, participate in `latest` resolution
+# (docs/architecture.md §9.2).
 _is_clean_tag() {
     local tag="$1"
-    case "${tag}" in v*) : ;; *) return 1 ;; esac
     local rest="${tag#v}"
     local -a parts
     IFS='.' read -r -a parts <<< "${rest}"
@@ -169,7 +169,7 @@ if [[ -n "${_best_tag}" ]]; then
     TRACK_REF="${_best_tag}"
     log "resolved release: ${_best_tag} (${SHA:0:7})"
 else
-    log "WARNING: no vX.Y.Z release tag found yet for ${OWNER}/${REPO} — falling back to 'main'"
+    log "WARNING: no clean release tag found yet for ${OWNER}/${REPO} — falling back to 'main'"
     SHA="$(_gh_curl "https://api.github.com/repos/${OWNER}/${REPO}/commits/main" \
         | grep -o '"sha":[^,]*' | head -1 | grep -oE '[0-9a-f]{40}' || true)"
     if [[ -z "${SHA}" ]]; then

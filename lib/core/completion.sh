@@ -17,7 +17,7 @@ _wb_completion_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 unset _wb_completion_dir
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/completion.sh" "0.2.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/completion.sh" "0.3.1" || true
 
 # _wb_completion_dispatch_commands
 # Prints one dispatch-case command per line, in source order, by reading
@@ -93,8 +93,8 @@ _wb_cmd_complete() {
     local kind="${1:-}"
     case "${kind}" in
         registered-modules) workbench_list_registered_modules ;;
-        catalog-modules)    workbench_catalog_list_modules ;;
-        catalog-bundles)    workbench_catalog_list_bundles ;;
+        catalog-modules)    _wb_require modules/catalog.sh; workbench_catalog_list_modules ;;
+        catalog-bundles)    _wb_require modules/catalog.sh; workbench_catalog_list_bundles ;;
         tools)              workbench_tools_collect 2>/dev/null | cut -d'|' -f4 ;;
         *)                  return 1 ;;
     esac

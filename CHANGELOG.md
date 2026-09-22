@@ -6,17 +6,83 @@ All notable changes to `workbench-core` are documented here.
 
 ### Added
 
-- **`docs/decisions-log.md` D63** — `GingerGraham/workbench-template`, a
-  GitHub template repository for scaffolding new `workbench-*` extension
-  modules, with a self-removing bootstrap workflow that fills in the new
-  module's name on first push.
-
 - **Manual `workflow_dispatch` release override.** `release.yml` (and the
   reusable `module-release.yml`) now accept a `bump_type`
   (patch/minor/major) input to force a release regardless of what
   Conventional Commits since the last tag would compute — a floor, never
   a downgrade of a higher severity already pending. Manual dispatch only
-  runs from `main`. See `docs/decisions-log.md` D64.
+  runs from `main`. See `docs/decisions-log.md` D67.
+
+## [2.11.2] - 2026-09-21
+
+### Changed
+
+- **`docs/decisions-log.md` D66** — `TRACK_MODE=latest` tag resolution now
+  accepts bare `X.Y.Z` release tags, not just `vX.Y.Z` (`_wb_semver_is_clean_tag`,
+  `lib/core/semver.sh`, and its `bootstrap.sh` duplicate, `_is_clean_tag`).
+  A module tagged `2.5.6` with no leading `v` is now `latest`-trackable
+  without falling back to `--branch`.
+
+## [2.11.1] - 2026-09-21
+
+### Added
+
+- **`docs/decisions-log.md` D65** — `_wb_run_with_timeout`/`_wb_cache_bool`
+  (`lib/core/functions.sh`, `CORE_API_VERSION` 1.2 → 1.3): every
+  `_<name>-available` predicate `wb functions` runs is now bounded to
+  `WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS` (default 1s, overridable) — a
+  hand-written predicate that hangs is killed and hidden, named in a
+  warning line, instead of blocking the whole command indefinitely.
+  `_wb_cache_bool <cache-key> -- <command...>` lets several predicates
+  that really share one expensive check (a live agent/hardware probe) run
+  it once per `wb functions` invocation instead of once per name — see
+  `docs/module-authoring.md`, "Declaring function availability".
+
+### Changed
+
+- **`wb __complete <kind>`, the hidden dispatcher the generated bash/zsh
+  completion scripts shell out to on every keystroke past the first TAB
+  level, no longer triggers a full shell reload** (`lib/loader.sh`) — a
+  gap in the reload wrapper's read-only exclusion list, not a deliberate
+  choice. See `docs/decisions-log.md` D65.
+- **`bin/wb` now lazy-loads its heavier lib files** (`distribution/
+  resolve.sh`, `distribution/fetch-tarball.sh`, `distribution/fetch-git-
+  snapshot.sh`, `distribution/snapshot.sh`, `ssh/bootstrap.sh`, `sync/
+  scheduler.sh`, `modules/catalog.sh`, `modules/add.sh`, `modules/
+  remove.sh`, `modules/track.sh`, `modules/dev.sh`, `modules/sync-
+  toggle.sh`, `modules/info.sh`) via a new internal `_wb_require`
+  idempotent-source helper, instead of sourcing all 24 lib files
+  unconditionally on every invocation — a real cost on hosts where
+  opening a shell script file is expensive (e.g. some WSL2/AV
+  configurations), and previously paid on every single keystroke of
+  second-level tab completion (`wb __complete`) regardless of which
+  subcommand was actually being completed. No behavioural change to any
+  command's output. See `docs/decisions-log.md` D65.
+- **`wb functions` reads its "Loaded functions"/"Loaded aliases" listing
+  from live shell state after sourcing each registered file once, instead
+  of re-opening every file a second time to grep it** — removes a
+  redundant file read on a frequently-invoked command, and is also more
+  accurate: a function a module only conditionally defines (inside an
+  `if command -v <tool>; then ... fi` guard) now shows correctly instead
+  of always showing regardless of whether the guard actually passed.
+  Register-list and manifest-getter entries are also now gathered in one
+  walk of the loadable-module set instead of two. See
+  `docs/decisions-log.md` D65.
+
+## [2.11.0] - 2026-09-21
+
+### Added
+
+- **`docs/decisions-log.md` D64** — `wb install`/`wb apply` now back up
+  pre-existing `.bashrc`/`.zshrc`/`.zshenv` content (tagged `rc-stub`,
+  reusing D53's backup mechanism) the first time the loader stub is
+  appended, and a persistent warning fires on every new interactive shell
+  until the backup is reviewed and cleared. See "Migrating from an
+  existing shell config" in `docs/getting-started.md`.
+- **`docs/decisions-log.md` D63** — `GingerGraham/workbench-template`, a
+  GitHub template repository for scaffolding new `workbench-*` extension
+  modules, with a self-removing bootstrap workflow that fills in the new
+  module's name on first push.
 
 ### Changed
 
@@ -25,6 +91,15 @@ All notable changes to `workbench-core` are documented here.
   template") instead of copying an existing module's tree by hand;
   `docs/module-authoring.md` remains the canonical source the template
   is periodically re-snapshotted from.
+
+### Fixed
+
+- **`lib/loader.sh`'s prompt fallback no longer silently overwrites a
+  non-workbench-aware prompt tool** (starship, oh-my-posh, oh-my-zsh,
+  powerlevel10k) that already claimed the prompt from earlier rc content.
+  It now also checks whether `PROMPT_COMMAND` (bash) or
+  `precmd_functions` (zsh) is already non-empty the first time the loader
+  runs, and skips itself if so — see `docs/decisions-log.md` D64.
 
 ## [2.10.1] - 2026-09-16
 

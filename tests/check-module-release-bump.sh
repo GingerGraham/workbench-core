@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/check-module-release-bump.sh — acceptance check for the module-repo
 # release pipeline's bump arithmetic and manual workflow_dispatch floor
-# (.github/scripts/module-release/). docs/decisions-log.md D40, D64.
+# (.github/scripts/module-release/). docs/decisions-log.md D40, D67.
 #
 # Simplified relative to check-release-bump.sh's fixture: no VERSION file
 # (git-tag derived), no per-file registration, a single OVERALL severity.

@@ -30,6 +30,10 @@ mkdir -p "${HOME}"
 WB="${REPO_ROOT}/bin/wb"
 # shellcheck source=bin/wb
 source "${WB}" >/tmp/wb-tools-registry-source.log 2>&1
+# modules/add.sh is lazy-loaded now (docs/decisions-log.md D65) — this
+# test calls workbench_cmd_add directly, bypassing bin/wb's own dispatch
+# (which requires it itself), so require it explicitly here.
+_wb_require modules/add.sh
 
 MARKER_ALPHA_TF="${WORK}/alpha-terraform-ran"
 MARKER_ALPHA_WIDGET="${WORK}/alpha-widget-ran"
