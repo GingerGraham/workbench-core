@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.12.1] - 2026-09-22
+
 ### Fixed
 
 - **`compute-bumps.sh` re-counted already-released commits when a manual
