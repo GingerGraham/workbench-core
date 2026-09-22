@@ -4,6 +4,12 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.13.1] - 2026-09-22
+
+### Changed
+
+- Testing manual release
+
 ## [2.13.0] - 2026-09-22
 
 ### Changed
