@@ -93,7 +93,7 @@ jobs:
       - name: Compute bump plan
         id: compute
         env:
-          WB_RELEASE_FORCE_SEVERITY: ${{ inputs.bump_type }}
+          WB_RELEASE_FORCE_SEVERITY: ${{ github.event.inputs.bump_type }}
         run: |
           .github/scripts/release/compute-bumps.sh | tee bump-plan.txt
           overall_line="$(grep -m 1 '^OVERALL|' bump-plan.txt)"
@@ -109,7 +109,7 @@ jobs:
         if: steps.compute.outputs.severity != 'none'
         env:
           NEW_VERSION: ${{ steps.compute.outputs.new_version }}
-          MANUAL_REASON: ${{ inputs.reason }}
+          MANUAL_REASON: ${{ github.event.inputs.reason }}
         run: |
           {
             echo "## Version bumps"
