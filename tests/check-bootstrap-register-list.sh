@@ -174,7 +174,7 @@ WIDGET_REGLIST="${XDG_DATA_HOME}/workbench/modules/widget/register.list"
 : > "${WIDGET_REGLIST}"
 
 STATUS_OUT="$(_wb_cmd_status 2>&1)"
-if echo "${STATUS_OUT}" | grep -q "'widget' declares register.shell\[\]/register.installers\[\] entries but register.list is missing or empty"; then
+if echo "${STATUS_OUT}" | grep -q "'widget' declares register.shell\[\] entries but register.list is missing or empty"; then
     ok "'wb status' loudly warns about a registered module whose register.list is missing/empty despite declared register content"
 else
     fail "'wb status' did not warn about widget's missing register.list"
@@ -188,6 +188,131 @@ if echo "${STATUS_OUT2}" | grep -q "'widget' declares register.shell"; then
     fail "'wb status' still warns about widget after 'wb apply' re-converged register.list"
 else
     ok "'wb apply' re-converging register.list clears 'wb status'' warning"
+fi
+
+# ── 6. An installers-only module (register.installers[] only, no
+#    register.shell[]) correctly has an empty register.list — installers
+#    render to installers.list instead — and must NOT trigger the
+#    register.list warning (docs/decisions-log.md D71: this was a permanent
+#    false positive 'wb apply' could never clear, first seen: workbench-ai).
+GADGET_SRC="${WORK}/gadget-src"
+GADGET_BARE="${WORK}/gadget-bare.git"
+mkdir -p "${GADGET_SRC}"
+git init -q --bare "${GADGET_BARE}"
+git clone -q "${GADGET_BARE}" "${GADGET_SRC}" 2>/dev/null
+(
+    cd "${GADGET_SRC}" || exit 1
+    git config user.email t@t.com
+    git config user.name Test
+    mkdir -p install
+    echo 'install-gadget() { :; }' > install/gadget.sh
+    cat > .dotfiles-sync.yml <<'EOF'
+version: 1
+branch: main
+core_api: ">=1.0 <2.0"
+register:
+  installers:
+    - src: install/gadget.sh
+EOF
+    git add -A && git commit -q -m v1
+    git branch -M main
+    git push -q origin main
+    git tag v1.0.0 && git push -q origin v1.0.0
+)
+
+workbench_cmd_add gadget "${GADGET_BARE}" --private >/tmp/wb-bootstrap-reglist-add-gadget.log 2>&1
+GADGET_INSTLIST="${XDG_DATA_HOME}/workbench/modules/gadget/installers.list"
+
+_wb_cmd_apply >/tmp/wb-bootstrap-reglist-apply-gadget.log 2>&1
+STATUS_OUT_GADGET="$(_wb_cmd_status 2>&1)"
+if echo "${STATUS_OUT_GADGET}" | grep -q "'gadget'"; then
+    fail "'wb status' warned about installers-only module 'gadget' after 'wb apply' rendered its installers.list"
+    echo "${STATUS_OUT_GADGET}"
+else
+    ok "'wb status' emits no warning for an installers-only module whose installers.list is correctly populated"
+fi
+
+# ── 7. Same module with installers.list truncated: 'wb status' emits the
+#    installers.list warning, not the register.list one. ───────────────────
+: > "${GADGET_INSTLIST}"
+STATUS_OUT_GADGET2="$(_wb_cmd_status 2>&1)"
+if echo "${STATUS_OUT_GADGET2}" | grep -q "'gadget' declares register.installers\[\] entries but installers.list is missing or empty"; then
+    ok "'wb status' warns about installers.list specifically when a declared-installers module's installers.list is empty"
+else
+    fail "'wb status' did not warn about gadget's missing installers.list"
+    echo "${STATUS_OUT_GADGET2}"
+fi
+if echo "${STATUS_OUT_GADGET2}" | grep -q "'gadget' declares register.shell"; then
+    fail "'wb status' incorrectly emitted the register.list warning for installers-only module 'gadget'"
+else
+    ok "'wb status' does not emit the register.list warning for installers-only module 'gadget'"
+fi
+
+# Re-converging clears it.
+_wb_cmd_apply >/tmp/wb-bootstrap-reglist-apply-gadget2.log 2>&1
+STATUS_OUT_GADGET3="$(_wb_cmd_status 2>&1)"
+if echo "${STATUS_OUT_GADGET3}" | grep -q "'gadget'"; then
+    fail "'wb status' still warns about gadget after 'wb apply' re-converged installers.list"
+else
+    ok "'wb apply' re-converging installers.list clears 'wb status'' warning for gadget"
+fi
+
+# ── 8. A module with both register.shell[] and register.installers[]
+#    blocks, register.list truncated: only the register.list warning fires
+#    — installers.list stays populated and untouched, proving the two
+#    checks are independent per-list, not still summed. ────────────────────
+HYBRID_SRC="${WORK}/hybrid-src"
+HYBRID_BARE="${WORK}/hybrid-bare.git"
+mkdir -p "${HYBRID_SRC}"
+git init -q --bare "${HYBRID_BARE}"
+git clone -q "${HYBRID_BARE}" "${HYBRID_SRC}" 2>/dev/null
+(
+    cd "${HYBRID_SRC}" || exit 1
+    git config user.email t@t.com
+    git config user.name Test
+    mkdir -p shell install
+    echo 'hybrid-fn() { :; }' > shell/hybrid.sh
+    echo 'install-hybrid() { :; }' > install/hybrid.sh
+    cat > .dotfiles-sync.yml <<'EOF'
+version: 1
+branch: main
+core_api: ">=1.0 <2.0"
+register:
+  shell:
+    - src: shell/hybrid.sh
+      tier: tools
+  installers:
+    - src: install/hybrid.sh
+EOF
+    git add -A && git commit -q -m v1
+    git branch -M main
+    git push -q origin main
+    git tag v1.0.0 && git push -q origin v1.0.0
+)
+
+workbench_cmd_add hybrid "${HYBRID_BARE}" --private >/tmp/wb-bootstrap-reglist-add-hybrid.log 2>&1
+HYBRID_REGLIST="${XDG_DATA_HOME}/workbench/modules/hybrid/register.list"
+HYBRID_INSTLIST="${XDG_DATA_HOME}/workbench/modules/hybrid/installers.list"
+
+_wb_cmd_apply >/tmp/wb-bootstrap-reglist-apply-hybrid.log 2>&1
+: > "${HYBRID_REGLIST}"
+
+STATUS_OUT_HYBRID="$(_wb_cmd_status 2>&1)"
+if echo "${STATUS_OUT_HYBRID}" | grep -q "'hybrid' declares register.shell\[\] entries but register.list is missing or empty"; then
+    ok "'wb status' warns about register.list specifically for a hybrid module with a truncated register.list"
+else
+    fail "'wb status' did not warn about hybrid's missing register.list"
+    echo "${STATUS_OUT_HYBRID}"
+fi
+if echo "${STATUS_OUT_HYBRID}" | grep -q "'hybrid' declares register.installers"; then
+    fail "'wb status' incorrectly warned about hybrid's installers.list, which was never touched"
+else
+    ok "'wb status' does not warn about installers.list for hybrid, whose installers.list stayed populated"
+fi
+if [[ -s "${HYBRID_INSTLIST}" ]]; then
+    ok "hybrid's installers.list remains populated, untouched by truncating register.list"
+else
+    fail "hybrid's installers.list was unexpectedly empty"
 fi
 
 echo

@@ -4,6 +4,18 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`wb status` no longer false-positives on installers-only modules.**
+  The `register.list`/`installers.list` check (D21) summed
+  `register.shell[]` and `register.installers[]` counts but checked only
+  `register.list` — an installers-only module (e.g. `workbench-ai`)
+  correctly renders an empty `register.list`, since its content only ever
+  reaches `installers.list`, so it warned on every run with no way for
+  `wb apply` to clear it. The check is now split per-list: each block is
+  checked against the file it actually renders to. See
+  `docs/decisions-log.md` D71.
+
 ## [2.13.1] - 2026-09-23
 
 ### Changed
