@@ -21,9 +21,11 @@ Install it yourself with your distro's package manager, then re-run
    regression left `register.list` unrendered on that install path
    specifically (`docs/decisions-log.md` D21) — just re-run `wb apply` once;
    it now unconditionally re-renders `register.list`/`installers.list` for
-   every loadable module on every run. `wb status` also now warns loudly
-   if a registered module's declared shell/installer content never made
-   it into its `register.list`.
+   every loadable module on every run. `wb status` also now warns loudly,
+   checking each list against its own manifest block
+   (`docs/decisions-log.md` D71): a `register.shell[]` entry not reaching
+   `register.list`, or a `register.installers[]` entry not reaching
+   `installers.list`.
 
 ## A module's functions aren't loading even though `wb status` shows it registered
 

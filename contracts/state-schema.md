@@ -94,9 +94,11 @@ One line per registered shell file. `<tier>` is one of
 platform/distro filename-selector convention.
 
 `wb status` flags loudly (a warning, not silence) any registered,
-sync-enabled module whose manifest declares `register.shell[]`/
-`register.installers[]` entries but whose `register.list` is missing or
-empty.
+sync-enabled module whose manifest declares `register.shell[]` entries but
+whose `register.list` is missing or empty (docs/decisions-log.md D71: this
+check is against `register.shell[]` alone — an installers-only module
+correctly has an empty `register.list`, since its content never renders
+there).
 
 ### `installers.list`
 
@@ -117,6 +119,12 @@ aggregates this file across every loadable module — see
 `docs/module-authoring.md` for the naming convention and the collision
 rule (first-by-module-name-order wins, warned once) when two modules
 declare the same friendly name.
+
+`wb status` flags loudly (a warning, not silence) any registered,
+sync-enabled module whose manifest declares `register.installers[]`
+entries but whose `installers.list` is missing or empty — checked
+independently of the `register.list` check above (docs/decisions-log.md
+D71).
 
 ## User-local overrides
 

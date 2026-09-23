@@ -551,15 +551,24 @@ _wb_cmd_version() {
 }
 
 # ── status ─────────────────────────────────────────────────────────────────
-# _wb_status_check_register_lists
-# Loud, explicit check (fix-brief §1): a registered, sync-enabled module
-# whose manifest declares register.shell[]/register.installers[] entries
-# but whose register.list is missing or empty means that module's shell
-# content is silently never reaching a real shell — this was invisible
-# everywhere before this brief (wb install reported success, wb status/wb
-# functions showed nothing wrong) and must not be able to be again.
-_wb_status_check_register_lists() {
-    local name current_dir manifest core_api reglist shell_count installer_count
+# _wb_status_check_rendered_lists
+# Loud, explicit check (fix-brief §1; reworked per the installers-only-module
+# false-positive brief, docs/decisions-log.md D71): a registered, sync-enabled
+# module whose manifest declares register.shell[] entries but whose
+# register.list is missing or empty means that module's shell content is
+# silently never reaching a real shell. Declaring register.installers[]
+# entries with installers.list missing or empty is the same class of gap for
+# the tool-registry framework instead. These two manifest blocks render to
+# two different files (register.list / installers.list —
+# workbench_render_register_list / workbench_render_installers_list,
+# lib/sync/engine.sh) and must be checked against their own file each: an
+# installers-only module (register.installers[] only, no register.shell[])
+# correctly has an empty register.list, since its content never renders
+# there — checking register.list alone against the summed count produced a
+# permanent false positive for exactly this shape (first seen:
+# workbench-ai) that 'wb apply' could never clear.
+_wb_status_check_rendered_lists() {
+    local name current_dir manifest core_api reglist instlist shell_count installer_count
 
     while IFS= read -r name; do
         [[ -z "${name}" ]] && continue
@@ -572,11 +581,19 @@ _wb_status_check_register_lists() {
 
         shell_count="$(workbench_manifest_register_shell_entries "${manifest}" | wc -l | tr -d ' ')"
         installer_count="$(workbench_manifest_register_installer_entries "${manifest}" | wc -l | tr -d ' ')"
-        [[ "${shell_count}" -eq 0 && "${installer_count}" -eq 0 ]] && continue
 
-        reglist="$(workbench_module_dir "${name}")/register.list"
-        if [[ ! -s "${reglist}" ]]; then
-            log_warn "wb status: '${name}' declares register.shell[]/register.installers[] entries but register.list is missing or empty — its shell content is NOT reaching new shells. Run 'wb apply' to re-render it."
+        if [[ "${shell_count}" -gt 0 ]]; then
+            reglist="$(workbench_module_dir "${name}")/register.list"
+            if [[ ! -s "${reglist}" ]]; then
+                log_warn "wb status: '${name}' declares register.shell[] entries but register.list is missing or empty — its shell content is NOT reaching new shells. Run 'wb apply' to re-render it."
+            fi
+        fi
+
+        if [[ "${installer_count}" -gt 0 ]]; then
+            instlist="$(workbench_module_dir "${name}")/installers.list"
+            if [[ ! -s "${instlist}" ]]; then
+                log_warn "wb status: '${name}' declares register.installers[] entries but installers.list is missing or empty — its installers are NOT visible to 'wb tools'. Run 'wb apply' to re-render it; if it stays empty, check the declared file defines install-<name> functions."
+            fi
         fi
     done < <(workbench_list_loadable_modules)
 }
@@ -599,7 +616,7 @@ _wb_cmd_status() {
     echo
     echo "Fast (5-minute) cadence active: ${fast}"
 
-    _wb_status_check_register_lists
+    _wb_status_check_rendered_lists
 }
 
 # ── functions ──────────────────────────────────────────────────────────────
