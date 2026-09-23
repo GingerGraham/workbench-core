@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.14.0] - 2026-09-23
+
 ### Added
 
 - **`wb functions` output is now piped through a pager on a real

@@ -19,7 +19,7 @@ _wb_functions_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 unset _wb_functions_dir
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/functions.sh" "0.4.1" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/functions.sh" "0.5.0" || true
 
 # ── OS / WSL / Distro / Shell / Arch detection (run once per session) ───────
 # Reconciles loader.sh's inline detection block and functions.sh's separate

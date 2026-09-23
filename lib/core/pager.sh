@@ -6,7 +6,7 @@
 # no associative arrays, no ${var,,}, no mapfile.
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/pager.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/pager.sh" "0.2.0" || true
 
 # _wb_resolve_pager
 # Decides which pager command (if any) should wrap output, without
