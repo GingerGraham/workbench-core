@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.13.1] - 2026-09-23
+
 ### Changed
 
 - **`wb module info`/`wb module docs` no longer trigger a full shell
