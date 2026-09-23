@@ -548,6 +548,7 @@ wb() {
     local _wb_wrapper_rc=0
     command wb "$@" || _wb_wrapper_rc=$?
 
+    local _wb_should_reload=true
     case "${1:-}" in
         # __complete is the hidden dispatcher the generated bash/zsh
         # completion scripts shell out to on every keystroke past the
@@ -558,16 +559,31 @@ wb() {
         # the single most expensive thing this wrapper could trigger now
         # that a full reload means re-sourcing every tier of every
         # loadable module under this environment's per-file-open cost.
-        status|functions|tools|version|completion|__complete|help|-h|--help|"") ;;
-        *)
-            # shellcheck disable=SC1090
-            if source "${WORKBENCH_LOADER_PATH}"; then
-                log_info "wb: reloaded workbench-core in this shell"
-            else
-                log_error "wb: failed to reload workbench-core in this shell"
-            fi
+        status|functions|tools|version|completion|__complete|help|-h|--help|"")
+            _wb_should_reload=false
+            ;;
+        # 'wb module info'/'wb module docs' are read-only (D45/D70) — same
+        # exclusion reasoning as above, one level deeper since 'module' is
+        # a command group, not a single subcommand. 'wb module reset'
+        # genuinely writes to disk (force-redeploys a copy-mode deploy
+        # file), and any future 'wb module' subcommand nobody's excluded
+        # yet defaults to reloading — same "unknown defaults to the safe
+        # direction" rule as the block above.
+        module)
+            case "${2:-}" in
+                info|docs) _wb_should_reload=false ;;
+            esac
             ;;
     esac
+
+    if [[ "${_wb_should_reload}" == "true" ]]; then
+        # shellcheck disable=SC1090
+        if source "${WORKBENCH_LOADER_PATH}"; then
+            log_info "wb: reloaded workbench-core in this shell"
+        else
+            log_error "wb: failed to reload workbench-core in this shell"
+        fi
+    fi
 
     return "${_wb_wrapper_rc}"
 }

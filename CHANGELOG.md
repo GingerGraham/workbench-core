@@ -4,6 +4,15 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **`wb module info`/`wb module docs` no longer trigger a full shell
+  reload** (`lib/loader.sh`) — a gap in the `wb` wrapper's read-only
+  exclusion list, same class as D65's `__complete` fix: `module` was
+  never added to the list, so every `wb module` call fell through to the
+  default-reload path. `wb module reset` (state-changing) is unaffected
+  and still reloads. See `docs/decisions-log.md` D70.
+
 ## [2.13.0] - 2026-09-22
 
 ### Changed
