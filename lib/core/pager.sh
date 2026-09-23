@@ -5,6 +5,7 @@
 # primitive rather than growing its own paging logic. Bash 3.2 / zsh safe:
 # no associative arrays, no ${var,,}, no mapfile.
 
+# shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/pager.sh" "0.1.0" || true
 
 # _wb_resolve_pager

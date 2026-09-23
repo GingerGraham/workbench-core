@@ -30,6 +30,7 @@ unset WORKBENCH_PAGER PAGER 2>/dev/null || true
 
 WORKBENCH_PAGER="most --wrap"
 out="$(_wb_resolve_pager)"
+# shellcheck disable=SC2015
 [[ "${out}" == "most --wrap" ]] \
     && ok "WORKBENCH_PAGER (multi-word) wins outright, used verbatim" \
     || fail "WORKBENCH_PAGER not honoured verbatim, got '${out}'"
@@ -40,6 +41,7 @@ PAGER="should-never-be-used"
 for disable_val in "" "cat" "none"; do
     WORKBENCH_PAGER="${disable_val}"
     out="$(_wb_resolve_pager)"
+    # shellcheck disable=SC2015
     [[ -z "${out}" ]] \
         && ok "WORKBENCH_PAGER='${disable_val}' disables paging (empty result, not PAGER)" \
         || fail "WORKBENCH_PAGER='${disable_val}' should disable paging, got '${out}'"
@@ -49,6 +51,7 @@ unset WORKBENCH_PAGER PAGER
 # ── PAGER fallback when WORKBENCH_PAGER is unset ────────────────────────────
 PAGER="bat --paging=always"
 out="$(_wb_resolve_pager)"
+# shellcheck disable=SC2015
 [[ "${out}" == "bat --paging=always" ]] \
     && ok "PAGER used verbatim when WORKBENCH_PAGER is unset" \
     || fail "PAGER fallback not honoured, got '${out}'"
@@ -57,6 +60,7 @@ unset PAGER
 # ── less default when neither is set ─────────────────────────────────────────
 if command -v less &>/dev/null; then
     out="$(_wb_resolve_pager)"
+    # shellcheck disable=SC2015
     [[ "${out}" == "less -F -R -X" ]] \
         && ok "bare 'less -F -R -X' picked as the default when nothing else is configured" \
         || fail "expected default 'less -F -R -X', got '${out}'"
@@ -66,6 +70,7 @@ fi
 
 # ── Nothing available at all resolves to no pager ───────────────────────────
 out="$(PATH="/nonexistent" _wb_resolve_pager 2>/dev/null)"
+# shellcheck disable=SC2015
 [[ -z "${out}" ]] \
     && ok "no WORKBENCH_PAGER/PAGER and no 'less' on PATH resolves to no pager" \
     || fail "expected empty result with no pager available, got '${out}'"
@@ -77,6 +82,7 @@ out="$(PATH="/nonexistent" _wb_resolve_pager 2>/dev/null)"
 # that _wb_resolve_pager itself behaves correctly in isolation.
 WORKBENCH_PAGER="false"
 out="$(printf 'line one\nline two\n' | _wb_maybe_page)"
+# shellcheck disable=SC2015
 [[ "${out}" == "$(printf 'line one\nline two')" ]] \
     && ok "_wb_maybe_page passes input through unchanged when stdout is not a terminal" \
     || fail "_wb_maybe_page altered or lost output under a non-tty stdout"
