@@ -333,8 +333,9 @@ _wb_scaffold_local_overrides() {
 # forces WORKBENCH_SHOW_FUNCTIONS off, regardless of its own setting below.
 # WORKBENCH_PLAIN_SHELL=true
 
-# Print every registered function/getter/installer at the start of each
-# new interactive shell (same output as running `wb functions` by hand).
+# Print loaded functions and getters at the start of each new interactive
+# shell — a quick, unpaged summary (no aliases, never opens a pager; run
+# `wb functions` by hand for the full listing, aliases included).
 # WORKBENCH_SHOW_FUNCTIONS=true
 
 # Verbose loader/sync debug logging (release version, script versions,
@@ -620,11 +621,15 @@ _wb_cmd_status() {
 }
 
 # ── functions ──────────────────────────────────────────────────────────────
-# _wb_cmd_functions [--all] [--no-pager]
+# _wb_cmd_functions [--all] [--no-pager] [--no-aliases]
 # Thin wrapper around _wb_cmd_functions_impl (the actual listing logic,
 # unchanged below): scans all of $@ for --all/--no-pager — order-
 # independent, unlike a bare "${1:-}" == "--all" check — then pipes the
 # impl's output through _wb_maybe_page unless --no-pager was given.
+# --no-aliases isn't parsed here at all: it's forwarded to
+# _wb_cmd_functions_impl unchanged via "$@" and handled entirely there
+# (docs/decisions-log.md D73), since it only affects what the impl prints,
+# not whether/how this wrapper pages it.
 # _wb_availability_timeout_reset moved here (was previously the first
 # thing inside the old single function) so it always runs once, in this
 # process, before _wb_cmd_functions_impl forks into the pipeline below —
@@ -649,6 +654,20 @@ _wb_cmd_functions() {
     if [[ "${_wb_fn_no_pager}" == "true" ]]; then
         _wb_cmd_functions_impl "$@"
     else
+        # column (util-linux and BSD/macOS alike, docs/decisions-log.md
+        # D73) falls back to $COLUMNS, then a fixed default, once its own
+        # stdout isn't a tty — which is exactly what _wb_cmd_functions_impl's
+        # stdout becomes the moment it's the left side of this pipe, even
+        # though fd 1 genuinely is a real terminal one level up. Snapshot
+        # the real width here, before that pipe exists, and export it so
+        # column picks up the true width instead of silently collapsing to
+        # a narrow default — but only when the caller hasn't already set
+        # COLUMNS themselves, which always wins.
+        if [[ -t 1 ]] && [[ -z "${COLUMNS:-}" ]]; then
+            local _wb_fn_cols
+            _wb_fn_cols="$(tput cols 2>/dev/null)"
+            [[ -n "${_wb_fn_cols}" ]] && export COLUMNS="${_wb_fn_cols}"
+        fi
         _wb_cmd_functions_impl "$@" | _wb_maybe_page
     fi
 }
@@ -676,11 +695,23 @@ _wb_cmd_functions() {
 # second grep pass re-opening every one of those files — this
 # environment's per-file-open cost is real (confirmed against a live
 # trace) and worth avoiding on a command this frequently invoked.
+#
+# --no-aliases (docs/decisions-log.md D73) skips both computing and
+# printing the "Loaded aliases" section — not just hiding it after the
+# fact, since the alias snapshot/diff (alias -p twice, sort, comm) is
+# pure overhead when the caller never wanted it. Used by the automatic
+# WORKBENCH_SHOW_FUNCTIONS startup banner (lib/loader.sh) to keep that
+# banner to functions + getters only; a manual `wb functions` still shows
+# every section by default.
 _wb_cmd_functions_impl() {
     local name reglist filepath tier base manifest
     local -a eager_files=()
     local any_getters="false"
     local -a _getter_lines=()
+    local _wb_fn_arg _wb_fn_no_aliases="false"
+    for _wb_fn_arg in "$@"; do
+        [[ "${_wb_fn_arg}" == "--no-aliases" ]] && _wb_fn_no_aliases="true"
+    done
 
     while IFS= read -r name; do
         [[ -z "${name}" ]] && continue
@@ -720,7 +751,9 @@ _wb_cmd_functions_impl() {
     # file read on every single name to avoid it.
     local _before_functions _before_aliases
     _before_functions="$(declare -F | sed 's/^declare -f //')"
-    _before_aliases="$(alias -p 2>/dev/null | sed -E 's/^alias ([a-zA-Z0-9_-]+)=.*/\1/')"
+    if [[ "${_wb_fn_no_aliases}" == "false" ]]; then
+        _before_aliases="$(alias -p 2>/dev/null | sed -E 's/^alias ([a-zA-Z0-9_-]+)=.*/\1/')"
+    fi
 
     # ── Source eager_files once so any "_<name>-available" predicates they
     # declare (docs/module-authoring.md "Declaring function availability")
@@ -761,14 +794,17 @@ _wb_cmd_functions_impl() {
         echo "[INFO] Loaded functions:"
         echo "  (none — no module has rendered register.list yet; run 'wb apply')"
     else
-        local _after_functions _after_aliases _new_functions _new_aliases
+        local _after_functions _new_functions
         _after_functions="$(declare -F | sed 's/^declare -f //')"
-        _after_aliases="$(alias -p 2>/dev/null | sed -E 's/^alias ([a-zA-Z0-9_-]+)=.*/\1/')"
         _new_functions="$(comm -13 <(sort <<< "${_before_functions}") <(sort <<< "${_after_functions}") | grep -v '^_')"
-        _new_aliases="$(comm -13 <(sort <<< "${_before_aliases}") <(sort <<< "${_after_aliases}"))"
-
         _wb_print_live_names "Loaded functions" "${_new_functions}"
-        _wb_print_live_names "Loaded aliases" "${_new_aliases}"
+
+        if [[ "${_wb_fn_no_aliases}" == "false" ]]; then
+            local _after_aliases _new_aliases
+            _after_aliases="$(alias -p 2>/dev/null | sed -E 's/^alias ([a-zA-Z0-9_-]+)=.*/\1/')"
+            _new_aliases="$(comm -13 <(sort <<< "${_before_aliases}") <(sort <<< "${_after_aliases}"))"
+            _wb_print_live_names "Loaded aliases" "${_new_aliases}"
+        fi
     fi
 
     echo
@@ -1517,7 +1553,7 @@ EOF
 
 _wb_help_functions() {
     cat <<'EOF'
-Usage: wb functions [--all] [--no-pager]
+Usage: wb functions [--all] [--no-pager] [--no-aliases]
 
 Lists every registered shell function/getter/installer, grouped by the
 module that declared it (via that module's manifest register: block).
@@ -1535,7 +1571,10 @@ set (empty/"cat"/"none" disables this outright), else PAGER, else a bare
 'less -F -R -X' if installed, else no pager. Never pages when stdout is
 redirected or captured (a file, a pipe, $(...)) — only affects what you
 see interactively. --no-pager skips this for one call regardless of
-WORKBENCH_PAGER/PAGER.
+WORKBENCH_PAGER/PAGER. --no-aliases omits the "Loaded aliases" section,
+listing only loaded functions and getters — this is what the automatic
+WORKBENCH_SHOW_FUNCTIONS startup banner uses (unpaged, no aliases) so it
+stays a quick summary rather than a full listing every new shell.
 
 Confused with 'wb tools'? This lists the raw register.installers[] src
 paths a manifest declares; 'wb tools' lists (and can invoke) the actual

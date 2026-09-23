@@ -616,8 +616,14 @@ if [[ $- == *i* ]]; then
 fi
 
 # ── Interactive startup ───────────────────────────────────────────────────────
+# --no-pager --no-aliases (docs/decisions-log.md D73): this fires on every
+# new interactive shell, so it must never itself drop into an interactive
+# pager session (surprising and confusing on plain shell launch/reload —
+# real report) and stays trimmed to functions + getters, skipping the
+# aliases section, to keep it a quick summary rather than the full listing
+# `wb functions` by hand still gives you.
 if [[ $- == *i* ]] && [[ "${WORKBENCH_SHOW_FUNCTIONS}" == "true" ]] && command -v get-functions &>/dev/null; then
-    get-functions
+    get-functions --no-pager --no-aliases
 fi
 
 unset _wb_loader_lib_dir
