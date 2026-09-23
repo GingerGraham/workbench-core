@@ -4,6 +4,17 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`wb functions` output is now piped through a pager on a real
+  terminal** once it's long enough to matter (`lib/core/pager.sh`, new).
+  Resolution order: `WORKBENCH_PAGER` (wb-specific override;
+  empty/`cat`/`none` disables paging outright) → `PAGER` → a bare
+  `less -F -R -X` if present → plain output. Never pages when stdout
+  isn't a terminal, so no existing script, test, or `$(...)` capture of
+  `wb functions` is affected. New `--no-pager` flag for a one-off
+  override. See `docs/decisions-log.md` D72.
+
 ## [2.13.2] - 2026-09-23
 
 ### Fixed

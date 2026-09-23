@@ -76,7 +76,7 @@ _wb_require() {
 # tab completion) and `wb functions`. Kept deliberately generous rather
 # than pared to the bone — see docs/decisions-log.md D65.
 for _wb_f in \
-    core/log.sh core/version.sh core/functions.sh core/completion.sh loader-select.sh core/semver.sh core/prereqs.sh \
+    core/log.sh core/version.sh core/functions.sh core/pager.sh core/completion.sh loader-select.sh core/semver.sh core/prereqs.sh \
     manifest/parse.sh \
     sync/state.sh sync/engine.sh \
     core/tools.sh \
@@ -620,38 +620,63 @@ _wb_cmd_status() {
 }
 
 # ── functions ──────────────────────────────────────────────────────────────
+# _wb_cmd_functions [--all] [--no-pager]
+# Thin wrapper around _wb_cmd_functions_impl (the actual listing logic,
+# unchanged below): scans all of $@ for --all/--no-pager — order-
+# independent, unlike a bare "${1:-}" == "--all" check — then pipes the
+# impl's output through _wb_maybe_page unless --no-pager was given.
+# _wb_availability_timeout_reset moved here (was previously the first
+# thing inside the old single function) so it always runs once, in this
+# process, before _wb_cmd_functions_impl forks into the pipeline below —
+# it only touches a state file, so where it runs relative to the pipe
+# doesn't matter, but running it twice (once per branch) would be
+# pointless duplication.
 _wb_cmd_functions() {
-    # Generalised get-functions (docs/architecture.md §3/§4): walks every
-    # registered module's declared files and extracts what's actually
-    # defined in them. One exclusion keeps this an accurate "what's
-    # actually loaded" list:
-    #   - platform/distro-tier files whose basename doesn't match this
-    #     host: lib/loader.sh only sources the matching one (e.g. a
-    #     registered macos.sh is never sourced on Linux). Applying
-    #     _wb_loader_should_source_by_name (lib/loader-select.sh — the
-    #     exact function the real loader uses, not a second copy) keeps
-    #     this listing honest on hosts with mixed-platform modules
-    #     registered.
-    #
-    # tier: lazy is NOT excluded here (docs/decisions-log.md D61,
-    # workbench-gpg#7) — see that entry for why.
-    #
-    # As of docs/decisions-log.md D65: register.list entries and
-    # manifest-declared getters are gathered in one walk of
-    # workbench_list_loadable_modules instead of two, and the "Loaded
-    # functions"/"Loaded aliases" name lists come from the live shell
-    # function/alias table after sourcing eager_files once, rather than a
-    # second grep pass re-opening every one of those files — this
-    # environment's per-file-open cost is real (confirmed against a live
-    # trace) and worth avoiding on a command this frequently invoked.
-    if [[ "${1:-}" == "--all" ]]; then
-        # shellcheck disable=SC2034  # read by _wb_function_available
-        # (lib/core/functions.sh), a different file shellcheck can't see
-        # into from here — not actually unused.
-        WORKBENCH_FUNCTIONS_SHOW_ALL="true"
-    fi
+    local _wb_fn_arg _wb_fn_no_pager="false"
+    for _wb_fn_arg in "$@"; do
+        case "${_wb_fn_arg}" in
+            --all)
+                # shellcheck disable=SC2034  # read by _wb_function_available
+                # (lib/core/functions.sh), a different file shellcheck can't see
+                # into from here — not actually unused.
+                WORKBENCH_FUNCTIONS_SHOW_ALL="true"
+                ;;
+            --no-pager) _wb_fn_no_pager="true" ;;
+        esac
+    done
     _wb_availability_timeout_reset
 
+    if [[ "${_wb_fn_no_pager}" == "true" ]]; then
+        _wb_cmd_functions_impl "$@"
+    else
+        _wb_cmd_functions_impl "$@" | _wb_maybe_page
+    fi
+}
+
+# Generalised get-functions (docs/architecture.md §3/§4): walks every
+# registered module's declared files and extracts what's actually
+# defined in them. One exclusion keeps this an accurate "what's
+# actually loaded" list:
+#   - platform/distro-tier files whose basename doesn't match this
+#     host: lib/loader.sh only sources the matching one (e.g. a
+#     registered macos.sh is never sourced on Linux). Applying
+#     _wb_loader_should_source_by_name (lib/loader-select.sh — the
+#     exact function the real loader uses, not a second copy) keeps
+#     this listing honest on hosts with mixed-platform modules
+#     registered.
+#
+# tier: lazy is NOT excluded here (docs/decisions-log.md D61,
+# workbench-gpg#7) — see that entry for why.
+#
+# As of docs/decisions-log.md D65: register.list entries and
+# manifest-declared getters are gathered in one walk of
+# workbench_list_loadable_modules instead of two, and the "Loaded
+# functions"/"Loaded aliases" name lists come from the live shell
+# function/alias table after sourcing eager_files once, rather than a
+# second grep pass re-opening every one of those files — this
+# environment's per-file-open cost is real (confirmed against a live
+# trace) and worth avoiding on a command this frequently invoked.
+_wb_cmd_functions_impl() {
     local name reglist filepath tier base manifest
     local -a eager_files=()
     local any_getters="false"
@@ -1492,7 +1517,7 @@ EOF
 
 _wb_help_functions() {
     cat <<'EOF'
-Usage: wb functions [--all]
+Usage: wb functions [--all] [--no-pager]
 
 Lists every registered shell function/getter/installer, grouped by the
 module that declared it (via that module's manifest register: block).
@@ -1504,6 +1529,13 @@ from this listing — see docs/module-authoring.md "Declaring function
 availability". --all (or WORKBENCH_FUNCTIONS_SHOW_ALL=true, which also
 works in front of any module's own get-<domain>-functions getter) shows
 every function regardless of availability.
+
+On a real terminal, output is piped through a pager: WORKBENCH_PAGER if
+set (empty/"cat"/"none" disables this outright), else PAGER, else a bare
+'less -F -R -X' if installed, else no pager. Never pages when stdout is
+redirected or captured (a file, a pipe, $(...)) — only affects what you
+see interactively. --no-pager skips this for one call regardless of
+WORKBENCH_PAGER/PAGER.
 
 Confused with 'wb tools'? This lists the raw register.installers[] src
 paths a manifest declares; 'wb tools' lists (and can invoke) the actual
