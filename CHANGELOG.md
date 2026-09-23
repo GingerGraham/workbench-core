@@ -4,6 +4,27 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`wb functions` output is now piped through a pager on a real
+  terminal** once it's long enough to matter (`lib/core/pager.sh`, new).
+  Resolution order: `WORKBENCH_PAGER` (wb-specific override;
+  empty/`cat`/`none` disables paging outright) → `PAGER` → a bare
+  `less -F -R -X` if present → plain output. Never pages when stdout
+  isn't a terminal, so no existing script, test, or `$(...)` capture of
+  `wb functions` is affected. New `--no-pager` flag for a one-off
+  override, and a new `--no-aliases` flag that skips the "Loaded
+  aliases" section entirely. The automatic `WORKBENCH_SHOW_FUNCTIONS`
+  startup banner now always uses `--no-pager --no-aliases` — it never
+  opens an interactive pager on shell launch/reload, and stays a quick
+  functions+getters summary rather than the full listing; run
+  `wb functions` by hand for that. Also fixes a real regression this
+  introduced: `column`-formatted output silently collapsed to a much
+  narrower layout than before once it was piped through the pager
+  machinery, even outside an actual paging session — the real terminal
+  width is now captured and preserved across that pipe. See
+  `docs/decisions-log.md` D72, D73.
+
 ## [2.13.2] - 2026-09-23
 
 ### Fixed

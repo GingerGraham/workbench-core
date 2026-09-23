@@ -692,10 +692,16 @@ _wb_print_live_names() {
 # `current` snapshot always contains bin/wb, since the whole repo (bin/
 # included) is exactly what gets fetched/symlinked as core's own module
 # content (principle 4: core is module zero, no special-cased shape).
+#
+# "$@" is forwarded verbatim so `get-functions` run by hand stays exactly
+# equivalent to `wb functions` (same flags, same output) — lib/loader.sh's
+# own automatic WORKBENCH_SHOW_FUNCTIONS startup call is the one caller
+# that passes --no-pager --no-aliases explicitly (docs/decisions-log.md
+# D73); this function itself has no opinion on which flags are used.
 get-functions() {
     local core_current="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/modules/core/current"
     if [[ -x "${core_current}/bin/wb" ]]; then
-        "${core_current}/bin/wb" functions
+        "${core_current}/bin/wb" functions "$@"
     else
         log_error "get-functions: workbench-core's bin/wb not found under ${core_current} — is core registered? (wb status)"
         return 1
