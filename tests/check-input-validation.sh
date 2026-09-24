@@ -50,6 +50,22 @@ for _n in "${BAD_NAMES[@]}"; do
 done
 [[ "${_all_rejected}" -eq 1 ]] && ok "workbench_valid_module_name rejects: Git, -x, 'a b', a/b, embedded newline, ../x, a 65-char name"
 
+# Under some UTF-8 locales (observed on macOS CI runners; not reproducible
+# under every host's default locale, hence the guard), bash's [a-z] bracket
+# range follows locale collation order rather than a strict ASCII range,
+# which previously let 'Git' slip past *[!a-z0-9-]*. workbench_valid_module_name
+# pins LC_ALL=C internally — this proves that pin actually holds regardless
+# of the caller's ambient locale.
+if locale -a 2>/dev/null | grep -qiE '^en_US\.utf-?8$'; then
+    if LC_ALL=en_US.UTF-8 workbench_valid_module_name "Git"; then
+        fail "workbench_valid_module_name wrongly accepted 'Git' under LC_ALL=en_US.UTF-8"
+    else
+        ok "workbench_valid_module_name rejects 'Git' under LC_ALL=en_US.UTF-8 (locale-independent)"
+    fi
+else
+    ok "workbench_valid_module_name locale-independence check skipped (en_US.UTF-8 not installed on this host)"
+fi
+
 # ── URLs ─────────────────────────────────────────────────────────────────────
 declare -a GOOD_URLS=("https://github.com/o/r.git" "git@github.com:o/r.git" "ssh://git@host/o/r" "/tmp/bare.git" "file:///tmp/bare.git")
 _all_good=1
