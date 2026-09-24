@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-09-24
+
 ### Security
 
 - **`_download_file_robust` no longer resumes onto an existing file, and
