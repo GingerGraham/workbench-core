@@ -4,8 +4,6 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
-## [2.15.0] - 2026-09-24
-
 ### Security
 
 - **Module fetches are content-addressed by commit sha, not by tag/branch
@@ -25,6 +23,11 @@ All notable changes to `workbench-core` are documented here.
   called only after the whole file has been read, so a connection dropped
   mid-transfer under `curl | bash` can no longer execute a truncated
   script.
+
+## [2.15.0] - 2026-09-24
+
+### Security
+
 - **`_download_file_robust` no longer resumes onto an existing file, and
   now fails on HTTP errors and non-https redirects.** Downloads land in a
   fresh temp file next to the destination and are only renamed into place
