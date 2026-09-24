@@ -20,7 +20,7 @@ _wb_ssh_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 [[ -f "${_wb_ssh_lib_dir}/../sync/state.sh" ]] && source "${_wb_ssh_lib_dir}/../sync/state.sh"
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/ssh/bootstrap.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/ssh/bootstrap.sh" "0.1.1" || true
 
 WORKBENCH_SSH_CONFIG_D_FILE="${HOME:-}/.ssh/config.d/10-workbench.conf"
 

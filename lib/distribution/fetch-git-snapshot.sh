@@ -20,7 +20,7 @@
 # everywhere.
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/distribution/fetch-git-snapshot.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/distribution/fetch-git-snapshot.sh" "0.1.1" || true
 
 # workbench_fetch_git_snapshot <git_url> <ref-form> <ref-value> <dest_dir> [expected_sha]
 # <ref-form> is one of: branch | tag | commit. When [expected_sha] is given,
