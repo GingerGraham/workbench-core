@@ -468,6 +468,21 @@ else
     ok "lib/sync/state.sh's read path (workbench_module_conf_get etc.) contains no resolve/fetch calls — read-only, no-lock by construction"
 fi
 
+# ── 8. workbench_fetch_git_snapshot refuses a ref that moved since
+#    resolution (security review L1; D74/WP2). expected_sha is the sha of an
+#    *older* commit than what `branch main` actually resolves to now. ─────
+STALE_SHA="$(git -C "${SRC}" rev-parse v1.0.0)"
+STALE_DEST="${WORK}/stale-fetch-dest"
+if workbench_fetch_git_snapshot "${BARE}" branch main "${STALE_DEST}" "${STALE_SHA}" >/tmp/wb-fetch-git-stale.log 2>&1; then
+    fail "workbench_fetch_git_snapshot unexpectedly succeeded with a stale expected_sha"
+else
+    if [[ ! -e "${STALE_DEST}" ]]; then
+        ok "workbench_fetch_git_snapshot refuses a moved ref (returns 1, dest_dir not created)"
+    else
+        fail "workbench_fetch_git_snapshot returned non-zero but left dest_dir behind"
+    fi
+fi
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."

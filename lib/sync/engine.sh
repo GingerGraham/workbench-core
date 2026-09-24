@@ -598,14 +598,15 @@ workbench_sync_module() {
             if [[ "${ref_form}" == "latest" ]]; then
                 git_form="tag"; git_ref="${ref_label}"
             fi
-            workbench_fetch_git_snapshot "${url}" "${git_form}" "${git_ref}" "${new_snapshot}" && ok=0
+            workbench_fetch_git_snapshot "${url}" "${git_form}" "${git_ref}" "${new_snapshot}" "${new_sha}" && ok=0
         else
             local owner repo
             read -r owner repo < <(workbench_parse_github_url "${url}")
-            local tarball_form="${ref_form}"
-            local tarball_ref="${ref_value}"
-            [[ "${ref_form}" == "latest" ]] && { tarball_form="tag"; tarball_ref="${ref_label}"; }
-            workbench_fetch_tarball_public "${owner}" "${repo}" "${tarball_form}" "${tarball_ref}" "${new_snapshot}" && ok=0
+            # Always fetch by the resolved commit sha, never by tag or branch
+            # name. The sha is what RESOLVED_SHA and the snapshot dirname
+            # record; a name can move between resolve and fetch (security
+            # review L1). codeload serves tar.gz/<sha> for any commit.
+            workbench_fetch_tarball_public "${owner}" "${repo}" "commit" "${new_sha}" "${new_snapshot}" && ok=0
         fi
 
         if [[ "${ok}" -ne 0 ]]; then

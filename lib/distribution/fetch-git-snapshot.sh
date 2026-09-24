@@ -22,10 +22,13 @@
 # shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/distribution/fetch-git-snapshot.sh" "0.1.0" || true
 
-# workbench_fetch_git_snapshot <git_url> <ref-form> <ref-value> <dest_dir>
-# <ref-form> is one of: branch | tag | commit.
+# workbench_fetch_git_snapshot <git_url> <ref-form> <ref-value> <dest_dir> [expected_sha]
+# <ref-form> is one of: branch | tag | commit. When [expected_sha] is given,
+# the checked-out commit must equal it or the fetch is refused — the resolve
+# (git ls-remote) and this fetch are separate network calls and a branch or
+# tag can move between them (security review L1).
 workbench_fetch_git_snapshot() {
-    local url="$1" ref_form="$2" ref_value="$3" dest_dir="$4"
+    local url="$1" ref_form="$2" ref_value="$3" dest_dir="$4" expected_sha="${5:-}"
 
     if [[ -e "${dest_dir}" ]]; then
         log_error "workbench_fetch_git_snapshot: dest_dir already exists: ${dest_dir}"
@@ -75,6 +78,16 @@ workbench_fetch_git_snapshot() {
         rm -rf "${scratch}"
         return 1
     }
+
+    if [[ -n "${expected_sha}" ]]; then
+        local actual_sha
+        actual_sha="$(git -C "${scratch}" rev-parse HEAD 2>/dev/null)"
+        if [[ "${actual_sha}" != "${expected_sha}" ]]; then
+            log_warn "workbench_fetch_git_snapshot: ${url}@${ref_value} is ${actual_sha:-unknown}, expected ${expected_sha} — ref moved since resolution, will retry next cycle"
+            rm -rf "${scratch}"
+            return 1
+        fi
+    fi
 
     rm -rf "${scratch}/.git"
     mkdir -p "$(dirname "${dest_dir}")"

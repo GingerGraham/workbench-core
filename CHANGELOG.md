@@ -4,6 +4,26 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- **Module fetches are content-addressed by commit sha, not by tag/branch
+  name.** The sync engine now fetches every public-repo tarball as
+  `tar.gz/<resolved-sha>` (never `refs/tags/<tag>` or `refs/heads/<branch>`),
+  and the git-transport path verifies the checked-out commit against the
+  sha resolved just before the fetch, refusing (and retrying next cycle) if
+  it doesn't match. Resolving a ref and fetching it are two separate
+  network calls; a tag or branch that moves in between previously produced
+  a snapshot whose content didn't match `RESOLVED_SHA` or its own directory
+  name. `bootstrap.sh` picked up the same content-addressed fetch.
+- **`bootstrap.sh` fails closed on a GitHub API error instead of silently
+  installing unreleased `main`.** A failed tags-API call (network error, or
+  the 60-requests/hour unauthenticated limit) is no longer treated the same
+  as "no release exists yet" — only an empty tag list still falls back to
+  `main`. `bootstrap.sh` is also now wrapped in a single `main()` function
+  called only after the whole file has been read, so a connection dropped
+  mid-transfer under `curl | bash` can no longer execute a truncated
+  script.
+
 ## [2.15.0] - 2026-09-24
 
 ### Security
