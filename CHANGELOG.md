@@ -6,6 +6,20 @@ All notable changes to `workbench-core` are documented here.
 
 ### Security
 
+- **Manifest path rules (`dest`/`src` denylist and safety checks) are now
+  enforced at runtime by the sync engine, not only by `validate.sh` at
+  developer/CI time.** Previously a module added via `wb add <name> <url>`
+  never passed through a canonical repo's CI, so an absolute path, a `..`
+  segment, or a denylisted destination (`~/.ssh/`, shell startup files,
+  and more) in its manifest was deployed verbatim. The sync engine now
+  refuses, before ever swapping a new snapshot live, any manifest that
+  fails this check, and re-validates every entry again per-deploy. The
+  denylist is extended (`~/.local/bin/`, `~/.local/share/workbench/`
+  except a module's own `files/` subtree, autostart/environment.d
+  locations, and more shell startup files), compared case-insensitively,
+  and a `deploy[].src` that is itself a symlink — or whose resolved
+  target passes through one into a denylisted location — is refused.
+  See `docs/decisions-log.md` D75.
 - **Module fetches are content-addressed by commit sha, not by tag/branch
   name.** The sync engine now fetches every public-repo tarball as
   `tar.gz/<resolved-sha>` (never `refs/tags/<tag>` or `refs/heads/<branch>`),

@@ -13,8 +13,7 @@ not yet at the point of parallel-maintaining old lines.
 GitHub's private vulnerability reporting instead: go to the
 [Security tab](https://github.com/GingerGraham/workbench-core/security)
 → "Report a vulnerability". This opens a private advisory only visible
-to the maintainer until it's resolved. (Requires the repo setting to be
-enabled first — see §4 of the brief this file shipped with.)
+to the maintainer until it's resolved.
 
 This is a solo-maintained project — response is best-effort, not
 covered by an SLA, but security reports get triaged ahead of everything
@@ -39,9 +38,16 @@ worth reporting against specifically:
   namespace (`docs/architecture.md` principle 1, `lib/manifest/validate.sh`'s
   rejection of a `dest` on `register.shell[]` entries) — a module
   cannot declare where its own content lands outside itself.
-- **Manifest parsing rejects `..`/absolute paths** in every
-  `src`/`dest`-shaped field (`lib/manifest/validate.sh`'s
-  `_is_safe_relative_path`).
+- **`deploy[]` destinations are module-declared, but constrained by a
+  denylist** enforced at runtime, on every sync — not just by
+  `validate.sh` at developer/CI time (`docs/decisions-log.md` D75). The
+  sync engine refuses, before ever swapping a new snapshot live, any
+  manifest whose `src`/`dest`-shaped fields are absolute, contain `..`,
+  or target the denylist (`~/.ssh/`, shell startup files, `~/.local/bin/`,
+  and more — see `contracts/manifest-spec.md`'s `dest` validation
+  section for the full list), and re-checks every resolved deploy target
+  against its symlink-resolved physical location immediately before the
+  write, refusing a `deploy[].src` that is itself a symlink outright.
 
 If you find a way around any of these — a manifest that escapes its own
 namespace, a way to get arbitrary content sourced without going through

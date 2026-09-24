@@ -344,3 +344,156 @@ workbench_manifest_hook_post_deploy() {
         }
     ' "${file}"
 }
+
+# ── Path safety — runtime enforcement (security review H1; D75) ──────────────
+# contracts/manifest-spec.md §dest validation, enforced on the hot path. Until
+# D75 these rules lived only in lib/manifest/validate.sh (developer/CI time),
+# so any manifest that never went through a canonical repo's CI — every
+# `wb add <n> <url>` — was deployed verbatim.
+#
+# The two denylist constants are deliberately duplicated in validate.sh, which
+# must run standalone (same precedent as D30/D46). tests/check-dest-denylist-
+# sync.sh fails if the two copies drift. Space-separated, not arrays, so the
+# drift test can compare single lines.
+_WB_DEST_DENYLIST_DIRS_REL=".ssh/ .gnupg/ .config/shell/ .config/git/ .config/dotfiles/ .config/workbench/ .config/external-sync/ .config/systemd/user/ library/launchagents/ .local/bin/ .local/share/workbench/ .config/autostart/ .config/environment.d/"
+_WB_DEST_DENYLIST_FILES_REL=".bashrc .zshrc .profile .gitconfig .bash_profile .bash_login .bash_logout .zshenv .zprofile .zlogin .zlogout"
+
+# _wb_path_is_safe_relative <path>
+# True iff <path> is non-empty, not absolute, and has no ".." segment.
+_wb_path_is_safe_relative() {
+    local p="$1" rest seg
+    [[ -z "${p}" ]] && return 1
+    [[ "${p}" == /* ]] && return 1
+    rest="${p}"
+    while [[ -n "${rest}" ]]; do
+        seg="${rest%%/*}"
+        [[ "${seg}" == ".." ]] && return 1
+        [[ "${rest}" == */* ]] || break
+        rest="${rest#*/}"
+    done
+    return 0
+}
+
+# _wb_dest_is_safe <dest> <module-name>
+# Lexical dest check. <dest> must start with ~/, have no "..", "." or empty
+# segments, and not fall under the denylist. Compared lowercase so a
+# case-insensitive filesystem (macOS default) can't be used to slip past it.
+#
+# The single exception to the .local/share/workbench/ entry is the module's own
+# modules/<module-name>/files/ subtree (workbench-git deploys its excludes and
+# attributes files there) — never that module's sync.conf, snapshots/, current
+# or rendered lists, and never another module's directory.
+_wb_dest_is_safe() {
+    local d="$1" module="$2" rel lower entry
+    [[ -z "${d}" ]] && return 1
+    # shellcheck disable=SC2088
+    [[ "${d}" == "~/"* ]] || return 1
+    rel="${d#\~/}"
+    [[ -z "${rel}" ]] && return 1
+    case "${rel}" in
+        */../*|../*|*/..|..) return 1 ;;
+        *//*) return 1 ;;
+        ./*|*/./*|*/.|.) return 1 ;;
+    esac
+    _wb_path_is_safe_relative "${rel}" || return 1
+
+    lower="$(printf '%s' "${rel}" | tr '[:upper:]' '[:lower:]')"
+    if [[ -n "${module}" && "${lower}" == ".local/share/workbench/modules/${module}/files/"?* ]]; then
+        return 0
+    fi
+    for entry in ${_WB_DEST_DENYLIST_DIRS_REL}; do
+        [[ "${lower}" == "${entry}"* ]] && return 1
+    done
+    for entry in ${_WB_DEST_DENYLIST_FILES_REL}; do
+        [[ "${lower}" == "${entry}" ]] && return 1
+    done
+    return 0
+}
+
+# _wb_dest_physical_is_safe <absolute-target> <module-name>
+# Symlink-aware re-check, run immediately before each write. Resolves the
+# nearest existing ancestor of <target> with `pwd -P`, rebuilds the path from
+# there, and re-applies _wb_dest_is_safe to the result. Catches a dest whose
+# parent is (or passes through) a symlink into ~/.ssh or anywhere outside $HOME.
+_wb_dest_physical_is_safe() {
+    local target="$1" module="$2"
+    local probe suffix phys_probe phys_home phys_target rel
+
+    probe="$(dirname "${target}")"
+    suffix="/$(basename "${target}")"
+    while [[ ! -d "${probe}" ]]; do
+        suffix="/$(basename "${probe}")${suffix}"
+        probe="$(dirname "${probe}")"
+    done
+    phys_probe="$(cd "${probe}" 2>/dev/null && pwd -P)" || return 1
+    phys_home="$(cd "${HOME}" 2>/dev/null && pwd -P)" || return 1
+    phys_target="${phys_probe}${suffix}"
+
+    case "${phys_target}" in
+        "${phys_home}"/*) rel="${phys_target#"${phys_home}"/}" ;;
+        *) return 1 ;;
+    esac
+    # shellcheck disable=SC2088
+    _wb_dest_is_safe "~/${rel}" "${module}"
+}
+
+# workbench_manifest_paths_safe <manifest> <module-name>
+# Checks every path-shaped field in a manifest. Logs one error per violation
+# and returns 1 if there were any. Used as a pre-swap gate by the sync engine,
+# alongside the D30 version gate.
+workbench_manifest_paths_safe() {
+    local file="$1" module="$2" bad=0
+    local src dest dest_macos mode force platforms tier overrides_src hook_line argv0
+    [[ -f "${file}" ]] || return 0
+
+    # shellcheck disable=SC2034 # mode/force/platforms unused — only src/dest need checking here
+    while IFS='|' read -r src dest dest_macos mode force platforms; do
+        [[ -z "${src}" && -z "${dest}" ]] && continue
+        if ! _wb_path_is_safe_relative "${src}"; then
+            log_error "manifest: deploy src '${src}' is absolute or contains '..'"
+            bad=1
+        fi
+        if ! _wb_dest_is_safe "${dest}" "${module}"; then
+            log_error "manifest: deploy dest '${dest}' violates dest validation (contracts/manifest-spec.md §dest validation)"
+            bad=1
+        fi
+        if [[ -n "${dest_macos}" ]] && ! _wb_dest_is_safe "${dest_macos}" "${module}"; then
+            log_error "manifest: deploy dest_macos '${dest_macos}' violates dest validation"
+            bad=1
+        fi
+    done < <(workbench_manifest_deploy_entries "${file}")
+
+    overrides_src="$(workbench_manifest_scalar overrides_src "${file}")"
+    if [[ -n "${overrides_src}" ]] && ! _wb_path_is_safe_relative "${overrides_src}"; then
+        log_error "manifest: overrides_src '${overrides_src}' is absolute or contains '..'"
+        bad=1
+    fi
+
+    # shellcheck disable=SC2034 # tier unused — only src needs checking here
+    while IFS='|' read -r src tier; do
+        [[ -z "${src}" ]] && continue
+        if ! _wb_path_is_safe_relative "${src}"; then
+            log_error "manifest: register.shell src '${src}' is absolute or contains '..'"
+            bad=1
+        fi
+    done < <(workbench_manifest_register_shell_entries "${file}")
+
+    while IFS= read -r src; do
+        [[ -z "${src}" ]] && continue
+        if ! _wb_path_is_safe_relative "${src}"; then
+            log_error "manifest: register.installers src '${src}' is absolute or contains '..'"
+            bad=1
+        fi
+    done < <(workbench_manifest_register_installer_entries "${file}")
+
+    hook_line="$(workbench_manifest_hook_post_deploy "${file}")"
+    if [[ -n "${hook_line}" ]]; then
+        argv0="$(printf '%s' "${hook_line}" | cut -d'|' -f3)"
+        if ! _wb_path_is_safe_relative "${argv0}"; then
+            log_error "manifest: hooks.post_deploy.command[0] '${argv0}' is absolute or contains '..'"
+            bad=1
+        fi
+    fi
+
+    return "${bad}"
+}
