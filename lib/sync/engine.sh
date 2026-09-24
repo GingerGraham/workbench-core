@@ -126,6 +126,7 @@ workbench_resolve_module() {
     private="$(workbench_module_conf_get "${name}" PRIVATE false)"
     mode="$(workbench_module_conf_get "${name}" TRACK_MODE latest)"
     [[ -z "${url}" ]] && { log_warn "workbench_resolve_module: ${name}: no REPO_URL in sync.conf"; return 1; }
+    workbench_valid_repo_url "${url}" || { log_warn "workbench_resolve_module: ${name}: REPO_URL '${url}' fails validation — skipping"; return 1; }
 
     read -r ref_form ref_value < <(workbench_track_mode_parts "${mode}")
 
