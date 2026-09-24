@@ -93,6 +93,16 @@ existing enabled state carried forward once, automatically, rather than
 silently losing it (`_workbench_scheduler_migrate_existing_install`,
 `lib/sync/scheduler.sh`).
 
+**Release cooldown (security review H3 tier 2; docs/decisions-log.md
+D77):** an unattended (`scheduled`) sync of a `latest`-tracked module
+adopts a newly-resolved release only after it has been continuously
+resolved for `RELEASE_COOLDOWN_DAYS` (`scheduler.conf`, default 3 days;
+`0` disables), measured from first-seen time on the host — no remote
+timestamps, no extra API calls. Gives the maintainer a window to delete a
+bad tag before it reaches every host. Interactive commands (`wb
+update`/`wb add`/`wb track`) adopt immediately, and `branch:`/`tag:`/
+`commit:` modes are unaffected — cooldown only applies to `latest`.
+
 ## Persistence & `WORKBENCH_TRACK_<MODULE>` (§9.5/D7)
 
 `sync.conf`'s `TRACK_MODE`/`TRACK_REF`/`RESOLVED_SHA` is the sole persistent

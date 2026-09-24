@@ -98,6 +98,30 @@ workbench_cadence_mark_ran() {
     date +%s > "${state_file}"
 }
 
+# ── Release cooldown and adoption log (security review H3 tier 2; D77) ──────
+# _wb_release_cooldown_days
+# RELEASE_COOLDOWN_DAYS from scheduler.conf, read as data (never sourced).
+# Default 3; 0 disables; anything non-numeric falls back to the default.
+_wb_release_cooldown_days() {
+    local file value=""
+    file="${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/core/scheduler.conf"
+    [[ -f "${file}" ]] && value="$(grep -E '^RELEASE_COOLDOWN_DAYS=' "${file}" 2>/dev/null | tail -n 1 | cut -d= -f2-)"
+    case "${value}" in
+        ''|*[!0-9]*) value=3 ;;
+    esac
+    printf '%s\n' "${value}"
+}
+
+# _wb_adoption_log_event <event> <module> <old_sha> <new_sha> <ref> <reason>
+# Append-only record of what this host adopted and ran, and when. Never fatal.
+_wb_adoption_log_event() {
+    local log_file="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/adoption.log"
+    mkdir -p "$(dirname "${log_file}")" 2>/dev/null || return 0
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "${3:-none}" "${4:-none}" "${5:-}" "${6:-}" \
+        >> "${log_file}" 2>/dev/null || true
+}
+
 # ── Track-mode parsing ────────────────────────────────────────────────────────
 # workbench_track_mode_parts <TRACK_MODE_VALUE>
 # Prints "<ref-form> <ref-value>" — ref-form one of latest|branch|tag|commit.
@@ -518,11 +542,6 @@ _wb_hook_describe_change() {
     fi
 }
 
-# _wb_adoption_log_event stub — the real implementation lands in D77 (WP7).
-# Guarded so this WP's consent-binding code can call it before WP7 merges;
-# WP7 replaces this with the real append-only adoption-log writer.
-command -v _wb_adoption_log_event &>/dev/null || _wb_adoption_log_event() { :; }
-
 # workbench_run_post_deploy_hook <name> <reason> <changed> <is_first_sync>
 # run_on semantics (contracts/manifest-spec.md §Hook contract): changed
 # (default) fires when <changed> is true OR this is the module's first
@@ -630,8 +649,10 @@ workbench_run_post_deploy_hook() {
     local rc=$?
     if [[ "${rc}" -eq 0 ]]; then
         log_info "${name}: post_deploy hook succeeded"
+        _wb_adoption_log_event "hook-run" "${name}" "${approved_sha}" "${current_sha}" "" "${reason}"
     else
         log_warn "${name}: post_deploy hook failed (exit ${rc}) — non-fatal, this module's sync still counts as successful"
+        _wb_adoption_log_event "hook-failed" "${name}" "${approved_sha}" "${current_sha}" "" "${reason}"
     fi
     return 0
 }
@@ -690,8 +711,48 @@ workbench_sync_module() {
 
     if [[ "${new_sha}" == "${current_sha}" && -d "${module_dir}/current" ]]; then
         log_info "${name}: up to date (${new_sha:0:7})"
+        # A pending release that upstream withdrew (latest resolves back to
+        # what is deployed) is no longer pending.
+        if [[ -n "$(workbench_module_conf_get "${name}" PENDING_SHA "")" ]]; then
+            workbench_module_conf_set "${name}" PENDING_SHA ""
+            workbench_module_conf_set "${name}" PENDING_SINCE ""
+        fi
         workbench_run_post_deploy_hook "${name}" "${reason}" "false" "${is_first}"
         return 0
+    fi
+
+    # ── Release cooldown (security review H3 tier 2; D77) ────────────────────
+    # Unattended syncs adopt a new latest release only after it has been seen
+    # continuously for RELEASE_COOLDOWN_DAYS. Gives the maintainer a window to
+    # delete a bad tag before it reaches every host. Interactive commands
+    # (wb update/add/track) are unaffected.
+    if [[ "${reason}" == "scheduled" && "${ref_form}" == "latest" && -n "${current_sha}" ]]; then
+        local cooldown_days
+        cooldown_days="$(_wb_release_cooldown_days)"
+        if [[ "${cooldown_days}" -gt 0 ]]; then
+            local pending_sha pending_since now held_for needed
+            pending_sha="$(workbench_module_conf_get "${name}" PENDING_SHA "")"
+            pending_since="$(workbench_module_conf_get "${name}" PENDING_SINCE "")"
+            now="$(date +%s)"
+            if [[ "${pending_sha}" != "${new_sha}" ]]; then
+                workbench_module_conf_set "${name}" PENDING_SHA "${new_sha}"
+                workbench_module_conf_set "${name}" PENDING_SINCE "${now}"
+                log_info "${name}: new release ${ref_label} (${new_sha:0:7}) first seen — holding ${cooldown_days}d before unattended adoption ('wb update ${name}' adopts it now)"
+                _wb_adoption_log_event "cooldown-start" "${name}" "${current_sha}" "${new_sha}" "${ref_label}" "${reason}"
+                workbench_run_post_deploy_hook "${name}" "${reason}" "false" "${is_first}"
+                return 0
+            fi
+            case "${pending_since}" in
+                ''|*[!0-9]*) pending_since="${now}" ;;
+            esac
+            held_for=$((now - pending_since))
+            needed=$((cooldown_days * 86400))
+            if [[ "${held_for}" -lt "${needed}" ]]; then
+                log_info "${name}: ${ref_label} (${new_sha:0:7}) in cooldown — $(( (needed - held_for + 3599) / 3600 ))h remaining"
+                workbench_run_post_deploy_hook "${name}" "${reason}" "false" "${is_first}"
+                return 0
+            fi
+        fi
     fi
 
     log_info "${name}: change detected (${current_sha:-none} -> ${new_sha:0:7}) — fetching"
@@ -759,6 +820,9 @@ workbench_sync_module() {
     workbench_snapshot_prune "${name}"
     workbench_module_conf_set "${name}" RESOLVED_SHA "${new_sha}"
     workbench_module_conf_set "${name}" TRACK_REF "${ref_value:-${ref_label}}"
+    workbench_module_conf_set "${name}" PENDING_SHA ""
+    workbench_module_conf_set "${name}" PENDING_SINCE ""
+    _wb_adoption_log_event "adopt" "${name}" "${current_sha}" "${new_sha}" "${ref_label}" "${reason}"
 
     workbench_render_register_list "${name}"
     workbench_render_installers_list "${name}"

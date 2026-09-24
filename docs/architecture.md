@@ -536,6 +536,16 @@ The timer's own firing interval is dynamic:
   them.
 - **Manual, on-demand trigger** (`wb update [<name>]`) is always available
   regardless of cadence or tracking mode — confirmed in scope.
+- **Release cooldown for unattended `latest` adoption (security review H3
+  tier 2; docs/decisions-log.md D77).** An unattended (`scheduled`) cycle
+  adopts a newly-resolved `latest` release only once it has been
+  continuously resolved for `RELEASE_COOLDOWN_DAYS` (`scheduler.conf`,
+  default 3 days; `0` disables) — first-seen time on the host, no remote
+  timestamps or extra API calls. `wb update`/`wb add`/`wb track` adopt
+  immediately regardless; `branch:`/`tag:`/`commit:` modes are unaffected.
+  A local, append-only `adoption.log` records what was adopted, held in
+  cooldown, or ran a hook, and when — for incident response, not
+  telemetry.
 
 ### 9.5 Persistence & the tracking-variable contract
 

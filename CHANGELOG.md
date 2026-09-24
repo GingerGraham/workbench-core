@@ -6,6 +6,20 @@ All notable changes to `workbench-core` are documented here.
 
 ### Security
 
+- **Unattended syncs now hold a new `latest` release in cooldown before
+  adopting it.** Previously, any new clean tag on a registered repo was
+  adopted on the very next unattended sync — a compromised account,
+  token, or release automation reached every host within one cycle, with
+  no local record of what was adopted when. A scheduled sync of a
+  `latest`-tracked module now adopts a newly-resolved release only once
+  it's been continuously resolved for `RELEASE_COOLDOWN_DAYS`
+  (`scheduler.conf`, default 3 days; `0` disables) — giving the
+  maintainer a window to delete a bad tag before it reaches every host.
+  Interactive commands (`wb update`/`wb add`/`wb track`) adopt
+  immediately regardless, and `branch:`/`tag:`/`commit:` modes are
+  unaffected. A new local, append-only `adoption.log` records every
+  adopt, cooldown-start, and hook event, for incident response. See
+  `docs/decisions-log.md` D77.
 - **`post_deploy` hook consent is now bound to a specific commit, not
   granted forever by `--allow-hooks`.** Previously, once a module was
   added with hooks allowed, any later release could add a hook, change

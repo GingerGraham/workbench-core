@@ -28,6 +28,14 @@ export XDG_CONFIG_HOME="${WORK}/config"
 export HOME="${WORK}/home"
 mkdir -p "${HOME}"
 
+# The D77 release cooldown (a new tag on a latest-tracked module isn't
+# adopted by a scheduled sync — workbench_sync_module's default reason —
+# until it's been resolved for RELEASE_COOLDOWN_DAYS) is orthogonal to what
+# this suite tests. Disabled here; see tests/check-release-cooldown.sh for
+# cooldown coverage.
+mkdir -p "${XDG_CONFIG_HOME}/workbench/core"
+echo "RELEASE_COOLDOWN_DAYS=0" > "${XDG_CONFIG_HOME}/workbench/core/scheduler.conf"
+
 # shellcheck source=lib/sync/engine.sh
 source "${REPO_ROOT}/lib/sync/engine.sh"
 
