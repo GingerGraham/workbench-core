@@ -6,6 +6,14 @@ All notable changes to `workbench-core` are documented here.
 
 ### Security
 
+- **The sync timer's systemd unit now blocks privilege escalation.** The
+  unattended `wb sync run-if-due` path — module `post_deploy` hooks
+  included — runs with the user's full ability to invoke `sudo`, `pkexec`,
+  and other setuid binaries (NOPASSWD rules, cached credentials).
+  `workbench-sync.service` now sets `NoNewPrivileges=yes` and
+  `RestrictSUIDSGID=yes`. Existing hosts pick this up automatically on the
+  next `wb apply`/`wb install`, since the scheduler rewrites the unit
+  whenever it's enabled.
 - **Module names and `REPO_URL` values are now validated.** A module name
   becomes a directory name, an `ssh_config` `Host` alias, and an
   environment-variable suffix — `workbench_valid_module_name` now

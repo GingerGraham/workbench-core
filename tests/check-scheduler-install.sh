@@ -87,6 +87,11 @@ if [[ -f "${UNIT_DIR}/workbench-sync.timer" ]] && grep -qF "ExecStart=${HOME}/.l
 else
     fail "scheduler enable: timer not installed correctly"
 fi
+if grep -qF "NoNewPrivileges=yes" "${UNIT_DIR}/workbench-sync.service" && grep -qF "RestrictSUIDSGID=yes" "${UNIT_DIR}/workbench-sync.service"; then
+    ok "scheduler enable: service unit sandboxes privilege escalation (NoNewPrivileges, RestrictSUIDSGID)"
+else
+    fail "scheduler enable: service unit is missing NoNewPrivileges/RestrictSUIDSGID"
+fi
 if grep -q "enable --now workbench-sync.timer" "${STUB_LOG}"; then
     ok "scheduler enable: systemctl enable --now invoked"
 else

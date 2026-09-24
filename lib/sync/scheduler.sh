@@ -155,6 +155,11 @@ Description=workbench-core sync (run-if-due — see workbench-sync.timer)
 [Service]
 Type=oneshot
 ExecStart=${wb_path} sync run-if-due
+# Security review L5: the unattended path, module hooks included, must never
+# gain privileges — no sudo/pkexec/setuid, even with NOPASSWD rules or a
+# cached credential. Both directives work in systemd --user units.
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
 EOF
     then
         log_warn "workbench_scheduler: could not write ${service_file} — scheduled sync will not run automatically on this host. 'wb update'/'wb sync run-if-due' still work manually."
