@@ -384,6 +384,17 @@ machine-side state) — an ungated hook declaration is a no-op, not an error.
   available; a hook without either running is a logged, non-fatal warning.
 - A hook's exit code is recorded but never fails the module's own sync —
   see [tracking-spec.md](tracking-spec.md) §Resilience.
+- **Consent is bound to a commit** (`docs/decisions-log.md` D76):
+  `HOOKS_APPROVED_SHA` records the commit whose hook the user last
+  approved. A **scheduled** sync runs the hook only when the current
+  `RESOLVED_SHA` matches; otherwise it defers (`HOOKS_PENDING=true`,
+  logged) rather than running a hook — or hook-read file — the user
+  never saw. An **interactive** sync (`wb add`, `wb update`, `wb track`)
+  runs a deferred or changed hook: it prompts for approval on a real
+  terminal (`wb add`'s own `--allow-hooks` flag is itself the consent,
+  so it never prompts), and records the approved commit. This means a
+  `run_on: changed` hook can wait for the next interactive `wb update`
+  after an unattended adoption — a deliberate trade-off, not a bug.
 
 See `docs/module-authoring.md` for the full hook environment (env vars
 exposed to a running hook) and a reference hook skeleton.

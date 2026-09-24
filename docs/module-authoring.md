@@ -480,6 +480,15 @@ snapshot — `cwd` is already set there), `WORKBENCH_SYNC_REASON` (`add` |
 `track` | `manual` | `scheduled`). Exit non-zero on failure — it's logged
 and recorded, but never fails your module's sync (or any other module's).
 
+**A new or changed hook waits for interactive approval before an
+unattended host will run it** (`docs/decisions-log.md` D76): a scheduled
+sync only runs the hook at the commit the user already approved on that
+host; a hook that's new or has changed since then is deferred, logged,
+and left for the next interactive `wb update`/`wb add`/`wb track`, which
+prompts on a real terminal. If your hook's `run_on: changed` and you push
+a change to it alongside other module changes, don't expect it to run on
+every host immediately — that's by design, not a delivery bug.
+
 ## Dev-mode disk duplication
 
 If you point your own module's tracking at your working branch

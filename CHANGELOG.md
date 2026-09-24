@@ -6,6 +6,27 @@ All notable changes to `workbench-core` are documented here.
 
 ### Security
 
+- **`post_deploy` hook consent is now bound to a specific commit, not
+  granted forever by `--allow-hooks`.** Previously, once a module was
+  added with hooks allowed, any later release could add a hook, change
+  the hook script, or change files the hook copies into sensitive places
+  — and the unattended timer would run it with no re-consent. A
+  scheduled sync now only runs a module's hook at the commit
+  (`HOOKS_APPROVED_SHA`) the user already approved on that host;
+  otherwise it defers (`HOOKS_PENDING=true`, logged) rather than running
+  unreviewed content. An interactive sync (`wb add`, `wb update`, `wb
+  track`) runs a deferred or changed hook, prompting for approval on a
+  real terminal (with a compare-URL link for GitHub-hosted modules) and
+  recording the approved commit — `wb add --allow-hooks` is itself the
+  consent and never prompts. A pre-existing host with `ALLOW_HOOKS=true`
+  and no recorded approval approves its current commit silently on its
+  first *unchanged* cycle; a *changed* cycle is deferred like any other.
+  `wb status` gained a `HOOKS_PENDING` column. See `docs/decisions-log.md`
+  D76. The hook-execution command array now only appends its argument list
+  when non-empty — under macOS's stock bash 3.2, `"${arr[@]}"` on a
+  declared-but-empty array trips `set -u`'s unbound-variable check (fixed
+  in bash 4.4+, but 3.2 is this repo's floor), which previously made every
+  post_deploy hook invocation fail silently on macOS.
 - **The sync timer's systemd unit now blocks privilege escalation.** The
   unattended `wb sync run-if-due` path — module `post_deploy` hooks
   included — runs with the user's full ability to invoke `sudo`, `pkexec`,
