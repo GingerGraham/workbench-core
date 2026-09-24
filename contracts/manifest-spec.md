@@ -337,16 +337,33 @@ Every `deploy[].dest`/`dest_macos` must:
 
 - Start with `~/` (anchored at the user's home directory — no absolute
   paths outside it).
-- Contain no `..` path segment.
-- Not fall under the dest denylist: `~/.ssh/`, `~/.gnupg/`,
-  `~/.config/shell/`, `~/.config/git/`, `~/.config/dotfiles/`,
-  `~/.config/workbench/`, `~/.config/external-sync/`,
-  `~/.config/systemd/user/`, `~/Library/LaunchAgents/`, `~/.bashrc`,
-  `~/.zshrc`, `~/.profile`, `~/.gitconfig`.
+- Contain no `..`, `.`, `//`, or empty path segment.
+- Not fall under the dest denylist, compared **case-insensitively** (so a
+  case-insensitive filesystem, macOS's default, can't be used to slip past
+  it): `~/.ssh/`, `~/.gnupg/`, `~/.config/shell/`, `~/.config/git/`,
+  `~/.config/dotfiles/`, `~/.config/workbench/`,
+  `~/.config/external-sync/`, `~/.config/systemd/user/`,
+  `~/Library/LaunchAgents/`, `~/.local/bin/`,
+  `~/.local/share/workbench/`, `~/.config/autostart/`,
+  `~/.config/environment.d/`, `~/.bashrc`, `~/.zshrc`, `~/.profile`,
+  `~/.gitconfig`, `~/.bash_profile`, `~/.bash_login`, `~/.bash_logout`,
+  `~/.zshenv`, `~/.zprofile`, `~/.zlogin`, `~/.zlogout`.
+  - The single exception to `~/.local/share/workbench/` is a module's own
+    `~/.local/share/workbench/modules/<name>/files/` subtree (used to
+    deploy a file only that module's own registered content should ever
+    read, e.g. `workbench-git`'s excludes/attributes files) — never
+    another module's directory, and never that module's own `sync.conf`,
+    `snapshots/`, `current`, or rendered lists.
+- Not resolve, once expanded, through a symlink into any of the above —
+  a `deploy[].src` that is itself a symlink is refused outright, and every
+  resolved deploy target is re-checked against its own physical
+  (symlink-resolved) location immediately before the write.
 
 This denylist is exactly why `register:` had to exist as a separate,
 engine-routed mechanism — a manifest-driven module can never `deploy:` its
 way into shell-loader-visible territory, by design.
+
+Enforced by the sync engine at runtime (D75), not only by `validate.sh`.
 
 ## Hook contract
 

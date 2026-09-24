@@ -31,7 +31,7 @@ version: 1
 branch: main
 deploy:
   - src: shell/
-    dest: ~/.local/share/workbench/modules/awsconfd/src/
+    dest: ~/.config/awsconfd-test/
     mode: copy
 core_api: ">=1.0 <2.0"
 sync:
@@ -165,7 +165,7 @@ version: 2
 branch: main
 deploy:
   - src: shell/
-    dest: ~/.local/share/workbench/modules/awsconfd/src/
+    dest: ~/.config/awsconfd-test/
     mode: copy
 core_api: ">=1.0 <2.0"
 sync:

@@ -193,38 +193,43 @@ _is_safe_relative_path() {
     return 0
 }
 
-_DEST_DENYLIST_DIRS_REL=(
-    ".ssh/" ".gnupg/" ".config/shell/" ".config/git/" ".config/dotfiles/"
-    ".config/workbench/" ".config/external-sync/" ".config/systemd/user/"
-    "Library/LaunchAgents/"
-)
-_DEST_DENYLIST_FILES_REL=(
-    ".bashrc" ".zshrc" ".profile" ".gitconfig"
-)
+# Byte-identical to lib/manifest/parse.sh's copy of the same two lines
+# (this file must run standalone — same precedent as D30/D46 — so the list
+# can't be sourced from there). tests/check-dest-denylist-sync.sh fails if
+# the two copies drift.
+_WB_DEST_DENYLIST_DIRS_REL=".ssh/ .gnupg/ .config/shell/ .config/git/ .config/dotfiles/ .config/workbench/ .config/external-sync/ .config/systemd/user/ library/launchagents/ .local/bin/ .local/share/workbench/ .config/autostart/ .config/environment.d/"
+_WB_DEST_DENYLIST_FILES_REL=".bashrc .zshrc .profile .gitconfig .bash_profile .bash_login .bash_logout .zshenv .zprofile .zlogin .zlogout"
 
+# _is_safe_dest <dest>
+# Lexical dest check (docs/decisions-log.md D75). Compared lowercase so a
+# case-insensitive filesystem (macOS default) can't be used to slip past it.
+# The single exception to the .local/share/workbench/ entry is a module's
+# own modules/<name>/files/ subtree — this validator runs against a source
+# repo, not an installed module instance, so it doesn't know the eventual
+# registration name and allows any single path segment there.
 _is_safe_dest() {
-    local d="$1"
+    local d="$1" rel lower entry
     [[ -z "${d}" || "${d}" == "null" ]] && return 1
     # shellcheck disable=SC2088
-    [[ "${d}" != "~/"* ]] && return 1
-
-    local rel="${d#\~/}"
+    [[ "${d}" == "~/"* ]] || return 1
+    rel="${d#\~/}"
     [[ -z "${rel}" ]] && return 1
+    case "${rel}" in
+        */../*|../*|*/..|..) return 1 ;;
+        *//*) return 1 ;;
+        ./*|*/./*|*/.|.) return 1 ;;
+    esac
+    _is_safe_relative_path "${rel}" || return 1
 
-    _split_path_segments "${rel}"
-    local seg
-    if [[ "${#_PATH_SEGMENTS[@]}" -gt 0 ]]; then
-        for seg in "${_PATH_SEGMENTS[@]}"; do
-            [[ "${seg}" == ".." ]] && return 1
-        done
-    fi
-
-    local entry
-    for entry in "${_DEST_DENYLIST_DIRS_REL[@]}"; do
-        [[ "${rel}" == "${entry}"* ]] && return 1
+    lower="$(printf '%s' "${rel}" | tr '[:upper:]' '[:lower:]')"
+    case "${lower}" in
+        .local/share/workbench/modules/*/files/?*) return 0 ;;
+    esac
+    for entry in ${_WB_DEST_DENYLIST_DIRS_REL}; do
+        [[ "${lower}" == "${entry}"* ]] && return 1
     done
-    for entry in "${_DEST_DENYLIST_FILES_REL[@]}"; do
-        [[ "${rel}" == "${entry}" ]] && return 1
+    for entry in ${_WB_DEST_DENYLIST_FILES_REL}; do
+        [[ "${lower}" == "${entry}" ]] && return 1
     done
     return 0
 }

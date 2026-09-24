@@ -277,16 +277,36 @@ workbench_deploy_module() {
                 Linux) printf '%s\n' "${platforms}" | tr ',' '\n' | grep -qx linux || continue ;;
             esac
         fi
-        local real_dest="${dest}"
-        [[ "${WORKBENCH_OS:-}" == "Mac" && -n "${dest_macos}" ]] && real_dest="${dest_macos}"
-        real_dest="$(_wb_expand_dest "${real_dest}")"
+        local chosen_dest="${dest}"
+        [[ "${WORKBENCH_OS:-}" == "Mac" && -n "${dest_macos}" ]] && chosen_dest="${dest_macos}"
+
+        # D75: lexical checks first, then a symlink-aware check per target.
+        if ! _wb_path_is_safe_relative "${src}" || ! _wb_dest_is_safe "${chosen_dest}" "${name}"; then
+            log_error "workbench_deploy_module: ${name}: refusing unsafe deploy entry (src: ${src}, dest: ${chosen_dest})"
+            continue
+        fi
+
+        local real_dest
+        real_dest="$(_wb_expand_dest "${chosen_dest}")"
         local abs_src="${current_dir}/${src%/}"
+
+        # A symlink in the snapshot can point anywhere, including outside
+        # $HOME. Never deploy one — as a single-file src, or as the source a
+        # link-mode entry would point at.
+        if [[ -L "${abs_src}" ]]; then
+            log_error "workbench_deploy_module: ${name}: refusing deploy src '${src}' — it is a symlink"
+            continue
+        fi
 
         if [[ -d "${abs_src}" ]]; then
             local file rel target
             while IFS= read -r -d '' file; do
                 rel="${file#"${abs_src}"/}"
                 target="${real_dest%/}/${rel}"
+                if ! _wb_dest_physical_is_safe "${target}" "${name}"; then
+                    log_error "workbench_deploy_module: ${name}: refusing ${target} — resolves through a symlink to a denied location"
+                    continue
+                fi
                 if [[ "${mode}" == "link" ]]; then
                     workbench_deploy_link_file "${file}" "${target}" "${force}" "${name}"
                 else
@@ -294,6 +314,10 @@ workbench_deploy_module() {
                 fi
             done < <(find "${abs_src}" -name .git -prune -o -type f -print0)
         elif [[ -e "${abs_src}" ]]; then
+            if ! _wb_dest_physical_is_safe "${real_dest}" "${name}"; then
+                log_error "workbench_deploy_module: ${name}: refusing ${real_dest} — resolves through a symlink to a denied location"
+                continue
+            fi
             if [[ "${mode}" == "link" ]]; then
                 workbench_deploy_link_file "${abs_src}" "${real_dest}" "${force}" "${name}"
             else
@@ -351,6 +375,12 @@ workbench_module_reset_targets() {
     while IFS='|' read -r src dest dest_macos mode force platforms; do
         [[ -z "${src}" ]] && continue
         [[ "${mode}" == "link" ]] && continue
+        # D75: same lexical checks as workbench_deploy_module — reset only
+        # lists targets, so an unsafe entry is skipped silently here.
+        _wb_path_is_safe_relative "${src}" || continue
+        local chosen_dest="${dest}"
+        [[ "${WORKBENCH_OS:-}" == "Mac" && -n "${dest_macos}" ]] && chosen_dest="${dest_macos}"
+        _wb_dest_is_safe "${chosen_dest}" "${name}" || continue
         local abs_src="${current_dir}/${src%/}"
         [[ -d "${abs_src}" ]] && continue
 
@@ -401,6 +431,7 @@ workbench_render_register_list() {
 
     while IFS='|' read -r src tier; do
         [[ -z "${src}" ]] && continue
+        _wb_path_is_safe_relative "${src}" || { log_error "workbench_render_register_list: ${name}: refusing register.shell src '${src}'"; continue; }
         printf '%s|%s\n' "${current_dir}/${src}" "${tier}" >> "${reglist}"
     done < <(workbench_manifest_register_shell_entries "${manifest}")
 }
@@ -445,6 +476,7 @@ workbench_render_installers_list() {
 
     while IFS= read -r src; do
         [[ -z "${src}" ]] && continue
+        _wb_path_is_safe_relative "${src}" || { log_error "workbench_render_installers_list: ${name}: refusing register.installers src '${src}'"; continue; }
         abs_path="${current_dir}/${src}"
         if [[ ! -f "${abs_path}" ]]; then
             log_warn "workbench_render_installers_list: ${name}: register.installers[] src not found: ${abs_path}"
@@ -484,6 +516,7 @@ workbench_run_post_deploy_hook() {
     run_on="${fields[0]}"
     timeout_s="${fields[1]}"
     argv=("${fields[@]:2}")
+    _wb_path_is_safe_relative "${argv[0]}" || { log_error "${name}: refusing post_deploy hook '${argv[0]}' — absolute or contains '..'"; return 0; }
 
     case "${run_on}" in
         always)  : ;;
@@ -630,6 +663,11 @@ workbench_sync_module() {
         expected_version="$(workbench_manifest_expected_version "${new_manifest}")"
         if ! _wb_manifest_schema_supported "${manifest_version}" || [[ "${manifest_version}" != "${expected_version}" ]]; then
             log_error "${name}: $(basename -- "${new_manifest}") declares version '${manifest_version:-<missing>}', expected ${expected_version} for that filename — refusing to sync (previous snapshot, if any, stays current)"
+            return 1
+        fi
+        # Same refuse-before-swap semantics as the version gate above (D75).
+        if ! workbench_manifest_paths_safe "${new_manifest}" "${name}"; then
+            log_error "${name}: $(basename -- "${new_manifest}") failed path-safety validation — refusing to sync (previous snapshot, if any, stays current)"
             return 1
         fi
     fi
