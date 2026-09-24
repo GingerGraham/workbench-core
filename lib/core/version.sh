@@ -30,7 +30,7 @@ _workbench_ensure_version_file() {
         cp "${_wb_version_lib_dir}/version-defaults.conf" "${file}"
     else
         cat > "${file}" <<'EOF'
-CORE_API_VERSION=1.3
+CORE_API_VERSION=1.4
 STATE_SCHEMA_VERSION=2
 WORKBENCH_CORE_SEMVER=0.1.0
 EOF
@@ -121,7 +121,7 @@ _workbench_version_remove_var() {
 # no self-healing path short of a manual file edit. Bump
 # _WB_CORE_API_VERSION_CURRENT by hand alongside future contracts/core-api.md
 # additions (same policy as D29/D34) — never anything in the function below.
-_WB_CORE_API_VERSION_CURRENT="1.3"
+_WB_CORE_API_VERSION_CURRENT="1.4"
 
 # _workbench_sync_version_facts
 # Called from `wb install`/`wb apply`, after _workbench_ensure_version_file

@@ -4,6 +4,26 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- **`_download_file_robust` no longer resumes onto an existing file, and
+  now fails on HTTP errors and non-https redirects.** Downloads land in a
+  fresh temp file next to the destination and are only renamed into place
+  on full success; a resumed (`curl -C -`) download onto an existing binary
+  could previously splice old-head + new-tail content together on
+  re-install. `curl` now runs with `--fail --proto/--proto-redir =https`
+  instead of bare `-L -C -`. See `docs/decisions-log.md` D74.
+
+### Added
+
+- **New verified-fetch helpers in `lib/core/installers-common.sh`**
+  (`CORE_API_VERSION` 1.3 → 1.4): `_wb_sha256`, `_wb_gh_asset_digest`,
+  `_wb_fetch_verified`, and `_wb_key_has_fingerprint`, so any module
+  installer can download a release asset or vendor GPG key and verify it
+  before trusting it, instead of each module hand-rolling its own
+  checksum/fingerprint logic. See `contracts/core-api.md` and
+  `docs/decisions-log.md` D74.
+
 ## [2.14.0] - 2026-09-23
 
 ### Added

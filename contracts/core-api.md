@@ -102,9 +102,9 @@ implementation instead of each ecosystem module (`workbench-cloud`,
 `workbench-ai`, `workbench-devtools`, `workbench-desktop`, and any future
 module) carrying its own copy:
 
-- `_download_file_robust <url> <output_file>` — retried, resumable `curl`
-  download; falls back to HTTP/1.1 and discards a truncated partial file
-  on repeated failure.
+- `_download_file_robust <url> <output_file>` — retried https-only download
+  that fails on HTTP errors; writes via temp file + rename, never resumes onto
+  an existing file (changed in 1.4 — D74).
 - `_node_version_at_least <major>` — true if the active `node`'s major
   version is `>= <major>`.
 - `_ensure_npm` — ensures `npm` resolves, preferring `nvm` (live shell
@@ -112,6 +112,32 @@ module) carrying its own copy:
 - `_npm_global_install <package>` — installs/updates a global npm package,
   redirecting to `~/.local` when the active npm prefix is system-owned
   (`/usr`, `/opt`) so no elevation is required.
+
+**New in `CORE_API_VERSION` 1.4.**
+
+- `_wb_sha256 <file>` — prints the lowercase hex SHA-256 of `<file>`, via
+  `sha256sum` (Linux) or `shasum -a 256` (macOS).
+- `_wb_gh_asset_digest <releases-api-json> <browser_download_url>` — prints
+  the hex SHA-256 GitHub publishes for one release asset (the asset's
+  `"digest": "sha256:<hex>"` field), or nothing when the asset is absent or
+  its digest is null. Integrity only: it proves the bytes are the ones GitHub
+  stored for that release, not that upstream is trustworthy.
+- `_wb_fetch_verified <url> <dest> <expectation> [asset-name]` — downloads
+  `<url>`, verifies its SHA-256, and only then moves it to `<dest>`. Fails
+  closed: any missing, malformed or mismatching hash leaves `<dest>`
+  untouched and returns non-zero. `<expectation>` is one of:
+  - `<64 hex chars>` — the expected SHA-256 itself
+  - `sums:<url>` — an upstream checksums file, lines `"<hex>  <name>"` or
+    `"<hex> *<name>"`; the line for `[asset-name]` is used (default: the
+    last path segment of `<url>`)
+  - `hashfile:<url>` — a file whose first whitespace-separated token is the
+    hex digest (e.g. kubectl's `.sha256`, helm's `.sha256sum`)
+- `_wb_key_has_fingerprint <keyfile> <fingerprint>` — true iff the OpenPGP
+  key file (armored or binary) contains a primary key whose fingerprint is
+  exactly `<fingerprint>` (40 hex; spaces and case ignored). Modules call
+  this before trusting a vendor repository key with `rpm --import` or an
+  apt keyring. Uses a throwaway `GNUPGHOME` so the user's keyring is never
+  touched.
 
 Registered in core's own `.dotfiles-sync.yml` at `tier: core`, the same
 tier `functions.sh`/`version.sh` use — every module's `lazy`-tier installer
