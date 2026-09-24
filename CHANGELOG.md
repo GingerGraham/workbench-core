@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-09-24
+
 ### Security
 
 - **Module fetches are content-addressed by commit sha, not by tag/branch
