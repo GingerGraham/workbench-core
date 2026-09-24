@@ -79,6 +79,7 @@ if [[ -f "${MARKER}" ]] && [[ "$(grep -c 'v1 ran' "${MARKER}")" -eq 1 ]]; then
 else
     fail "reason=add: hook did not run exactly once — see /tmp/wb-hook-consent-1.log"
     cat "${MARKER}" 2>/dev/null
+    cat /tmp/wb-hook-consent-1.log 2>/dev/null
 fi
 APPROVED1="$(workbench_module_conf_get hooktest HOOKS_APPROVED_SHA "")"
 if [[ "${APPROVED1}" == "${SHA1}" ]]; then
@@ -125,6 +126,7 @@ if [[ "$(grep -c 'v2 ran' "${MARKER}" 2>/dev/null)" -eq 1 ]]; then
 else
     fail "reason=manual: the pending hook did not run — see /tmp/wb-hook-consent-3.log"
     cat "${MARKER}" 2>/dev/null
+    cat /tmp/wb-hook-consent-3.log 2>/dev/null
 fi
 APPROVED3="$(workbench_module_conf_get hooktest HOOKS_APPROVED_SHA "")"
 if [[ "${APPROVED3}" == "${SHA2}" ]]; then
@@ -176,6 +178,7 @@ if [[ "$(grep -c 'migration ran' "${MARKER}" 2>/dev/null)" -eq 1 ]]; then
 else
     fail "migration: hook did not run — see /tmp/wb-hook-consent-4.log"
     cat "${MARKER}" 2>/dev/null
+    cat /tmp/wb-hook-consent-4.log 2>/dev/null
 fi
 APPROVED4="$(workbench_module_conf_get migtest HOOKS_APPROVED_SHA "")"
 if [[ "${APPROVED4}" == "${MIGSHA}" ]]; then
