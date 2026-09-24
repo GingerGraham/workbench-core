@@ -165,6 +165,13 @@ workbench_valid_module_name() {
     local n="$1"
     [[ -n "${n}" ]] || return 1
     [[ ${#n} -le 64 ]] || return 1
+    # LC_ALL=C pins the bracket range to plain ASCII: under a UTF-8 locale,
+    # bash's [a-z] follows locale collation order rather than a strict
+    # codepoint range, and on some platforms (observed on macOS runners)
+    # that lets 'G' and other uppercase letters slip through [!a-z0-9-].
+    # `local LC_ALL=C` is bash's own idiomatic fix — bash re-runs setlocale()
+    # on assignment to this variable regardless of export status.
+    local LC_ALL=C
     case "${n}" in
         -*|*[!a-z0-9-]*) return 1 ;;
     esac
