@@ -45,6 +45,11 @@ workbench_cmd_add() {
         return 2
     fi
 
+    if ! workbench_valid_module_name "${name}"; then
+        log_error "wb add: '${name}' is not a valid module name — lowercase letters, digits and '-' only, starting with a letter or digit, at most 64 characters"
+        return 2
+    fi
+
     if workbench_is_registered "${name}"; then
         log_info "wb add: '${name}' is already registered — no-op"
         return 0
@@ -60,6 +65,11 @@ workbench_cmd_add() {
         IFS='|' read -r catalog_url catalog_private <<< "${catalog_entry}"
         url="${catalog_url}"
         [[ "${private}" == "false" ]] && private="${catalog_private}"
+    fi
+
+    if ! workbench_valid_repo_url "${url}"; then
+        log_error "wb add: '${url}' is not a recognised repo url shape (https://, ssh://, git@host:path, file://, or an absolute local path)"
+        return 2
     fi
 
     mkdir -p "$(workbench_module_dir "${name}")"

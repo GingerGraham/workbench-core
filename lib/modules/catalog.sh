@@ -56,13 +56,20 @@ workbench_catalog_lookup() {
 # Prints the member module names, one per line, or nothing (exit 1) if the
 # bundle isn't known.
 workbench_catalog_bundle_modules() {
-    local bundle="$1" file n members
+    local bundle="$1" file n members member
     file="$(_wb_catalog_bundles_file)"
     [[ -f "${file}" ]] || return 1
     while IFS='|' read -r n members; do
         [[ -z "${n}" || "${n}" == \#* ]] && continue
         if [[ "${n}" == "${bundle}" ]]; then
-            printf '%s\n' "${members}" | tr ',' '\n'
+            while IFS= read -r member; do
+                [[ -z "${member}" ]] && continue
+                if workbench_valid_module_name "${member}"; then
+                    printf '%s\n' "${member}"
+                else
+                    log_warn "workbench_catalog_bundle_modules: bundle '${bundle}' lists '${member}', not a valid module name — skipping"
+                fi
+            done < <(printf '%s\n' "${members}" | tr ',' '\n')
             return 0
         fi
     done < "${file}"

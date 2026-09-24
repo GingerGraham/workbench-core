@@ -6,6 +6,22 @@ All notable changes to `workbench-core` are documented here.
 
 ### Security
 
+- **Module names and `REPO_URL` values are now validated.** A module name
+  becomes a directory name, an `ssh_config` `Host` alias, and an
+  environment-variable suffix — `workbench_valid_module_name` now
+  restricts it to lowercase letters, digits and `-`, starting with a
+  letter or digit, at most 64 characters. `REPO_URL` is passed to `git
+  ls-remote`/`git remote add` — `workbench_valid_repo_url` now allowlists
+  the URL shapes those calls actually understand, so a value starting
+  with `-` (which `git` would otherwise parse as an option) is rejected.
+  Both are checked by `wb add`, catalog bundle resolution (an invalid
+  member is skipped with a warning, not silently registered), private-repo
+  SSH bootstrap (also validates the extracted git host before writing it
+  into `ssh_config`), and the sync engine's own ref resolution.
+  `workbench_valid_module_name` pins `LC_ALL=C` around its character-class
+  check — under some hosts' UTF-8 locale, bash's `[a-z]` bracket range
+  follows locale collation order rather than a strict ASCII range, which
+  could let an uppercase name slip past `*[!a-z0-9-]*`.
 - **Manifest path rules (`dest`/`src` denylist and safety checks) are now
   enforced at runtime by the sync engine, not only by `validate.sh` at
   developer/CI time.** Previously a module added via `wb add <name> <url>`

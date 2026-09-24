@@ -143,6 +143,10 @@ EOF
 workbench_ssh_bootstrap_module() {
     local name="$1"
     local private url
+    # Defence in depth for hand-edited sync.conf (security review L3): name
+    # becomes an ssh_config Host alias below, so a hostile value here could
+    # inject config directives.
+    workbench_valid_module_name "${name}" || { log_error "workbench_ssh_bootstrap_module: '${name}' is not a valid module name"; return 1; }
     private="$(workbench_module_conf_get "${name}" PRIVATE false)"
     [[ "${private}" == "true" ]] || return 0
 
@@ -163,6 +167,12 @@ workbench_ssh_bootstrap_module() {
         log_error "${name}: could not determine the git host from REPO_URL '${url}' — set it to https://<host>/..., git@<host>:..., or ssh://git@<host>/... form"
         return 1
     }
+    case "${host}" in
+        *[!A-Za-z0-9.-]*)
+            log_error "${name}: git host '${host}' contains characters outside [A-Za-z0-9.-] — refusing to write it into ssh_config"
+            return 1
+            ;;
+    esac
     path="$(workbench_ssh_extract_path "${url}")" || {
         log_error "${name}: could not determine the repo path from REPO_URL '${url}'"
         return 1

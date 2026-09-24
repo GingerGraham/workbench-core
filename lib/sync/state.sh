@@ -154,3 +154,40 @@ workbench_list_loadable_modules() {
         workbench_is_sync_enabled "${name}" && printf '%s\n' "${name}"
     done < <(workbench_list_registered_modules)
 }
+
+# ── Input validation (security review L3) ─────────────────────────────────────
+# workbench_valid_module_name <name>
+# Lowercase letters, digits and '-'; must start with a letter or digit; at most
+# 64 characters. The name becomes a directory name, an ssh_config Host alias
+# and an environment-variable suffix, so nothing else is safe (security
+# review L3).
+workbench_valid_module_name() {
+    local n="$1"
+    [[ -n "${n}" ]] || return 1
+    [[ ${#n} -le 64 ]] || return 1
+    # LC_ALL=C pins the bracket range to plain ASCII: under a UTF-8 locale,
+    # bash's [a-z] follows locale collation order rather than a strict
+    # codepoint range, and on some platforms (observed on macOS runners)
+    # that lets 'G' and other uppercase letters slip through [!a-z0-9-].
+    # `local LC_ALL=C` is bash's own idiomatic fix — bash re-runs setlocale()
+    # on assignment to this variable regardless of export status.
+    local LC_ALL=C
+    case "${n}" in
+        -*|*[!a-z0-9-]*) return 1 ;;
+    esac
+    return 0
+}
+
+# workbench_valid_repo_url <url>
+# Allowlist of URL shapes the fetch paths understand. Anything starting with
+# '-' is excluded by construction, so git can never parse it as an option.
+# Absolute filesystem paths and file:// are allowed for local bare repos
+# (tests, and private repos mirrored locally).
+workbench_valid_repo_url() {
+    local u="$1"
+    case "${u}" in
+        *[[:space:]]*|*[[:cntrl:]]*) return 1 ;;
+        https://?*|ssh://?*|git@?*:?*|file:///?*|/?*) return 0 ;;
+    esac
+    return 1
+}
