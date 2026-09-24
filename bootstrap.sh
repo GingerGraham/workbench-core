@@ -103,7 +103,7 @@ _cmp() {
 }
 
 # Everything below runs only once the whole file has been received. Under
-# `curl | bash`, a connection dropped mid-transfer leaves bash with a file
+# `curl | bash`, a connection dropped mid-transfer leaves bash with a file  # pattern-scan:ignore -- prose describing the install pattern in a comment, not executed code
 # that ends before this call, so nothing executes (security review L2).
 main() {
     OWNER="GingerGraham"
