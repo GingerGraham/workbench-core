@@ -626,17 +626,25 @@ workbench_run_post_deploy_hook() {
     command -v timeout &>/dev/null && timeout_bin="timeout"
     command -v gtimeout &>/dev/null && timeout_bin="gtimeout"
 
+    local -a cmd=()
+    if [[ -n "${timeout_bin}" ]]; then
+        cmd=("${timeout_bin}" "${timeout_s}" bash "${script_path}")
+    else
+        cmd=(bash "${script_path}")
+    fi
+    # Appended only when non-empty: under macOS's stock bash 3.2, "${arr[@]}"
+    # on a declared-but-empty array trips `set -u`'s unbound-variable check
+    # (fixed in bash 4.4+, but 3.2 is this repo's floor) — this sidesteps
+    # the expansion entirely rather than reaching for a set -u workaround.
+    [[ "${#hook_args[@]}" -gt 0 ]] && cmd+=("${hook_args[@]}")
+
     log_info "${name}: running post_deploy hook (reason: ${reason})"
     (
         cd "${current_dir}" || exit 1
         export WORKBENCH_MODULE_NAME="${name}"
         export WORKBENCH_MODULE_DIR="${current_dir}"
         export WORKBENCH_SYNC_REASON="${reason}"
-        if [[ -n "${timeout_bin}" ]]; then
-            "${timeout_bin}" "${timeout_s}" bash "${script_path}" "${hook_args[@]}"
-        else
-            bash "${script_path}" "${hook_args[@]}"
-        fi
+        "${cmd[@]}"
     )
     local rc=$?
     if [[ "${rc}" -eq 0 ]]; then
