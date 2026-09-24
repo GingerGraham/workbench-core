@@ -88,6 +88,8 @@ while [[ \${i} -lt \${#args[@]} ]]; do
     i=\$((i + 1))
 done
 
+[[ -n "\${MOCK_URL_LOG:-}" ]] && echo "\${url}" >> "\${MOCK_URL_LOG}"
+
 case "\${url}" in
     */codeload.github.com/*)
         # Checked first: a codeload tarball URL for a tag ref
@@ -96,6 +98,10 @@ case "\${url}" in
         cp "\${MOCK_TARBALL}" "\${outfile}"
         ;;
     */repos/*/tags*)
+        if [[ "\${MOCK_TAGS_FAIL:-false}" == "true" ]]; then
+            echo "mock curl: simulated tags-API failure" >&2
+            exit 22
+        fi
         cat "\${MOCK_TAGS_JSON}"
         ;;
     */commits/main)
@@ -116,11 +122,13 @@ run_bootstrap() {
     env PATH="${MOCK_BIN}:${PATH}" \
         HOME="${1}" XDG_DATA_HOME="${1}/data" \
         MOCK_TAGS_JSON="${2}" MOCK_MAIN_JSON="${WORK}/commits-main.json" \
+        MOCK_URL_LOG="${MOCK_URL_LOG:-}" MOCK_TAGS_FAIL="${MOCK_TAGS_FAIL:-false}" \
         bash "${BOOTSTRAP}"
 }
 
 # ── 1. No-tag fallback to `main` ────────────────────────────────────────────
 H1="${WORK}/home1"; mkdir -p "${H1}"
+MOCK_URL_LOG="${WORK}/urls1.log"; : > "${MOCK_URL_LOG}"
 OUT1="$(run_bootstrap "${H1}" "${WORK}/tags-empty.json" 2>&1)"
 MODULE_DIR1="${H1}/data/workbench/modules/core"
 
@@ -144,8 +152,16 @@ else
     cat "${MODULE_DIR1}/sync.conf" 2>/dev/null
 fi
 
+if grep -qF "tar.gz/${MAIN_SHA}" "${MOCK_URL_LOG}" && ! grep -q "tar.gz/refs/heads/main" "${MOCK_URL_LOG}"; then
+    ok "no-tag fallback: codeload fetched by resolved commit sha (tar.gz/<sha>), not tar.gz/refs/heads/main (L1)"
+else
+    fail "no-tag fallback: codeload URL was not content-addressed by sha — see ${MOCK_URL_LOG}"
+    cat "${MOCK_URL_LOG}"
+fi
+
 # ── 2. Resolves the latest tag correctly when one exists ───────────────────
 H2="${WORK}/home2"; mkdir -p "${H2}"
+MOCK_URL_LOG="${WORK}/urls2.log"; : > "${MOCK_URL_LOG}"
 OUT2="$(run_bootstrap "${H2}" "${WORK}/tags-mixed.json" 2>&1)"
 MODULE_DIR2="${H2}/data/workbench/modules/core"
 
@@ -170,6 +186,14 @@ if [[ -d "${EXPECT_SNAP2}" ]]; then
 else
     fail "tag resolution: expected snapshot dir ${EXPECT_SNAP2} not found"
     find "${MODULE_DIR2}/snapshots" -maxdepth 1 2>/dev/null
+fi
+
+TAG_SHA="5555555555555555555555555555555555555555"
+if grep -qF "tar.gz/${TAG_SHA}" "${MOCK_URL_LOG}" && ! grep -q "tar.gz/refs/tags/" "${MOCK_URL_LOG}"; then
+    ok "tag resolution: codeload fetched by resolved commit sha (tar.gz/<sha>), not tar.gz/refs/tags/v1.10.0 (L1)"
+else
+    fail "tag resolution: codeload URL was not content-addressed by sha — see ${MOCK_URL_LOG}"
+    cat "${MOCK_URL_LOG}"
 fi
 
 # ── 3. `current` is a real directory under snapshots/, never /tmp ──────────
@@ -219,7 +243,31 @@ else
     echo "${OUT3}"
 fi
 
-# ── 5. No `git` invoked anywhere in bootstrap.sh ────────────────────────────
+# ── 5. Tags-API failure fails closed, does not fall back to `main` ─────────
+# security review L2: a failed API call (rate limit, network error) must not
+# be treated as "no release exists yet".
+H5="${WORK}/home5"; mkdir -p "${H5}"
+MODULE_DIR5="${H5}/data/workbench/modules/core"
+if MOCK_TAGS_FAIL=true run_bootstrap "${H5}" "${WORK}/tags-mixed.json" >"${WORK}/tags-fail-run.log" 2>&1; then
+    fail "tags-API failure: bootstrap.sh exited 0 — should fail closed"
+    cat "${WORK}/tags-fail-run.log"
+else
+    ok "tags-API failure: bootstrap.sh exits non-zero"
+fi
+
+if [[ ! -d "${MODULE_DIR5}/snapshots" ]]; then
+    ok "tags-API failure: no snapshots/ directory was created"
+else
+    fail "tags-API failure: a snapshots/ directory was created despite the failure"
+fi
+
+if [[ ! -f "${MODULE_DIR5}/sync.conf" ]]; then
+    ok "tags-API failure: no sync.conf was written"
+else
+    fail "tags-API failure: sync.conf was written despite the failure"
+fi
+
+# ── 6. No `git` invoked anywhere in bootstrap.sh ────────────────────────────
 # Unlike check-distribution-no-git.sh's target file, bootstrap.sh
 # legitimately writes a REPO_URL ending in ".git" into sync.conf (data, not
 # an invocation) — the boundary here additionally excludes a preceding '.'
