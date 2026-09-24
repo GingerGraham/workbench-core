@@ -6,6 +6,21 @@ All notable changes to `workbench-core` are documented here.
 
 ### Security
 
+- **CI supply-chain hardening.** Module repos' CI no longer calls core's
+  reusable workflows or scan actions at `@main` — every caller pins to a
+  core release tag (Dependabot-maintained), and the scan jobs
+  (`secrets-scan`/`malware-scan`/`pattern-scan`) load from that same
+  resolved ref instead of core's unreleased `main`. Every third-party
+  GitHub Action `workbench-core` itself uses is now SHA-pinned rather than
+  tag-pinned (`actions/checkout`, `actions/upload-artifact`,
+  `actions/create-github-app-token`, `actions/github-script`,
+  `actions/cache`). Every workflow declares least-privilege
+  `permissions:` (`contents: read` at minimum), and the release App
+  token is minted with only `contents: write` and `pull-requests: write`
+  rather than every permission the App has. The `yq` binary
+  `manifest-validate` downloads is now verified against its published
+  SHA-256 before use. See `docs/decisions-log.md` D78 and
+  `docs/release-process.md`'s "Releasing CI changes to modules".
 - **Unattended syncs now hold a new `latest` release in cooldown before
   adopting it.** Previously, any new clean tag on a registered repo was
   adopted on the very next unattended sync — a compromised account,

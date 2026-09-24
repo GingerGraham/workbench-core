@@ -19,6 +19,12 @@ on:
         type: string
         default: ""
 
+# Caller permissions required: contents: read (this workflow only reads —
+# checks out repos, downloads a pinned yq, runs tests/scans; it never
+# writes back to the calling repo).
+permissions:
+  contents: read
+
 jobs:
   resolve-core-ref:
     name: resolve core_ref
@@ -45,7 +51,7 @@ jobs:
     name: shellcheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run shellcheck over this module's own shell content
         shell: bash
         run: |
@@ -73,17 +79,22 @@ jobs:
     needs: resolve-core-ref
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Checkout workbench-core@${{ needs.resolve-core-ref.outputs.ref }}
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: GingerGraham/workbench-core
           ref: ${{ needs.resolve-core-ref.outputs.ref }}
           path: _core
       - name: Install yq
         shell: bash
+        env:
+          YQ_VERSION: "4.44.3"
+          YQ_SHA256: "a2c097180dd884a8d50c956ee16a9cec070f30a7947cf4ebf87d5f36213e9ed7"
         run: |
-          curl -fsSL "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64" -o /tmp/yq
+          set -euo pipefail
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64" -o /tmp/yq
+          echo "${YQ_SHA256}  /tmp/yq" | sha256sum -c -
           chmod +x /tmp/yq
           echo "/tmp" >> "$GITHUB_PATH"
       # No explicit path argument: an explicit argument always bypasses
@@ -100,7 +111,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run this module's own tests/check-*.sh, if any
         shell: bash
         run: |
@@ -127,12 +138,12 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - name: Checkout this module
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: _module
 
       - name: Checkout workbench-core@${{ needs.resolve-core-ref.outputs.ref }}
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: GingerGraham/workbench-core
           ref: ${{ needs.resolve-core-ref.outputs.ref }}
@@ -180,29 +191,50 @@ jobs:
 
       - name: Upload output
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: add-to-core-${{ matrix.os }}
           path: add-to-core-output.log
           if-no-files-found: warn
 
+  # Scan actions come from the same core ref every other job uses
+  # (resolve-core-ref: core's latest release unless a caller pins one), never
+  # from core's main (security review H3; D78).
   secrets-scan:
     name: secrets (gitleaks)
+    needs: resolve-core-ref
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: GingerGraham/workbench-core/.github/actions/scan-secrets@main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: GingerGraham/workbench-core
+          ref: ${{ needs.resolve-core-ref.outputs.ref }}
+          path: _core
+      - uses: ./_core/.github/actions/scan-secrets
 
   malware-scan:
     name: malware (clamav)
+    needs: resolve-core-ref
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: GingerGraham/workbench-core/.github/actions/scan-malware@main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: GingerGraham/workbench-core
+          ref: ${{ needs.resolve-core-ref.outputs.ref }}
+          path: _core
+      - uses: ./_core/.github/actions/scan-malware
 
   pattern-scan:
     name: dangerous patterns
+    needs: resolve-core-ref
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: GingerGraham/workbench-core/.github/actions/scan-patterns@main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: GingerGraham/workbench-core
+          ref: ${{ needs.resolve-core-ref.outputs.ref }}
+          path: _core
+      - uses: ./_core/.github/actions/scan-patterns

@@ -30,6 +30,13 @@ on:
         description: "Private key for the release GitHub App (RELEASE_APP_ID var + this secret, same App as core's own release pipeline, D28)."
         required: true
 
+# Caller permissions required: contents: read. Every write (release-branch
+# commit, PR creation, auto-merge) uses the minted App token below, scoped
+# to exactly contents: write + pull-requests: write at the point it's
+# minted — never the default GITHUB_TOKEN.
+permissions:
+  contents: read
+
 concurrency:
   group: module-release-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: false
@@ -64,20 +71,22 @@ jobs:
     steps:
       - name: Mint release App token
         id: app-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
 
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
           fetch-tags: true
 
       - name: Checkout workbench-core@${{ needs.resolve-core-ref.outputs.ref }} (for the shared release scripts)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: GingerGraham/workbench-core
           ref: ${{ needs.resolve-core-ref.outputs.ref }}
@@ -130,7 +139,7 @@ jobs:
       # instead, exactly like core's own release.yml (D27).
       - name: Create release branch and commit via API (verified signature)
         if: steps.compute.outputs.severity != 'none'
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           NEW_VERSION: ${{ steps.compute.outputs.new_version }}
         with:

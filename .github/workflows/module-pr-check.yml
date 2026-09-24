@@ -15,6 +15,12 @@ on:
         type: string
         default: ""
 
+# Caller permissions required: contents: read (this workflow only reads —
+# checks out repos, resolves core's latest release tag; it never writes
+# back to the calling repo).
+permissions:
+  contents: read
+
 jobs:
   resolve-core-ref:
     name: resolve core_ref
@@ -41,12 +47,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout calling repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Checkout workbench-core@${{ needs.resolve-core-ref.outputs.ref }} (for the shared commit-format script)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: GingerGraham/workbench-core
           ref: ${{ needs.resolve-core-ref.outputs.ref }}
@@ -79,7 +85,7 @@ jobs:
       # contributor-controlled text, so it's passed through env
       # indirection rather than interpolated into `run:`.
       - name: Checkout workbench-core@${{ needs.resolve-core-ref.outputs.ref }} (for the shared PR-title-format script)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: GingerGraham/workbench-core
           ref: ${{ needs.resolve-core-ref.outputs.ref }}

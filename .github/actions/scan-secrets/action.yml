@@ -25,4 +25,22 @@ runs:
 
     - name: Run gitleaks against working tree
       shell: bash
-      run: gitleaks detect --source "${GITHUB_WORKSPACE}" --no-git --redact -v
+      # _core/ (module-ci.yml's own nested workbench-core checkout, used to
+      # resolve/run this very action) is excluded via an allowlist that
+      # extends, rather than replaces, gitleaks' default ruleset — it's
+      # workbench-core's own already-scanned source, not this repo's
+      # content, and scanning it here would be redundant, not additive
+      # (security review H3; D78).
+      run: |
+        set -euo pipefail
+        config="$(mktemp)"
+        {
+          printf '[extend]\n'
+          printf 'useDefault = true\n'
+          printf '\n'
+          printf '[allowlist]\n'
+          printf 'paths = [\n'
+          printf "  '''^_core/''',\n"
+          printf ']\n'
+        } > "${config}"
+        gitleaks detect --source "${GITHUB_WORKSPACE}" --config "${config}" --no-git --redact -v
