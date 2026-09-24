@@ -22,7 +22,7 @@
 
 _wb_catalog_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/catalog.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/catalog.sh" "0.1.1" || true
 
 _wb_catalog_modules_file() {
     local override="${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/catalog/modules.list"

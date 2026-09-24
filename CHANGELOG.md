@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.16.0] - 2026-09-24
+
 ### Security
 
 - **CI supply-chain hardening.** Module repos' CI no longer calls core's
