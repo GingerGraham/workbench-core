@@ -70,6 +70,8 @@ there rather than just reading key/value pairs (`workbench_module_conf_get`,
 | `REGISTERED` | `true`/`false` — `wb remove` sets `false`, never deletes | `true` once the file exists |
 | `SYNC_ENABLED` | `true`/`false` — independent of `TRACK_MODE` (§9.7) | `true` |
 | `ALLOW_HOOKS` | `true`/`false` — per-machine hook gate, mirrors the manifest's hook declaration | `false` |
+| `HOOKS_APPROVED_SHA` | Commit whose `post_deploy` hook the user last approved (docs/decisions-log.md D76) | — |
+| `HOOKS_PENDING` | `true`/`false` — a hook was deferred by an unattended sync and is owed a run on the next interactive one | `false` |
 
 ### `register.list`
 

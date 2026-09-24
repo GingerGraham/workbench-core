@@ -496,6 +496,29 @@ workbench_render_installers_list() {
 }
 
 # ── Hooks ──────────────────────────────────────────────────────────────────────
+# _wb_hook_describe_change <name> <approved_sha> <current_sha> <hook_argv0>
+# What the user is being asked to approve: the hook path and, for GitHub
+# remotes, a compare URL covering every change since the last approval.
+_wb_hook_describe_change() {
+    local name="$1" approved="$2" current="$3" hook="$4" url owner repo
+    url="$(workbench_module_conf_get "${name}" REPO_URL "")"
+    printf '\n%s: post_deploy hook %s has changed since you last approved it.\n' "${name}" "${hook}"
+    if read -r owner repo < <(workbench_parse_github_url "${url}"); then
+        if [[ -n "${approved}" ]]; then
+            printf '  Review: https://github.com/%s/%s/compare/%s...%s\n\n' "${owner}" "${repo}" "${approved}" "${current}"
+        else
+            printf '  Review: https://github.com/%s/%s/tree/%s\n\n' "${owner}" "${repo}" "${current}"
+        fi
+    else
+        printf '  Commit: %s (%s)\n\n' "${current}" "${url}"
+    fi
+}
+
+# _wb_adoption_log_event stub — the real implementation lands in D77 (WP7).
+# Guarded so this WP's consent-binding code can call it before WP7 merges;
+# WP7 replaces this with the real append-only adoption-log writer.
+command -v _wb_adoption_log_event &>/dev/null || _wb_adoption_log_event() { :; }
+
 # workbench_run_post_deploy_hook <name> <reason> <changed> <is_first_sync>
 # run_on semantics (contracts/manifest-spec.md §Hook contract): changed
 # (default) fires when <changed> is true OR this is the module's first
@@ -505,6 +528,7 @@ workbench_render_installers_list() {
 workbench_run_post_deploy_hook() {
     local name="$1" reason="$2" changed="$3" is_first="$4"
     local current_dir allow_hooks hook_line run_on timeout_s
+    local current_sha approved_sha pending
     current_dir="$(workbench_module_current_dir "${name}")"
     allow_hooks="$(workbench_module_conf_get "${name}" ALLOW_HOOKS false)"
     [[ "${allow_hooks}" == "true" ]] || return 0
@@ -519,11 +543,57 @@ workbench_run_post_deploy_hook() {
     argv=("${fields[@]:2}")
     _wb_path_is_safe_relative "${argv[0]}" || { log_error "${name}: refusing post_deploy hook '${argv[0]}' — absolute or contains '..'"; return 0; }
 
+    # A hook deferred by an earlier unattended cycle is still owed a run.
+    pending="$(workbench_module_conf_get "${name}" HOOKS_PENDING false)"
+    [[ "${pending}" == "true" ]] && changed="true"
+
     case "${run_on}" in
         always)  : ;;
         initial) [[ "${is_first}" == "true" ]] || return 0 ;;
         *)       [[ "${changed}" == "true" || "${is_first}" == "true" ]] || return 0 ;;
     esac
+
+    # ── Consent binding (security review M1; D76) ────────────────────────────
+    current_sha="$(workbench_module_conf_get "${name}" RESOLVED_SHA "")"
+    approved_sha="$(workbench_module_conf_get "${name}" HOOKS_APPROVED_SHA "")"
+
+    if [[ -z "${approved_sha}" && "${changed}" != "true" && "${is_first}" != "true" ]]; then
+        # Migration from pre-D76 consent: this commit already ran under the
+        # old model; approve it without prompting.
+        workbench_module_conf_set "${name}" HOOKS_APPROVED_SHA "${current_sha}"
+        approved_sha="${current_sha}"
+    fi
+
+    if [[ "${current_sha}" != "${approved_sha}" ]]; then
+        case "${reason}" in
+            add)
+                : # --allow-hooks on this very command is the consent
+                ;;
+            manual|track)
+                if [[ -t 0 && -t 1 ]]; then
+                    _wb_hook_describe_change "${name}" "${approved_sha}" "${current_sha}" "${argv[0]}"
+                    local answer=""
+                    read -r -p "Run ${name}'s post_deploy hook for ${current_sha:0:7}? [y/N]: " answer
+                    case "${answer}" in
+                        y|Y|yes|YES) : ;;
+                        *)
+                            workbench_module_conf_set "${name}" HOOKS_PENDING true
+                            log_info "${name}: post_deploy hook left pending — run 'wb update ${name}' to review again"
+                            return 0
+                            ;;
+                    esac
+                fi
+                ;;
+            *)
+                workbench_module_conf_set "${name}" HOOKS_PENDING true
+                log_warn "${name}: post_deploy hook not run — ${current_sha:0:7} is not approved for unattended hook execution (approved: ${approved_sha:0:7}). Run 'wb update ${name}' to review and run it."
+                _wb_adoption_log_event "hook-deferred" "${name}" "${approved_sha}" "${current_sha}" "" "${reason}"
+                return 0
+                ;;
+        esac
+        workbench_module_conf_set "${name}" HOOKS_APPROVED_SHA "${current_sha}"
+    fi
+    workbench_module_conf_set "${name}" HOOKS_PENDING false
 
     local script_path="${current_dir}/${argv[0]}"
     local -a hook_args=()
