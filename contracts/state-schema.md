@@ -72,6 +72,33 @@ there rather than just reading key/value pairs (`workbench_module_conf_get`,
 | `ALLOW_HOOKS` | `true`/`false` — per-machine hook gate, mirrors the manifest's hook declaration | `false` |
 | `HOOKS_APPROVED_SHA` | Commit whose `post_deploy` hook the user last approved (docs/decisions-log.md D76) | — |
 | `HOOKS_PENDING` | `true`/`false` — a hook was deferred by an unattended sync and is owed a run on the next interactive one | `false` |
+| `PENDING_SHA` | A newly-resolved `latest` release currently held in cooldown, not yet adopted (docs/decisions-log.md D77) | — |
+| `PENDING_SINCE` | Unix epoch seconds this host first saw `PENDING_SHA` — measured against `RELEASE_COOLDOWN_DAYS` | — |
+
+### `scheduler.conf`
+
+```
+${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/core/scheduler.conf
+```
+
+Plain `KEY=VALUE`, read the same way as `sync.conf` (never `source`d).
+
+| Key | Meaning | Default if absent |
+|---|---|---|
+| `RELEASE_COOLDOWN_DAYS` | Days a new `latest` release must be continuously resolved before an unattended (`scheduled`) sync adopts it; `0` disables (docs/decisions-log.md D77) | `3` |
+
+### `adoption.log`
+
+```
+${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/adoption.log
+```
+
+Append-only, tab-separated, one line per event, never rotated (≈120
+bytes/line): `<utc-iso8601>\t<event>\t<module>\t<old_sha>\t<new_sha>\t<ref>\t<reason>`.
+`<event>` is one of `adopt`, `cooldown-start`, `hook-run`, `hook-failed`,
+`hook-deferred`. Written by `_wb_adoption_log_event`
+(`lib/sync/engine.sh`) — a local record of what this host adopted and ran,
+and when, for incident response (docs/decisions-log.md D77).
 
 ### `register.list`
 

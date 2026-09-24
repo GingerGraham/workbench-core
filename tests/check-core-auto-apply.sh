@@ -60,6 +60,13 @@ _wb_require modules/track.sh sync/scheduler.sh
 # coverage of the on/off switch itself.
 _workbench_scheduler_conf_set SCHEDULER_ENABLED true
 
+# The D77 release cooldown (a new tag on a latest-tracked module isn't
+# adopted by a scheduled sync until it's been resolved for
+# RELEASE_COOLDOWN_DAYS) is orthogonal to what this suite tests — the
+# convergence-trigger logic once a new sha is actually adopted — so disable
+# it here. See tests/check-release-cooldown.sh for cooldown coverage.
+_workbench_scheduler_conf_set RELEASE_COOLDOWN_DAYS 0
+
 # ── Stub _wb_cmd_apply: records every invocation's args, returns
 #    APPLY_EXIT. Redefining it after sourcing is safe — bash functions are
 #    just the last definition standing. ─────────────────────────────────────
