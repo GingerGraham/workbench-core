@@ -22,7 +22,11 @@ All notable changes to `workbench-core` are documented here.
   and no recorded approval approves its current commit silently on its
   first *unchanged* cycle; a *changed* cycle is deferred like any other.
   `wb status` gained a `HOOKS_PENDING` column. See `docs/decisions-log.md`
-  D76.
+  D76. The hook-execution command array now only appends its argument list
+  when non-empty — under macOS's stock bash 3.2, `"${arr[@]}"` on a
+  declared-but-empty array trips `set -u`'s unbound-variable check (fixed
+  in bash 4.4+, but 3.2 is this repo's floor), which previously made every
+  post_deploy hook invocation fail silently on macOS.
 - **The sync timer's systemd unit now blocks privilege escalation.** The
   unattended `wb sync run-if-due` path — module `post_deploy` hooks
   included — runs with the user's full ability to invoke `sudo`, `pkexec`,
