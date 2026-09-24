@@ -526,7 +526,11 @@ workbench_render_installers_list() {
 _wb_hook_describe_change() {
     local name="$1" approved="$2" current="$3" hook="$4" url owner repo
     url="$(workbench_module_conf_get "${name}" REPO_URL "")"
-    printf '\n%s: post_deploy hook %s has changed since you last approved it.\n' "${name}" "${hook}"
+    if [[ -n "${approved}" ]]; then
+        printf '\n%s: post_deploy hook %s has changed since you last approved it.\n' "${name}" "${hook}"
+    else
+        printf '\n%s: post_deploy hook %s has not been approved on this host yet.\n' "${name}" "${hook}"
+    fi
     if read -r owner repo < <(workbench_parse_github_url "${url}"); then
         if [[ -n "${approved}" ]]; then
             printf '  Review: https://github.com/%s/%s/compare/%s...%s\n\n' "${owner}" "${repo}" "${approved}" "${current}"
