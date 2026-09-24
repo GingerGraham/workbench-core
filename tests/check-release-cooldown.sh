@@ -82,7 +82,7 @@ if [[ "${RESOLVED1}" == "${SHA1}" ]]; then
 else
     fail "reason=add: RESOLVED_SHA is '${RESOLVED1}', expected ${SHA1} — see /tmp/wb-cooldown-1.log"
 fi
-if grep -qP "^\S+\tadopt\tcooldowntest\t" "${ADOPTION_LOG}" 2>/dev/null; then
+if grep -qE "^[^[:space:]]+[[:space:]]adopt[[:space:]]cooldowntest[[:space:]]" "${ADOPTION_LOG}" 2>/dev/null; then
     ok "reason=add: an 'adopt' line is in adoption.log"
 else
     fail "reason=add: no 'adopt' line found in adoption.log"
@@ -106,7 +106,7 @@ if [[ "${PENDING2}" == "${SHA2}" ]]; then
 else
     fail "reason=scheduled: PENDING_SHA is '${PENDING2}', expected ${SHA2}"
 fi
-if grep -qP "^\S+\tcooldown-start\tcooldowntest\t" "${ADOPTION_LOG}" 2>/dev/null; then
+if grep -qE "^[^[:space:]]+[[:space:]]cooldown-start[[:space:]]cooldowntest[[:space:]]" "${ADOPTION_LOG}" 2>/dev/null; then
     ok "reason=scheduled: a 'cooldown-start' line is in adoption.log"
 else
     fail "reason=scheduled: no 'cooldown-start' line found in adoption.log"
