@@ -171,6 +171,22 @@ release branch being cut from stale or divergent content.
 
 See `docs/decisions-log.md` D67, D69.
 
+## Releasing CI changes to modules
+
+Every module repo's own thin `.github/workflows/{ci,pr-check,release}.yml`
+calls core's reusable workflows (`module-ci.yml`, `module-pr-check.yml`,
+`module-release.yml`, `module-release-finalize.yml`) pinned to a core
+release tag — never `@main` (security review H3 tier 1;
+`docs/decisions-log.md` D78). A change to `.github/` here therefore
+doesn't reach any module until the next core release cuts a new tag for
+those callers to update to (Dependabot proposes the bump automatically,
+same as any other pinned action).
+
+If a `.github/`-only fix needs to reach modules sooner than the next
+ordinary release, use the D67 manual `workflow_dispatch` path to cut one
+immediately — there's no separate "CI-only release" mechanism, and none is
+needed.
+
 ## The CHANGELOG discipline
 
 Nothing here writes changelog prose for you — it only renames the heading.
