@@ -17,7 +17,11 @@ while IFS=$'\t' read -r pattern description || [[ -n "${pattern}" ]]; do
         [[ "${line}" == *"pattern-scan:ignore"* ]] && continue
         echo "::error file=${file},line=${line_no}::${description} (matched: ${pattern})"
         failed=1
-    done < <(git grep -nE "${pattern}" -- '*.sh' 'bin/*' 'hooks/*' 2>/dev/null || true)
+    # -e (not a bare positional pattern) — git grep otherwise tries to parse
+    # any pattern starting with a double dash as one of its own options and
+    # errors out, which this loop's `|| true` was silently swallowing: those
+    # patterns matched nothing, ever.
+    done < <(git grep -nE -e "${pattern}" -- '*.sh' 'bin/*' 'hooks/*' 2>/dev/null || true)
 done < "${rules_file}"
 
 exit "${failed}"

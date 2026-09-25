@@ -4,6 +4,32 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- **`dangerous-patterns.txt` (CI's pattern scanner) now catches more
+  remote-script-execution and verification-bypass shapes** (security
+  review M3): `bash <(curl …)` / `bash <(wget …)` process substitution,
+  `sh -c "$(curl|wget|fetch …)"` command substitution, a remote script
+  piped through `env … sh`, `--allow-unsigned-rpm`, `--nogpgcheck`,
+  `--gpg-auto-import-keys`, `curl -k`/`--insecure`, and
+  `StrictHostKeyChecking=no`/`StrictHostKeyChecking no`. Previously only a
+  literal `curl … | bash` shape was caught.
+- **Fixed a bug in `pattern-scan.sh` that made any pattern starting with
+  `-` match nothing, ever.** It called `git grep -nE "${pattern}"` without
+  `-e`; git grep parsed a pattern like `--allow-unsigned-rpm` as one of
+  its own unrecognised options, errored, and the script's `2>/dev/null ||
+  true` silently swallowed the failure — three of this release's own new
+  patterns would otherwise have been dead on arrival. Now calls
+  `git grep -nE -e "${pattern}"`.
+- **`dangerous-patterns.txt` no longer uses GNU-only regex escapes
+  (`\s`, `\b`).** macOS's `git grep -E` isn't PCRE-backed, so on macOS
+  these were either literal characters or no-ops — every pattern using
+  them (all four pre-existing patterns, plus four of this release's own
+  eight new ones) silently matched nothing on macOS runners while
+  working correctly on Linux. Rewritten with POSIX character classes
+  (`[[:space:]]`) and explicit `([[:space:]]|$)` boundaries, confirmed
+  identical behaviour on Linux via `tests/check-pattern-scan.sh`.
+
 ## [2.16.0] - 2026-09-24
 
 ### Security

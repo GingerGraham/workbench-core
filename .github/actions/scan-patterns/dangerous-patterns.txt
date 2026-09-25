@@ -1,4 +1,12 @@
-curl[^|]*\|\s*(sudo\s+)?(bash|sh)\b	remote script piped directly into a shell — fetch, verify, then execute instead
-wget[^|]*\|\s*(sudo\s+)?(bash|sh)\b	remote script piped directly into a shell — fetch, verify, then execute instead
-chmod\s+(-R\s+)?0?777\b	world-writable permissions
-chmod\s+(-R\s+)?a\+w\b	world-writable permissions
+curl[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh)([[:space:]]|$)	remote script piped directly into a shell — fetch, verify, then execute instead
+wget[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh)([[:space:]]|$)	remote script piped directly into a shell — fetch, verify, then execute instead
+chmod[[:space:]]+(-R[[:space:]]+)?0?777([[:space:]]|$)	world-writable permissions
+chmod[[:space:]]+(-R[[:space:]]+)?a\+w([[:space:]]|$)	world-writable permissions
+bash[[:space:]]+<\([[:space:]]*(curl|wget)	remote script run via process substitution — fetch, verify, then execute instead
+sh[[:space:]]+-c[[:space:]]+"\$\((curl|wget|fetch)	remote script run via command substitution — fetch, verify, then execute instead
+(curl|wget)[^|]*\|[[:space:]]*env[[:space:]]+[^|]*[[:space:]](ba)?sh([[:space:]]|$)	remote script piped into a shell via env — fetch, verify, then execute instead
+--allow-unsigned-rpm	package signature check disabled
+--nogpgcheck	package signature check disabled
+--gpg-auto-import-keys	repository signing keys trusted without verification
+curl[[:space:]]+(-[a-zA-Z]*k([[:space:]]|$)|--insecure)	TLS certificate verification disabled
+StrictHostKeyChecking[= ]+no	SSH host key verification disabled
