@@ -21,6 +21,14 @@ All notable changes to `workbench-core` are documented here.
   true` silently swallowed the failure — three of this release's own new
   patterns would otherwise have been dead on arrival. Now calls
   `git grep -nE -e "${pattern}"`.
+- **`dangerous-patterns.txt` no longer uses GNU-only regex escapes
+  (`\s`, `\b`).** macOS's `git grep -E` isn't PCRE-backed, so on macOS
+  these were either literal characters or no-ops — every pattern using
+  them (all four pre-existing patterns, plus four of this release's own
+  eight new ones) silently matched nothing on macOS runners while
+  working correctly on Linux. Rewritten with POSIX character classes
+  (`[[:space:]]`) and explicit `([[:space:]]|$)` boundaries, confirmed
+  identical behaviour on Linux via `tests/check-pattern-scan.sh`.
 
 ## [2.16.0] - 2026-09-24
 
