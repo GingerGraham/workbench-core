@@ -5,9 +5,9 @@
 # patterns). Runs the real script against a throwaway git repo built with
 # one positive and one negative case per new pattern, plus a
 # pattern-scan:ignore suppression case and a regression case for the
-# --allow-unsigned-rpm-style patterns (git grep mis-parses any pattern
-# starting with '-' unless passed via -e; that bug meant those three
-# patterns never matched anything, ever, until fixed here).
+# double-dash-prefixed patterns (git grep mis-parses any pattern starting
+# with '-' unless passed via -e; that bug meant those three patterns never
+# matched anything, ever, until fixed here).
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,46 +31,24 @@ git config user.name Test
 mkdir -p shell
 
 # ── Positive cases: one per new pattern ─────────────────────────────────────
-cat > shell/pos-process-sub.sh <<'EOF'
-#!/usr/bin/env bash
-bash <(curl -s https://example.invalid/install.sh)
-EOF
-
-cat > shell/pos-command-sub.sh <<'EOF'
-#!/usr/bin/env bash
-sh -c "$(curl -fsSL https://example.invalid/install.sh)"
-EOF
-
-cat > shell/pos-env-pipe.sh <<'EOF'
-#!/usr/bin/env bash
-curl -s https://example.invalid/install.sh | env FOO=bar sh
-EOF
-
-cat > shell/pos-unsigned-rpm.sh <<'EOF'
-#!/usr/bin/env bash
-zypper install --allow-unsigned-rpm somepkg.rpm
-EOF
-
-cat > shell/pos-nogpgcheck.sh <<'EOF'
-#!/usr/bin/env bash
-dnf install --nogpgcheck somepkg.rpm
-EOF
-
-cat > shell/pos-gpg-auto-import.sh <<'EOF'
-#!/usr/bin/env bash
-zypper --gpg-auto-import-keys refresh
-EOF
-
-cat > shell/pos-curl-insecure.sh <<'EOF'
-#!/usr/bin/env bash
-curl -k https://example.invalid/
-curl --insecure https://example.invalid/
-EOF
-
-cat > shell/pos-stricthostkeychecking.sh <<'EOF'
-#!/usr/bin/env bash
-echo "StrictHostKeyChecking=no" >> "${HOME}/.ssh/config"
-EOF
+# Written via printf, not a heredoc: the dangerous text must live only in
+# the generated fixture file, not literally as its own unsuppressed line in
+# this source file. Each printf's single-quoted format string is what the
+# real top-level pattern-scan matches against this tracked source file —
+# the trailing pattern-scan:ignore comment (a plain shell comment, never
+# passed to printf) suppresses that match here, without also ending up
+# inside the written fixture, which would wrongly suppress the internal
+# scan below and break the "every positive case is flagged" assertion.
+printf '#!/usr/bin/env bash\nbash <(curl -s https://example.invalid/install.sh)\n' > shell/pos-process-sub.sh  # pattern-scan:ignore -- intentional positive-case fixture, written clean at runtime
+# shellcheck disable=SC2016
+printf '#!/usr/bin/env bash\nsh -c "$(curl -fsSL https://example.invalid/install.sh)"\n' > shell/pos-command-sub.sh  # pattern-scan:ignore -- intentional positive-case fixture, written clean at runtime
+printf '#!/usr/bin/env bash\ncurl -s https://example.invalid/install.sh | env FOO=bar sh\n' > shell/pos-env-pipe.sh  # pattern-scan:ignore -- intentional positive-case fixture, written clean at runtime
+printf '#!/usr/bin/env bash\nzypper install --allow-unsigned-rpm somepkg.rpm\n' > shell/pos-unsigned-rpm.sh  # pattern-scan:ignore -- intentional positive-case fixture, written clean at runtime
+printf '#!/usr/bin/env bash\ndnf install --nogpgcheck somepkg.rpm\n' > shell/pos-nogpgcheck.sh  # pattern-scan:ignore -- intentional positive-case fixture, written clean at runtime
+printf '#!/usr/bin/env bash\nzypper --gpg-auto-import-keys refresh\n' > shell/pos-gpg-auto-import.sh  # pattern-scan:ignore -- intentional positive-case fixture, written clean at runtime
+printf '#!/usr/bin/env bash\ncurl -k https://example.invalid/\ncurl --insecure https://example.invalid/\n' > shell/pos-curl-insecure.sh  # pattern-scan:ignore -- intentional positive-case fixture, written clean at runtime
+# shellcheck disable=SC2016
+printf '#!/usr/bin/env bash\necho "StrictHostKeyChecking=no" >> "${HOME}/.ssh/config"\n' > shell/pos-stricthostkeychecking.sh  # pattern-scan:ignore -- intentional positive-case fixture, written clean at runtime
 
 # ── Negative cases: same shape, no match ────────────────────────────────────
 cat > shell/neg-process-sub.sh <<'EOF'
@@ -182,7 +160,7 @@ fi
 # error line (not just a nonzero exit, which a shell syntax error could also
 # produce).
 DASH_RULES="$(mktemp)"
-grep -E '^(--allow-unsigned-rpm|--nogpgcheck|--gpg-auto-import-keys)\b' "${RULES_FILE}" > "${DASH_RULES}"
+grep -E '^(--allow-unsigned-rpm|--nogpgcheck|--gpg-auto-import-keys)\b' "${RULES_FILE}" > "${DASH_RULES}"  # pattern-scan:ignore -- lists pattern names, not an actual dangerous command
 DASH_OUT="$(bash "${SCAN_SCRIPT}" "${DASH_RULES}" 2>&1)"
 rm -f "${DASH_RULES}"
 _dash_hits="$(grep -c '^::error' <<< "${DASH_OUT}")"
