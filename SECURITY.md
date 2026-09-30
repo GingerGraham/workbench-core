@@ -48,6 +48,14 @@ worth reporting against specifically:
   section for the full list), and re-checks every resolved deploy target
   against its symlink-resolved physical location immediately before the
   write, refusing a `deploy[].src` that is itself a symlink outright.
+- **Scheduled sync privilege sandbox is Linux-only.** On Linux the
+  `systemd --user` sync unit sets `NoNewPrivileges=yes` and
+  `RestrictSUIDSGID=yes`, so the unattended path, module hooks included,
+  cannot gain privileges through `sudo`, `pkexec` or setuid binaries. launchd
+  has no equivalent. On macOS the scheduled path runs with your normal
+  ability to use `sudo`, including a cached credential or `NOPASSWD` rule.
+  Keep `sudo`'s timestamp timeout short, and avoid `NOPASSWD` rules, on Macs
+  with the scheduler enabled.
 
 If you find a way around any of these — a manifest that escapes its own
 namespace, a way to get arbitrary content sourced without going through

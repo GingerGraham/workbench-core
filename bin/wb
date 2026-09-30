@@ -1309,6 +1309,19 @@ _wb_cmd_module_reset() {
     local abs_src failed=0
     for k in "${!chosen_dests[@]}"; do
         abs_src="${current_dir}/${chosen_srcs[$k]%/}"
+        # Same D75 checks the sync-time deploy applies (security review
+        # follow-up R6): never copy through a symlinked src, never write
+        # through a symlinked parent into a denied location.
+        if [[ -L "${abs_src}" ]]; then
+            log_error "wb module reset: refusing ${chosen_srcs[$k]} — it is a symlink"
+            failed=1
+            continue
+        fi
+        if ! _wb_dest_physical_is_safe "${chosen_dests[$k]}" "${name}"; then
+            log_error "wb module reset: refusing ${chosen_dests[$k]} — resolves through a symlink to a denied location"
+            failed=1
+            continue
+        fi
         workbench_deploy_copy_file "${abs_src}" "${chosen_dests[$k]}" "true" "${name}" || failed=1
     done
 

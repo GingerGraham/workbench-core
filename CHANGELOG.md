@@ -6,6 +6,16 @@ All notable changes to `workbench-core` are documented here.
 
 ### Security
 
+- **`wb module reset` now applies the same symlink checks as sync-time
+  deploys** (security review follow-up R6). It refuses a snapshot `src`
+  that is a symlink, and re-checks each destination's physical location
+  with `_wb_dest_physical_is_safe`, so a confirmed reset can no longer copy
+  a user-readable file to a module-declared destination or write through a
+  symlinked parent into a denied location.
+- **`SECURITY.md` documents that the scheduled-sync privilege sandbox is
+  Linux-only** (follow-up R7): launchd has no `NoNewPrivileges`
+  equivalent, so on macOS the scheduled path can use `sudo`.
+
 - **`dangerous-patterns.txt` (CI's pattern scanner) now catches more
   remote-script-execution and verification-bypass shapes** (security
   review M3): `bash <(curl …)` / `bash <(wget …)` process substitution,

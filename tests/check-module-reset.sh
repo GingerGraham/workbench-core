@@ -297,6 +297,37 @@ else
     cat /tmp/wb-mr-partial.log
 fi
 
+
+# ── 10. R6: reset refuses a symlinked snapshot src — it must not copy a
+#    user-readable file (here ~/secret.txt) to the module's destination. ───
+echo "TOP SECRET" > "${HOME}/secret.txt"
+CURRENT_DIR1="$(workbench_module_current_dir reset-mod)"
+rm -f "${CURRENT_DIR1}/files/vimrc"
+ln -s "${HOME}/secret.txt" "${CURRENT_DIR1}/files/vimrc"
+echo "USER RUINED VIMRC 2" > "${VIMRC_DEST}"
+echo "y" | _wb_cmd_module_reset reset-mod .vimrc >/tmp/wb-mr-symsrc.log 2>&1; rc=$?
+if [[ "${rc}" -ne 0 ]] && grep -q "is a symlink" /tmp/wb-mr-symsrc.log \
+    && ! grep -q "TOP SECRET" "${VIMRC_DEST}"; then
+    ok "reset refuses a symlinked src and does not copy the secret to the destination"
+else
+    fail "reset followed (or did not report) a symlinked src (exit ${rc})"
+    cat /tmp/wb-mr-symsrc.log
+fi
+
+# ── 11. R6: reset refuses a destination whose parent is a symlink into a
+#    denied location (~/.ssh) — nothing is written under .ssh. ────────────
+mkdir -p "${HOME}/.ssh"
+rm -rf "${HOME}/.config/tmux/other"
+ln -s "${HOME}/.ssh" "${HOME}/.config/tmux/other"
+echo "y" | _wb_cmd_module_reset reset-mod2 files/other/tmux.conf >/tmp/wb-mr-symdest.log 2>&1; rc=$?
+if [[ "${rc}" -ne 0 ]] && grep -q "resolves through a symlink" /tmp/wb-mr-symdest.log \
+    && [[ -z "$(ls -A "${HOME}/.ssh")" ]]; then
+    ok "reset refuses a destination whose parent symlinks into ~/.ssh; nothing written there"
+else
+    fail "reset wrote through a symlinked parent or did not refuse (exit ${rc})"
+    cat /tmp/wb-mr-symdest.log
+fi
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."
