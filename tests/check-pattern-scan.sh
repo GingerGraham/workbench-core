@@ -147,7 +147,7 @@ for _f in "${NEGATIVE_FILES[@]}"; do
 done
 [[ "${_none_flagged}" -eq 1 ]] && ok "no negative case (one per new pattern) is flagged"
 
-if grep -q "file=shell/suppressed.sh," <<< "${OUT}"; then
+if grep -q "^::error file=shell/suppressed.sh," <<< "${OUT}"; then
     fail "a pattern-scan:ignore-annotated line was flagged anyway"
 else
     ok "pattern-scan:ignore suppresses a genuine positive match"
@@ -168,6 +168,78 @@ if [[ "${_dash_hits}" -eq 3 ]]; then
     ok "all three '--'-prefixed patterns match via git grep -e (regression guard)"
 else
     fail "expected 3 hits from the '--'-prefixed patterns alone, got ${_dash_hits} — see git grep -e regression"
+fi
+
+
+# ── D80 / R4-R5: reasoned suppressions, notices, files/* scope, ssh_config
+#    patterns. A second throwaway repo so it can't disturb the fixtures
+#    above. Fixtures are written via printf (see the note above): the
+#    dangerous text must not appear as its own line in this source file. ───
+cd "${WORK}" || exit 1
+rm -rf d80 && mkdir d80 && cd d80 || exit 1
+git init -q
+git config user.email t@t.com
+git config user.name Test
+mkdir -p shell files/nested/dir
+
+scan_d80() {
+    git add -A && git commit -q -m fx --allow-empty
+    OUT80="$(bash "${SCAN_SCRIPT}" "${RULES_FILE}" 2>&1)"; RC80=$?
+    git rm -q -r --cached . >/dev/null 2>&1; rm -rf shell/* files/*; mkdir -p shell files/nested/dir
+}
+
+# 1. suppression with a reason: exit 0, ::notice printed
+printf '#!/usr/bin/env bash\nzypper install --allow-unsigned-rpm x.rpm  # pattern-scan:ignore -- reviewed, verified elsewhere\n' > shell/s.sh
+scan_d80
+if [[ "${RC80}" -eq 0 ]] && grep -q '^::notice file=shell/s.sh' <<< "${OUT80}" && grep -q 'reviewed, verified elsewhere' <<< "${OUT80}"; then
+    ok "pattern-scan:ignore -- <reason>: exit 0 and a ::notice carrying the reason"
+else
+    fail "reasoned suppression: rc=${RC80} out=${OUT80}"
+fi
+
+# 2. bare suppression: exit 1, error names the missing reason
+printf '#!/usr/bin/env bash\nzypper install --allow-unsigned-rpm x.rpm  # pattern-scan:ignore\n' > shell/b.sh  # pattern-scan:ignore -- fixture for the bare-marker check, written into a scratch repo
+scan_d80
+if [[ "${RC80}" -eq 1 ]] && grep -q '^::error file=shell/b.sh.*without a reason' <<< "${OUT80}"; then
+    ok "bare pattern-scan:ignore fails and names the missing reason"
+else
+    fail "bare suppression: rc=${RC80} out=${OUT80}"
+fi
+
+# 3. ProxyCommand in files/
+printf '    ProxyCommand nc %%h %%p\n' > files/x.conf
+scan_d80
+if [[ "${RC80}" -eq 1 ]] && grep -q 'file=files/x.conf' <<< "${OUT80}"; then
+    ok "ProxyCommand in files/x.conf is flagged (files/* is scanned)"
+else
+    fail "files/x.conf ProxyCommand: rc=${RC80} out=${OUT80}"
+fi
+
+# 4. same word in a .sh comment: not at line start, no match
+printf '#!/usr/bin/env bash\n# ProxyCommand is not used\n' > shell/c.sh
+scan_d80
+if [[ "${RC80}" -eq 0 ]]; then
+    ok "ProxyCommand mentioned in a .sh comment is not flagged"
+else
+    fail "comment mention flagged: rc=${RC80} out=${OUT80}"
+fi
+
+# 5. Match ... exec in files/
+printf 'Match host x exec "true"\n' > files/m.conf
+scan_d80
+if [[ "${RC80}" -eq 1 ]] && grep -q 'file=files/m.conf' <<< "${OUT80}"; then
+    ok "ssh_config 'Match ... exec' in files/ is flagged"
+else
+    fail "Match exec: rc=${RC80} out=${OUT80}"
+fi
+
+# 6. nested files/ path is scanned
+printf 'LocalCommand /bin/true\n' > files/nested/dir/deep.conf
+scan_d80
+if [[ "${RC80}" -eq 1 ]] && grep -q 'file=files/nested/dir/deep.conf' <<< "${OUT80}"; then
+    ok "a file under files/nested/dir/ is scanned"
+else
+    fail "nested files/ path: rc=${RC80} out=${OUT80}"
 fi
 
 echo

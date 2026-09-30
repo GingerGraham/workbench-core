@@ -6,6 +6,19 @@ All notable changes to `workbench-core` are documented here.
 
 ### Security
 
+- **The pattern scanner is now governed and covers more** (security review
+  follow-up R3-R5; D80). Suppressions must be `pattern-scan:ignore --
+  <reason>`: a bare marker now fails the scan, and every accepted
+  suppression is printed as a CI `::notice`. The scan now also covers
+  `files/*` (content modules copy into places like `~/.ssh`), and gains
+  patterns for ssh_config directives that run commands (`ProxyCommand`,
+  `LocalCommand`, `KnownHostsCommand`, `PermitLocalCommand yes`,
+  `Match ... exec`).
+- **Changes to `.github/actions/**` or `.github/workflows/module-*.yml` now
+  trigger a core patch release automatically** (R3; D80), so module CI,
+  which uses core's latest release, no longer scans with stale rules until
+  someone remembers to force a D67 release.
+
 - **`dangerous-patterns.txt` (CI's pattern scanner) now catches more
   remote-script-execution and verification-bypass shapes** (security
   review M3): `bash <(curl …)` / `bash <(wget …)` process substitution,

@@ -99,10 +99,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      # Module CI resolves core's latest *release*, but .github/actions/**
+      # and module-*.yml are not registered files, so commits touching only
+      # them never bump anything by themselves. Force a patch floor (the D67
+      # mechanism) so they always ship (security review follow-up R3, D80).
+      # A manual bump_type still wins: compute-bumps.sh only ever raises.
+      - name: Detect module-consumed CI changes
+        id: ci_changes
+        run: .github/scripts/release/detect-module-ci-changes.sh >> "$GITHUB_OUTPUT"
+
       - name: Compute bump plan
         id: compute
         env:
-          WB_RELEASE_FORCE_SEVERITY: ${{ github.event.inputs.bump_type || '' }}
+          WB_RELEASE_FORCE_SEVERITY: ${{ github.event.inputs.bump_type || steps.ci_changes.outputs.force_severity || '' }}
         run: |
           .github/scripts/release/compute-bumps.sh | tee bump-plan.txt
           overall_line="$(grep -m 1 '^OVERALL|' bump-plan.txt)"
@@ -113,14 +122,14 @@ jobs:
       - name: Apply bumps
         if: steps.compute.outputs.severity != 'none'
         env:
-          WB_RELEASE_MANUAL_REASON: ${{ github.event.inputs.reason || '' }}
+          WB_RELEASE_MANUAL_REASON: ${{ github.event.inputs.reason || steps.ci_changes.outputs.reason || '' }}
         run: .github/scripts/release/apply-bumps.sh bump-plan.txt
 
       - name: Build release notes
         if: steps.compute.outputs.severity != 'none'
         env:
           NEW_VERSION: ${{ steps.compute.outputs.new_version }}
-          MANUAL_REASON: ${{ github.event.inputs.reason || '' }}
+          MANUAL_REASON: ${{ github.event.inputs.reason || steps.ci_changes.outputs.reason || '' }}
         run: |
           {
             echo "## Version bumps"
