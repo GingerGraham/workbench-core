@@ -134,10 +134,30 @@ module) carrying its own copy:
     hex digest (e.g. kubectl's `.sha256`, helm's `.sha256sum`)
 - `_wb_key_has_fingerprint <keyfile> <fingerprint>` — true iff the OpenPGP
   key file (armored or binary) contains a primary key whose fingerprint is
-  exactly `<fingerprint>` (40 hex; spaces and case ignored). Modules call
-  this before trusting a vendor repository key with `rpm --import` or an
-  apt keyring. Uses a throwaway `GNUPGHOME` so the user's keyring is never
-  touched.
+  exactly `<fingerprint>` (40 hex; spaces and case ignored). Uses a
+  throwaway `GNUPGHOME` so the user's keyring is never touched. **Presence
+  check only — never a trust decision** (see 1.5 below).
+
+**New in `CORE_API_VERSION` 1.5.** Vendor signing keys are trusted only as
+pinned, local copies (D79). Modules must not pass a downloaded key file to
+`rpm --import` or apt directly.
+
+- `_wb_key_extract_pinned <keyfile> <out_file> <armor|binary> <fingerprint> [<fingerprint> ...]`
+  — writes to `<out_file>` only the primary keys from `<keyfile>` whose
+  fingerprints are pinned; any other key is dropped with a warning; fails if
+  no pinned key is present.
+- `_wb_rpm_import_pinned_key <key_url> <local_name> <fingerprint> [<fingerprint> ...]`
+  — downloads the key, keeps only the pinned key(s), installs them as
+  `/etc/pki/rpm-gpg/RPM-GPG-KEY-workbench-<local_name>` and `rpm --import`s
+  that local file. Prints the installed path.
+- `_wb_apt_keyring_pinned <key_url> <keyring_path> <fingerprint> [<fingerprint> ...]`
+  — downloads the key and installs only the pinned key(s) as a binary apt
+  keyring at `<keyring_path>` (`/etc/apt/keyrings/*.gpg` or
+  `/usr/share/keyrings/*.gpg`).
+- `_wb_dnf_vendor_repo --id <id> --name <name> --baseurl <https-url> --key-url <https-url> --fingerprint <fpr> [--fingerprint <fpr> ...] --include <pkg> [--include <pkg> ...] [--repo-gpgcheck]`
+  — writes `/etc/yum.repos.d/<id>.repo` with `gpgcheck=1`, a local pinned
+  `gpgkey=file://…` and `includepkgs=`, so dnf can never import a different
+  key from the vendor later. Rewritten on every call.
 
 Registered in core's own `.dotfiles-sync.yml` at `tier: core`, the same
 tier `functions.sh`/`version.sh` use — every module's `lazy`-tier installer
