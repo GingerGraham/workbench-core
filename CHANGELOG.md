@@ -16,6 +16,17 @@ All notable changes to `workbench-core` are documented here.
   Linux-only** (follow-up R7): launchd has no `NoNewPrivileges`
   equivalent, so on macOS the scheduled path can use `sudo`.
 
+- **Vendor signing keys are now trusted only as pinned, local copies; Core
+  API 1.5** (security review follow-up R1, R2; D79). New install helpers
+  `_wb_key_extract_pinned`, `_wb_rpm_import_pinned_key`,
+  `_wb_apt_keyring_pinned` and `_wb_dnf_vendor_repo` export only the pinned
+  primary key(s) from a downloaded key file (extra keys are dropped with a
+  warning), install them locally, and write dnf repo definitions with
+  `gpgkey=file://…` and `includepkgs=`, so a later `dnf -y` can no longer
+  import whatever key the vendor URL serves. `_wb_key_has_fingerprint` is
+  unchanged but now documented as a presence check only, never a trust
+  decision. `CORE_API_VERSION` is now 1.5.
+
 - **`dangerous-patterns.txt` (CI's pattern scanner) now catches more
   remote-script-execution and verification-bypass shapes** (security
   review M3): `bash <(curl …)` / `bash <(wget …)` process substitution,
