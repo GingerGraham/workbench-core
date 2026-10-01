@@ -268,9 +268,14 @@ _wb_fetch_verified() {
 # _wb_key_has_fingerprint <keyfile> <fingerprint>
 # True iff the OpenPGP key file (armored or binary) contains a primary key
 # whose fingerprint is exactly <fingerprint> (40 hex; spaces and case
-# ignored). Modules call this before trusting a vendor repository key with
-# rpm --import or an apt keyring (security review M4). Uses a throwaway
-# GNUPGHOME so the user's keyring is never touched.
+# ignored). Uses a throwaway GNUPGHOME so the user's keyring is never
+# touched.
+#
+# Presence check only — never use it as a trust decision. A file that also
+# carries other keys passes this check, and rpm --import / apt signed-by
+# would trust those too (security review follow-up R1). To trust a vendor
+# key, use _wb_key_extract_pinned, _wb_rpm_import_pinned_key,
+# _wb_apt_keyring_pinned or _wb_dnf_vendor_repo (D79).
 _wb_key_has_fingerprint() {
     local keyfile="$1" want="$2" gnupg_home rc
     command -v gpg &>/dev/null || { log_error "_wb_key_has_fingerprint: gpg is required"; return 1; }
@@ -282,6 +287,240 @@ _wb_key_has_fingerprint() {
     rc=$?
     rm -rf "${gnupg_home}"
     return ${rc}
+}
+
+# _wb_vendor_id_is_valid <id>
+# Lowercase letters, digits and '-'; must not start with '-'. Used for repo
+# ids and key file names that become paths under /etc.
+_wb_vendor_id_is_valid() {
+    local id="$1"
+    local LC_ALL=C
+    [[ -n "${id}" && ${#id} -le 64 ]] || return 1
+    case "${id}" in
+        -*|*[!a-z0-9-]*) return 1 ;;
+    esac
+    return 0
+}
+
+# _wb_key_extract_pinned <keyfile> <out_file> <armor|binary> <fingerprint> [<fingerprint> ...]
+# Writes to <out_file> an export containing only the primary keys from
+# <keyfile> whose fingerprints are pinned (40 hex; spaces and case ignored).
+# Any other primary key in <keyfile> is dropped with a warning. Fails if none
+# of the pinned keys is present. Always trust the output, never the
+# downloaded file (security review follow-up R1, D79).
+_wb_key_extract_pinned() {
+    local keyfile="$1" out_file="$2" format="$3"
+    local gnupg_home fpr want pinned="" dropped=""
+    local -a found=()
+    local -a export_args=()
+
+    if [[ $# -lt 4 ]]; then
+        log_error "_wb_key_extract_pinned: usage: <keyfile> <out_file> <armor|binary> <fingerprint> [<fingerprint> ...]"
+        return 2
+    fi
+    shift 3
+    case "${format}" in
+        armor|binary) ;;
+        *) log_error "_wb_key_extract_pinned: format must be 'armor' or 'binary', got '${format}'"; return 2 ;;
+    esac
+    command -v gpg &>/dev/null || { log_error "_wb_key_extract_pinned: gpg is required"; return 1; }
+
+    for want in "$@"; do
+        pinned="${pinned} $(printf '%s' "${want}" | tr -d ' ' | tr '[:lower:]' '[:upper:]')"
+    done
+
+    gnupg_home="$(mktemp -d)" || return 1
+    if ! gpg --homedir "${gnupg_home}" --batch --quiet --no-autostart --import "${keyfile}" 2>/dev/null; then
+        log_error "_wb_key_extract_pinned: ${keyfile} is not a readable OpenPGP key file"
+        rm -rf "${gnupg_home}"
+        return 1
+    fi
+
+    while IFS= read -r fpr; do
+        [[ -z "${fpr}" ]] && continue
+        case "${pinned} " in
+            *" ${fpr} "*) found+=("${fpr}") ;;
+            *)            dropped="${dropped} ${fpr}" ;;
+        esac
+    done < <(gpg --homedir "${gnupg_home}" --batch --no-autostart --with-colons --list-keys 2>/dev/null \
+                | awk -F: 'previous == "pub" && $1 == "fpr" { print $10 } { previous = $1 }')
+
+    if [[ ${#found[@]} -eq 0 ]]; then
+        log_error "_wb_key_extract_pinned: ${keyfile} contains none of the pinned keys — refusing to trust it"
+        rm -rf "${gnupg_home}"
+        return 1
+    fi
+    if [[ -n "${dropped}" ]]; then
+        log_warn "_wb_key_extract_pinned: ignoring unpinned key(s) in ${keyfile}:${dropped}"
+    fi
+
+    export_args=(--homedir "${gnupg_home}" --batch --no-autostart --export)
+    [[ "${format}" == "armor" ]] && export_args+=(--armor)
+    if ! gpg "${export_args[@]}" "${found[@]}" > "${out_file}" 2>/dev/null || [[ ! -s "${out_file}" ]]; then
+        log_error "_wb_key_extract_pinned: exporting the pinned key(s) failed"
+        rm -f "${out_file}"
+        rm -rf "${gnupg_home}"
+        return 1
+    fi
+    chmod 0644 "${out_file}"
+    rm -rf "${gnupg_home}"
+    return 0
+}
+
+# _wb_rpm_import_pinned_key <key_url> <local_name> <fingerprint> [<fingerprint> ...]
+# Downloads <key_url>, keeps only the pinned key(s), installs them as
+# /etc/pki/rpm-gpg/RPM-GPG-KEY-workbench-<local_name>, and rpm --imports that
+# local file. Prints the installed path on stdout (logs go to stderr).
+_wb_rpm_import_pinned_key() {
+    local key_url="$1" local_name="$2"
+    local elevation_cmd tmp_dir key_path rc
+
+    if [[ $# -lt 3 ]]; then
+        log_error "_wb_rpm_import_pinned_key: usage: <key_url> <local_name> <fingerprint> [<fingerprint> ...]"
+        return 2
+    fi
+    shift 2
+    _wb_vendor_id_is_valid "${local_name}" || { log_error "_wb_rpm_import_pinned_key: invalid name '${local_name}'"; return 2; }
+    case "${key_url}" in
+        https://?*) ;;
+        *) log_error "_wb_rpm_import_pinned_key: key URL must be https://"; return 2 ;;
+    esac
+
+    key_path="${_WB_TEST_SYSROOT:-}/etc/pki/rpm-gpg/RPM-GPG-KEY-workbench-${local_name}"
+    elevation_cmd="$(get-elevation-command)" || return 1
+    tmp_dir="$(mktemp -d)" || return 1
+
+    if ! _download_file_robust "${key_url}" "${tmp_dir}/downloaded" \
+        || ! _wb_key_extract_pinned "${tmp_dir}/downloaded" "${tmp_dir}/pinned.asc" armor "$@"; then
+        rm -rf "${tmp_dir}"
+        return 1
+    fi
+
+    ${elevation_cmd} install -D -m 0644 "${tmp_dir}/pinned.asc" "${key_path}" \
+        && ${elevation_cmd} rpm --import "${key_path}"
+    rc=$?
+    rm -rf "${tmp_dir}"
+    if [[ ${rc} -ne 0 ]]; then
+        log_error "_wb_rpm_import_pinned_key: installing or importing ${key_path} failed"
+        return ${rc}
+    fi
+    printf '%s\n' "${key_path#"${_WB_TEST_SYSROOT:-}"}"
+}
+
+# _wb_apt_keyring_pinned <key_url> <keyring_path> <fingerprint> [<fingerprint> ...]
+# Downloads <key_url>, keeps only the pinned key(s), and installs them as a
+# binary keyring at <keyring_path> for use with apt's signed-by=. The path
+# must be under /etc/apt/keyrings/ or /usr/share/keyrings/ and end in .gpg.
+_wb_apt_keyring_pinned() {
+    local key_url="$1" keyring="$2"
+    local elevation_cmd tmp_dir rc
+
+    if [[ $# -lt 3 ]]; then
+        log_error "_wb_apt_keyring_pinned: usage: <key_url> <keyring_path> <fingerprint> [<fingerprint> ...]"
+        return 2
+    fi
+    shift 2
+    case "${keyring}" in
+        */../*|*/./*) log_error "_wb_apt_keyring_pinned: invalid keyring path '${keyring}'"; return 2 ;;
+        /etc/apt/keyrings/?*.gpg|/usr/share/keyrings/?*.gpg) ;;
+        *) log_error "_wb_apt_keyring_pinned: keyring must be /etc/apt/keyrings/*.gpg or /usr/share/keyrings/*.gpg"; return 2 ;;
+    esac
+    case "${key_url}" in
+        https://?*) ;;
+        *) log_error "_wb_apt_keyring_pinned: key URL must be https://"; return 2 ;;
+    esac
+
+    elevation_cmd="$(get-elevation-command)" || return 1
+    tmp_dir="$(mktemp -d)" || return 1
+    if ! _download_file_robust "${key_url}" "${tmp_dir}/downloaded" \
+        || ! _wb_key_extract_pinned "${tmp_dir}/downloaded" "${tmp_dir}/pinned.gpg" binary "$@"; then
+        rm -rf "${tmp_dir}"
+        return 1
+    fi
+    ${elevation_cmd} install -D -m 0644 "${tmp_dir}/pinned.gpg" "${_WB_TEST_SYSROOT:-}${keyring}"
+    rc=$?
+    rm -rf "${tmp_dir}"
+    return ${rc}
+}
+
+# _wb_dnf_vendor_repo --id <id> --name <name> --baseurl <https-url>
+#                     --key-url <https-url> --fingerprint <fpr> [--fingerprint <fpr> ...]
+#                     --include <pkg> [--include <pkg> ...] [--repo-gpgcheck]
+# Writes /etc/yum.repos.d/<id>.repo for a third-party dnf/yum repository:
+#   - its signing key is pinned and stored locally (gpgkey=file://…), so dnf
+#     can never import a different key from the vendor later (R2);
+#   - includepkgs limits the repository to the named packages (M4).
+# The file is rewritten on every call so existing hosts converge.
+_wb_dnf_vendor_repo() {
+    local id="" name="" baseurl="" key_url="" repo_gpgcheck=0
+    local key_path elevation_cmd repo_file pkg
+    local -a fprs=()
+    local -a pkgs=()
+
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" == "--repo-gpgcheck" ]]; then
+            repo_gpgcheck=1
+            shift
+            continue
+        fi
+        if [[ $# -lt 2 ]]; then
+            log_error "_wb_dnf_vendor_repo: $1 needs a value"
+            return 2
+        fi
+        case "$1" in
+            --id)          id="$2" ;;
+            --name)        name="$2" ;;
+            --baseurl)     baseurl="$2" ;;
+            --key-url)     key_url="$2" ;;
+            --fingerprint) fprs+=("$2") ;;
+            --include)     pkgs+=("$2") ;;
+            *) log_error "_wb_dnf_vendor_repo: unknown option '$1'"; return 2 ;;
+        esac
+        shift 2
+    done
+
+    _wb_vendor_id_is_valid "${id}" || { log_error "_wb_dnf_vendor_repo: invalid --id '${id}'"; return 2; }
+    case "${name}" in
+        ''|*[[:cntrl:]]*) log_error "_wb_dnf_vendor_repo: --name is required and must be a single line"; return 2 ;;
+    esac
+    case "${baseurl}" in
+        https://?*) ;;
+        *) log_error "_wb_dnf_vendor_repo: --baseurl must be https://"; return 2 ;;
+    esac
+    case "${baseurl}" in
+        *[[:space:]]*|*[[:cntrl:]]*) log_error "_wb_dnf_vendor_repo: --baseurl contains whitespace"; return 2 ;;
+    esac
+    [[ ${#fprs[@]} -gt 0 ]] || { log_error "_wb_dnf_vendor_repo: at least one --fingerprint is required"; return 2; }
+    [[ ${#pkgs[@]} -gt 0 ]] || { log_error "_wb_dnf_vendor_repo: at least one --include is required"; return 2; }
+    for pkg in "${pkgs[@]}"; do
+        local LC_ALL=C
+        case "${pkg}" in
+            ''|*[!A-Za-z0-9._+*-]*) log_error "_wb_dnf_vendor_repo: invalid --include '${pkg}'"; return 2 ;;
+        esac
+    done
+
+    case "${key_url}" in
+        https://?*) ;;
+        *) log_error "_wb_dnf_vendor_repo: --key-url must be https://"; return 2 ;;
+    esac
+
+    key_path="$(_wb_rpm_import_pinned_key "${key_url}" "${id}" "${fprs[@]}")" || return 1
+    elevation_cmd="$(get-elevation-command)" || return 1
+    repo_file="${_WB_TEST_SYSROOT:-}/etc/yum.repos.d/${id}.repo"
+
+    ${elevation_cmd} install -d -m 0755 "$(dirname "${repo_file}")" || return 1
+
+    printf '%s\n' \
+        "# Managed by workbench (D79): pinned local signing key, package allowlist." \
+        "[${id}]" \
+        "name=${name}" \
+        "baseurl=${baseurl}" \
+        "enabled=1" \
+        "gpgcheck=1" \
+        "repo_gpgcheck=${repo_gpgcheck}" \
+        "gpgkey=file://${key_path}" \
+        "includepkgs=${pkgs[*]}" \
+        | ${elevation_cmd} tee "${repo_file}" >/dev/null
 }
 
 # shellcheck disable=SC2015
