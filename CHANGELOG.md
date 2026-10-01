@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.16.1] - 2026-10-01
+
 ### Security
 
 - **Vendor signing keys are now trusted only as pinned, local copies; Core
