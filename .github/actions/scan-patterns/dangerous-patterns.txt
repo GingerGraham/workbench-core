@@ -12,4 +12,4 @@ curl[[:space:]]+(-[a-zA-Z]*k([[:space:]]|$)|--insecure)	TLS certificate verifica
 StrictHostKeyChecking[= ]+no	SSH host key verification disabled
 ^[[:space:]]*(ProxyCommand|LocalCommand|KnownHostsCommand)([[:space:]]|=)	ssh_config directive that runs a command — review before shipping
 ^[[:space:]]*PermitLocalCommand([[:space:]]|=)+yes	ssh_config LocalCommand execution enabled
-^[[:space:]]*Match[[:space:]].*[[:space:]]exec[[:space:]]	ssh_config Match exec runs a command on every connection
+^[[:space:]]*Match[[:space:]]+(.*[[:space:]])?exec[[:space:]]	ssh_config Match exec runs a command on every connection

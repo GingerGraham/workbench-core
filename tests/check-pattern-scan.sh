@@ -233,6 +233,24 @@ else
     fail "Match exec: rc=${RC80} out=${OUT80}"
 fi
 
+# 5b. Canonical single-space form: no criteria between Match and exec
+printf 'Match exec "true"\n' > files/m1.conf
+scan_d80
+if [[ "${RC80}" -eq 1 ]] && grep -q 'file=files/m1.conf' <<< "${OUT80}"; then
+    ok "ssh_config 'Match exec \"cmd\"' (single space) is flagged"
+else
+    fail "Match exec single-space: rc=${RC80} out=${OUT80}"
+fi
+
+# 5c. Look-alike keywords are not 'Match'
+printf 'Matches exec x\nMatchmaker exec x\n' > files/neg.conf
+scan_d80
+if [[ "${RC80}" -eq 0 ]]; then
+    ok "'Matches exec x' and 'Matchmaker exec x' are not flagged"
+else
+    fail "look-alike Match keywords flagged: rc=${RC80} out=${OUT80}"
+fi
+
 # 6. nested files/ path is scanned
 printf 'LocalCommand /bin/true\n' > files/nested/dir/deep.conf
 scan_d80
