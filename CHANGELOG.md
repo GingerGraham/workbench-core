@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.16.1] - 2026-10-01
+
 ### Security
 
 - **`wb module reset` now applies the same symlink checks as sync-time
