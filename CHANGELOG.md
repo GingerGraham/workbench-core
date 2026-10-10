@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.16.2] - 2026-10-10
+
 ### Security
 
 - **The pattern scanner is now governed and covers more** (security review
