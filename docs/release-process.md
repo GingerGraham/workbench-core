@@ -182,10 +182,17 @@ doesn't reach any module until the next core release cuts a new tag for
 those callers to update to (Dependabot proposes the bump automatically,
 same as any other pinned action).
 
-If a `.github/`-only fix needs to reach modules sooner than the next
-ordinary release, use the D67 manual `workflow_dispatch` path to cut one
-immediately — there's no separate "CI-only release" mechanism, and none is
-needed.
+Changes under `.github/actions/**` or `.github/workflows/module-*.yml` —
+the files module CI actually consumes from a core release — therefore
+trigger a patch release automatically: on every push to `main`,
+`release.yml` runs `.github/scripts/release/detect-module-ci-changes.sh`,
+and if any of those paths changed since the last tag it applies the D67
+severity floor (`patch`) even though no registered file changed
+(`docs/decisions-log.md` D80). The `[Unreleased]` CHANGELOG discipline
+below still applies; if it is empty, the D69 synthetic entry is inserted.
+
+The D67 manual `workflow_dispatch` path remains the override, for cutting a
+release of any other kind on demand or raising the severity.
 
 ## The CHANGELOG discipline
 
