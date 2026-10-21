@@ -32,7 +32,7 @@
 # and what it depends on.
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/files/layers.sh" "0.2.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/files/layers.sh" "0.3.0" || true
 
 # ── Adapters ────────────────────────────────────────────────────────────────
 
