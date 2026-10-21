@@ -147,8 +147,10 @@ workbench_manifest_info_description() {
 }
 
 # workbench_manifest_deploy_entries <file>
-# Emits one line per deploy[] entry: src|dest|dest_macos|mode|force|platforms
-# (platforms comma-joined, empty if unset). Mirrors the field set
+# Emits one line per deploy[] entry:
+#   src|dest|dest_macos|mode|force|platforms|lifecycle|yield_to
+# (platforms and yield_to comma-joined, lifecycle as written — empty if
+# unset; the engine resolves the default, see docs/decisions-log.md D81). Mirrors the field set
 # ansible/roles/sync-external's deploy.list.j2 already renders, minus
 # Ansible-side path expansion — dest/dest_macos here are still the raw
 # manifest strings (with a literal leading ~), expanded by the caller.
@@ -164,8 +166,8 @@ workbench_manifest_deploy_entries() {
             return s
         }
         function flush() {
-            if (have_item) print src "|" dest "|" dest_macos "|" mode "|" force "|" platforms
-            have_item = 0; src = ""; dest = ""; dest_macos = ""; mode = "copy"; force = "false"; platforms = ""
+            if (have_item) print src "|" dest "|" dest_macos "|" mode "|" force "|" platforms "|" lifecycle "|" yield_to
+            have_item = 0; src = ""; dest = ""; dest_macos = ""; mode = "copy"; force = "false"; platforms = ""; lifecycle = ""; yield_to = ""
         }
         /^deploy:[[:space:]]*$/ { in_block = 1; next }
         in_block && /^[A-Za-z]/ { flush(); in_block = 0 }
@@ -188,6 +190,18 @@ workbench_manifest_deploy_entries() {
         }
         in_block && have_item && /^[[:space:]]+force:/ {
             line = $0; sub(/^[[:space:]]+force:[[:space:]]*/, "", line); force = clean(line); next
+        }
+        in_block && have_item && /^[[:space:]]+lifecycle:/ {
+            line = $0; sub(/^[[:space:]]+lifecycle:[[:space:]]*/, "", line); lifecycle = clean(line); next
+        }
+        in_block && have_item && /^[[:space:]]+yield_to:/ {
+            # Flow-sequence form only, same as platforms: yield_to: [~/.a, ~/.b]
+            line = $0
+            sub(/^[[:space:]]+yield_to:[[:space:]]*\[/, "", line)
+            sub(/\][[:space:]]*$/, "", line)
+            gsub(/[[:space:]"'"'"']/, "", line)
+            yield_to = line
+            next
         }
         in_block && have_item && /^[[:space:]]+platforms:/ {
             # Flow-sequence form only: platforms: [linux, macos]
@@ -443,11 +457,12 @@ _wb_dest_physical_is_safe() {
 # alongside the D30 version gate.
 workbench_manifest_paths_safe() {
     local file="$1" module="$2" bad=0
-    local src dest dest_macos mode force platforms tier overrides_src hook_line argv0
+    local src dest dest_macos mode force platforms yield_to tier overrides_src hook_line argv0
     [[ -f "${file}" ]] || return 0
 
-    # shellcheck disable=SC2034 # mode/force/platforms unused — only src/dest need checking here
-    while IFS='|' read -r src dest dest_macos mode force platforms; do
+    local yield_path
+    # shellcheck disable=SC2034 # mode/force/platforms unused — only path fields need checking here
+    while IFS='|' read -r src dest dest_macos mode force platforms _lifecycle yield_to; do
         [[ -z "${src}" && -z "${dest}" ]] && continue
         if ! _wb_path_is_safe_relative "${src}"; then
             log_error "manifest: deploy src '${src}' is absolute or contains '..'"
@@ -461,6 +476,15 @@ workbench_manifest_paths_safe() {
             log_error "manifest: deploy dest_macos '${dest_macos}' violates dest validation"
             bad=1
         fi
+        # D81: yield_to paths get the full dest validation, denylist
+        # included — 'wb files use' can move what's at them aside.
+        while IFS= read -r yield_path; do
+            [[ -z "${yield_path}" ]] && continue
+            if ! _wb_dest_is_safe "${yield_path}" "${module}"; then
+                log_error "manifest: deploy yield_to '${yield_path}' violates dest validation"
+                bad=1
+            fi
+        done < <(printf '%s\n' "${yield_to}" | tr ',' '\n')
     done < <(workbench_manifest_deploy_entries "${file}")
 
     overrides_src="$(workbench_manifest_scalar overrides_src "${file}")"

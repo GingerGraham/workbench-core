@@ -101,6 +101,12 @@ Checks (fail the manifest) — unchanged from schema version 1:
   - mode, when given, is copy, link, or link_tree
   - mode: link_tree requires src: '.'
   - platforms, when given, only contains linux/macos
+  - lifecycle, when given, is seed, managed, or generated; copy mode only;
+    force: true alongside any lifecycle but generated is an error
+    (docs/decisions-log.md D81)
+  - yield_to, when given, is a flow-form list of strings, each passing the
+    full dest validation (denylist included)
+  - dest, dest_macos and every yield_to item contain no '|' or ','
   - hooks.post_deploy.command, when declared, is a non-empty list whose [0]
     is a safe relative path that exists in the repo
   - hooks.post_deploy.run_on, when given, is changed/always/initial
@@ -305,6 +311,58 @@ if [[ "${_deploy_count}" -gt 0 ]]; then
                 fi
                 _p=$((_p + 1))
             done
+        fi
+
+        # ── lifecycle / force / yield_to (docs/decisions-log.md D81) ──
+        _lifecycle=$(yq eval ".deploy[${_i}].lifecycle" "${MANIFEST}")
+        _force=$(yq eval ".deploy[${_i}].force" "${MANIFEST}")
+        if [[ -n "${_lifecycle}" && "${_lifecycle}" != "null" ]]; then
+            case "${_lifecycle}" in
+                seed|managed|generated) ;;
+                *) err "${_label}: lifecycle must be 'seed', 'managed', or 'generated' — found '${_lifecycle}'." ;;
+            esac
+            if [[ "${_force}" == "true" && "${_lifecycle}" != "generated" ]]; then
+                err "${_label}: force: true is the legacy spelling of lifecycle: generated — drop one."
+            fi
+            if [[ "${_mode}" == "link" || "${_mode}" == "link_tree" ]]; then
+                err "${_label}: lifecycle applies to copy-mode entries; linked entries always follow the module, and the host chooses what happens to local changes."
+            fi
+        fi
+
+        # '|' and ',' would corrupt core's '|'-delimited state files and the
+        # comma-joined yield_to list the parser emits.
+        for _pathfield in dest dest_macos; do
+            _pathval=$(yq eval ".deploy[${_i}].${_pathfield}" "${MANIFEST}")
+            if [[ "${_pathval}" == *'|'* || "${_pathval}" == *,* ]]; then
+                err "${_label}: ${_pathfield} '${_pathval}' must not contain '|' or ','."
+            fi
+        done
+
+        _yield_type=$(yq eval ".deploy[${_i}].yield_to | type" "${MANIFEST}")
+        if [[ "${_yield_type}" != "!!null" ]]; then
+            if [[ "${_yield_type}" != "!!seq" ]]; then
+                err "${_label}: yield_to must be a list of ~/ paths — found ${_yield_type}."
+            elif [[ "$(yq eval ".deploy[${_i}].yield_to | style" "${MANIFEST}")" != "flow" ]]; then
+                err "${_label}: yield_to must use flow form, e.g. yield_to: [~/.a, ~/.b] — core's parser reads only that form (same as platforms)."
+            else
+                _yield_count=$(yq eval ".deploy[${_i}].yield_to | length" "${MANIFEST}")
+                _y=0
+                while [[ "${_y}" -lt "${_yield_count}" ]]; do
+                    _yield_item_type=$(yq eval ".deploy[${_i}].yield_to[${_y}] | type" "${MANIFEST}")
+                    _yield_item=$(yq eval ".deploy[${_i}].yield_to[${_y}]" "${MANIFEST}")
+                    if [[ "${_yield_item_type}" != "!!str" ]]; then
+                        err "${_label}: yield_to[${_y}] must be a string — found ${_yield_item_type}."
+                    elif [[ "${_yield_item}" == *'|'* || "${_yield_item}" == *,* ]]; then
+                        err "${_label}: yield_to[${_y}] '${_yield_item}' must not contain '|' or ','."
+                    elif ! _is_safe_dest "${_yield_item}"; then
+                        # Full dest validation: 'wb files use' can move what's
+                        # at these paths aside, so they must be exactly as
+                        # trustworthy as a dest.
+                        err "${_label}: yield_to[${_y}] '${_yield_item}' must start with ~/, contain no '..' segments, and must not target the dest denylist (contracts/manifest-spec.md §dest validation)."
+                    fi
+                    _y=$((_y + 1))
+                done
+            fi
         fi
 
         _i=$((_i + 1))

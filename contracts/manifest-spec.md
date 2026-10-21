@@ -33,6 +33,7 @@ wins** — both cite the relevant section here in their own error output.
   - [`register.getters[]`](#registergetters)
 - [Field reference](#field-reference)
 - [`dest` validation](#dest-validation)
+- [Deploy modes, lifecycle and yield_to](#deploy-modes-lifecycle-and-yield_to)
 - [Hook contract](#hook-contract)
 - [The compatibility boundary — what would actually be breaking](#the-compatibility-boundary)
 - [Validating your manifest](#validating-your-manifest)
@@ -313,9 +314,11 @@ forward-compatibility posture as the rest of this spec.
 | `deploy[].src` | yes, per entry | — | Path within repo, relative, no `..`. |
 | `deploy[].dest` | yes, per entry | — | Must start with `~/`, no `..`, not on the dest denylist. |
 | `deploy[].dest_macos` | no | — | Overrides `dest` on macOS only. Same validation as `dest`. |
-| `deploy[].mode` | no | `copy` | `copy` \| `link` \| `link_tree`. |
-| `deploy[].force` | no | `false` | Overwrite a non-symlink/non-matching existing dest. |
+| `deploy[].mode` | no | `copy` | `copy` \| `link` \| `link_tree`. See "Deploy modes" below. |
+| `deploy[].force` | no | `false` | Legacy spelling of `lifecycle: generated` (copy mode). Contradicting `lifecycle` is a validation error. |
 | `deploy[].platforms` | no | (all) | List containing only `linux`/`macos`. |
+| `deploy[].lifecycle` | no | `managed` (`generated` if `force: true`) | `seed` \| `managed` \| `generated`. Copy mode only. |
+| `deploy[].yield_to` | no | — | Flow list of `~/` paths where the same tool also reads its config. Full dest validation applies. Any mode. |
 | `core_api` | no | — | Semver range this module targets. Absent = `register:` ignored. |
 | `sync.enabled` | no | `true` | Module-level default; machine state can override. |
 | `info.description` | no | — | Free text, shown by `wb module info`. No functional effect — read regardless of whether `core_api` is declared. |
@@ -364,6 +367,42 @@ engine-routed mechanism — a manifest-driven module can never `deploy:` its
 way into shell-loader-visible territory, by design.
 
 Enforced by the sync engine at runtime (D75), not only by `validate.sh`.
+
+## Deploy modes, lifecycle and yield_to
+
+A `deploy[]` entry says what a module provides. What happens on a given host is core's decision, made from the entry, the host's policy, and what's actually on disk (docs/decisions-log.md D81). In every mode, core never removes or overwrites something it didn't put there, never re-creates a file the user deleted, and never discards a change the user (or their tools) made — unless the user has chosen `follow` for that file or runs an explicit command, and then it backs the change up first.
+
+### `mode: copy` (default)
+
+The file (or every file under a directory `src`) is copied to `dest`. `lifecycle` says what kind of file it is:
+
+| `lifecycle` | Meaning | Default host behaviour |
+|---|---|---|
+| `managed` (default) | An opinionated default the user may adopt, edit, or replace. | Kept current while unedited. Once edited, never touched; the user is told when the default changes. |
+| `seed` | A starting point meant to be edited — a template, a knobs file. | Created once if absent, never updated. |
+| `generated` | Fully generated, no user content expected. | Always refreshed; an edited copy is backed up first. `force: true` means this. |
+
+### `mode: link`
+
+`dest` is a symlink to the file inside the module's snapshot, through `<module>/current`, so it follows every update. A directory `src` links each file individually.
+
+### `mode: link_tree`
+
+`src` must be `.`. `dest` is one symlink to `<module>/current` — the whole module, following every update. This is the workbench meaning of the dotfiles-era mode; the "develop in place in a git clone" half doesn't carry over, because workbench keeps no git working tree on a user's machine (docs/architecture.md principle 6). To develop in place, keep your own clone at `dest`; core treats it as yours.
+
+For both linked modes: a link is core's only while it points into that module's own state; anything else at `dest` — a real file or directory, or a symlink the user made — is the user's. A linked `dest` exposes the snapshot, so anything a tool writes there (a plugin manager's lock file, say) changes the snapshot. Core detects that at the next update and holds that entry at its current version until the user chooses what to do (`wb files resolve`) — the rest of the module still updates. If a tool routinely writes into its config directory, `mode: copy` avoids the question entirely.
+
+### `yield_to`
+
+The other places the same tool reads its config from:
+
+    - src: files/vimrc
+      dest: ~/.vimrc
+      yield_to: [~/.vim/vimrc, ~/.config/vim/vimrc]
+
+If any of them exists when `dest` doesn't, the user already has their own config and core leaves the entry alone. If the user later opts in to the module's version (`wb files use`), core moves those files aside — so the tool finds only one config — and `wb files restore` puts them back. Because core can move what's at these paths, each must pass the full dest validation above, denylist included.
+
+Older cores ignore `lifecycle` and `yield_to`, and keep their previous behaviour for each mode.
 
 ## Hook contract
 

@@ -32,6 +32,10 @@ deploy:
     mode: link
     force: true
     platforms: [linux, macos]
+  - src: files/vimrc
+    dest: ~/.vimrc
+    lifecycle: seed
+    yield_to: [~/.vim/vimrc, "~/.config/vim/vimrc"]
 
 core_api: ">=1.0 <2.0"
 sync:
@@ -73,8 +77,8 @@ EOF
     && ok "sync.enabled: false read correctly" || fail "sync.enabled extraction failed"
 
 deploy_out="$(workbench_manifest_deploy_entries "${MANIFEST}")"
-expected_deploy_0="shell/|~/.local/share/workbench/modules/awsconfd/src/||copy|false|"
-expected_deploy_1="bin/aws-helper|~/.local/bin/aws-helper|~/Library/aws-helper|link|true|linux,macos"
+expected_deploy_0="shell/|~/.local/share/workbench/modules/awsconfd/src/||copy|false|||"
+expected_deploy_1="bin/aws-helper|~/.local/bin/aws-helper|~/Library/aws-helper|link|true|linux,macos||"
 if [[ "$(sed -n '1p' <<< "${deploy_out}")" == "${expected_deploy_0}" ]]; then
     ok "deploy[0] parsed correctly (mode/force defaults applied)"
 else
@@ -84,6 +88,12 @@ if [[ "$(sed -n '2p' <<< "${deploy_out}")" == "${expected_deploy_1}" ]]; then
     ok "deploy[1] parsed correctly (dest_macos, force, platforms)"
 else
     fail "deploy[1] mismatch: $(sed -n '2p' <<< "${deploy_out}")"
+fi
+expected_deploy_2="files/vimrc|~/.vimrc||copy|false||seed|~/.vim/vimrc,~/.config/vim/vimrc"
+if [[ "$(sed -n '3p' <<< "${deploy_out}")" == "${expected_deploy_2}" ]]; then
+    ok "deploy[2] parsed correctly (lifecycle, yield_to with quoted item)"
+else
+    fail "deploy[2] mismatch: $(sed -n '3p' <<< "${deploy_out}")"
 fi
 
 shell_out="$(workbench_manifest_register_shell_entries "${MANIFEST}")"

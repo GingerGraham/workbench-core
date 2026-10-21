@@ -9,11 +9,32 @@
 # shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/remove.sh" "0.1.0" || true
 
-# workbench_cmd_remove <name>
+# workbench_cmd_remove <name> [--restore [--yes]]
+# --restore (docs/decisions-log.md D81): first 'wb files restore <name> all'
+# — same preview and confirmation (bin/wb's _wb_files_restore_run) — and
+# deregister only if that went ahead and succeeded.
 workbench_cmd_remove() {
-    local name="$1"
+    local name="" restore="false" yes="false" rc
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --restore) restore="true" ;;
+            --yes|-y)  yes="true" ;;
+            -*)
+                log_error "wb remove: unknown flag '$1'"
+                return 2
+                ;;
+            *)
+                if [[ -n "${name}" ]]; then
+                    log_error "wb remove: unexpected extra argument '$1'"
+                    return 2
+                fi
+                name="$1"
+                ;;
+        esac
+        shift
+    done
     if [[ -z "${name}" ]]; then
-        log_error "wb remove: usage: wb remove <name>"
+        log_error "wb remove: usage: wb remove <name> [--restore [--yes]]"
         return 2
     fi
 
@@ -22,6 +43,20 @@ workbench_cmd_remove() {
         return 0
     fi
 
+    if [[ "${restore}" == "true" ]]; then
+        _wb_engine_require_files
+        rc=0
+        _wb_files_restore_run "${name}" all "${yes}" "wb remove" || rc=$?
+        case "${rc}" in
+            0) ;;
+            2) log_info "wb remove: '${name}' is still registered"; return 0 ;;
+            *) log_error "wb remove: '${name}' is still registered — restore didn't complete; see above"; return 1 ;;
+        esac
+        workbench_module_conf_set "${name}" REGISTERED "false"
+        log_info "wb remove: '${name}' deregistered and its files put back — its snapshots are left in place; re-run 'wb add ${name}' to bring it back"
+        return 0
+    fi
+
     workbench_module_conf_set "${name}" REGISTERED "false"
-    log_info "wb remove: '${name}' deregistered — its deployed content and snapshots are left in place; re-run 'wb add ${name}' to bring it back"
+    log_info "wb remove: '${name}' deregistered — its deployed content and snapshots are left in place; re-run 'wb add ${name}' to bring it back — to put back the files it replaced, run 'wb remove ${name} --restore' instead"
 }

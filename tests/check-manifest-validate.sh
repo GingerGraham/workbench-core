@@ -381,6 +381,120 @@ else
     ok "an overrides_src-only manifest does not trigger the clone-only warning"
 fi
 
+# ── Fixtures 17+: deploy[].lifecycle / yield_to (docs/decisions-log.md D81) ──
+# _d81_case <name> <expect: pass|fail> <message-grep-or-empty> <description>
+# The deploy entry comes from stdin, indented under 'deploy:'.
+_d81_case() {
+    local expect="$2" pattern="$3" desc="$4" dir="${WORK}/d81-$1" log rc=0
+    mkdir -p "${dir}/files"
+    touch "${dir}/files/tmux.conf"
+    {
+        printf 'version: 1\ndeploy:\n'
+        cat
+    } > "${dir}/.dotfiles-sync.yml"
+    log="${dir}/validate.log"
+    "${VALIDATE}" "${dir}/.dotfiles-sync.yml" > "${log}" 2>&1 || rc=$?
+    if [[ "${expect}" == "pass" && "${rc}" -ne 0 ]]; then
+        fail "${desc} — rejected, expected valid:"; cat "${log}"; return
+    fi
+    if [[ "${expect}" == "fail" && "${rc}" -eq 0 ]]; then
+        fail "${desc} — accepted, expected an error"; return
+    fi
+    if [[ -n "${pattern}" ]] && ! grep -qF -- "${pattern}" "${log}"; then
+        fail "${desc} — expected message '${pattern}' missing:"; cat "${log}"; return
+    fi
+    ok "${desc}"
+}
+
+_d81_case lifecycle-ok pass "" "lifecycle: seed/managed/generated and a flow-form yield_to validate cleanly" <<'EOF'
+  - src: files/tmux.conf
+    dest: ~/.config/tmux/tmux.conf
+    lifecycle: managed
+    yield_to: [~/.tmux.conf]
+  - src: files/tmux.conf
+    dest: ~/.config/d81/seed.conf
+    lifecycle: seed
+  - src: files/tmux.conf
+    dest: ~/.config/d81/gen.conf
+    lifecycle: generated
+    force: true
+EOF
+
+_d81_case lifecycle-bad fail "lifecycle must be 'seed', 'managed', or 'generated'" "an unknown lifecycle value is rejected" <<'EOF'
+  - src: files/tmux.conf
+    dest: ~/.config/tmux/tmux.conf
+    lifecycle: sometimes
+EOF
+
+_d81_case force-contradicts fail "force: true is the legacy spelling of lifecycle: generated — drop one" "force: true with lifecycle: managed is rejected" <<'EOF'
+  - src: files/tmux.conf
+    dest: ~/.config/tmux/tmux.conf
+    lifecycle: managed
+    force: true
+EOF
+
+_d81_case lifecycle-on-link fail "lifecycle applies to copy-mode entries" "lifecycle on a mode: link entry is rejected" <<'EOF'
+  - src: files/tmux.conf
+    dest: ~/.config/tmux/tmux.conf
+    mode: link
+    lifecycle: managed
+EOF
+
+_d81_case yield-link-ok pass "" "yield_to on a mode: link entry is allowed" <<'EOF'
+  - src: files/tmux.conf
+    dest: ~/.config/tmux/tmux.conf
+    mode: link
+    yield_to: [~/.tmux.conf]
+EOF
+
+_d81_case yield-block fail "yield_to must use flow form" "block-form yield_to is rejected with a pointer to flow form" <<'EOF'
+  - src: files/tmux.conf
+    dest: ~/.config/tmux/tmux.conf
+    yield_to:
+      - ~/.tmux.conf
+EOF
+
+_d81_case yield-scalar fail "yield_to must be a list" "a scalar yield_to is rejected" <<'EOF'
+  - src: files/tmux.conf
+    dest: ~/.config/tmux/tmux.conf
+    yield_to: ~/.tmux.conf
+EOF
+
+_d81_case yield-denied fail "yield_to[0] '~/.bashrc'" "a denylisted yield_to path is rejected (full dest validation)" <<'EOF'
+  - src: files/tmux.conf
+    dest: ~/.config/tmux/tmux.conf
+    yield_to: [~/.bashrc]
+EOF
+
+_d81_case yield-escape fail "yield_to[1] '~/../etc/passwd'" "a yield_to path with '..' is rejected" <<'EOF'
+  - src: files/tmux.conf
+    dest: ~/.config/tmux/tmux.conf
+    yield_to: [~/.tmux.conf, ~/../etc/passwd]
+EOF
+
+_d81_case yield-not-string fail "yield_to[0] must be a string" "a non-string yield_to item is rejected" <<'EOF'
+  - src: files/tmux.conf
+    dest: ~/.config/tmux/tmux.conf
+    yield_to: [{a: b}]
+EOF
+
+_d81_case dest-pipe fail "must not contain '|' or ','" "a '|' in dest is rejected" <<'EOF'
+  - src: files/tmux.conf
+    dest: "~/.config/a|b.conf"
+EOF
+
+_d81_case dest-macos-comma fail "dest_macos '~/Library/a,b.conf' must not contain" "a ',' in dest_macos is rejected" <<'EOF'
+  - src: files/tmux.conf
+    dest: ~/.config/a.conf
+    dest_macos: "~/Library/a,b.conf"
+EOF
+
+_d81_case yield-pipe fail "yield_to[0] '~/.a|b' must not contain" "a '|' in a yield_to item is rejected" <<'EOF'
+  - src: files/tmux.conf
+    dest: ~/.config/a.conf
+    yield_to: ["~/.a|b"]
+EOF
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."

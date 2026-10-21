@@ -4,6 +4,44 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Core now owns the whole lifecycle of every file a module deploys, and
+  never discards a change it didn't make** (D81, architecture principle
+  7). A per-module ledger (`files.list`) records what core wrote, and
+  checksums are kept for every fetched snapshot, so core can always tell
+  its own unedited default from your content. A file you already have is
+  left alone — including the other places a tool reads its config from
+  (new `deploy[].yield_to`) — a file you edit stays yours, and a file you
+  delete isn't recreated.
+- **`mode: link` and `mode: link_tree` are real symlinks through the
+  module's `current`**, so they follow every update. A change made through
+  a link (`:Lazy update` rewriting `lazy-lock.json`) holds that one entry
+  at its current version until you decide, while the rest of the module
+  updates. A new interactive shell says when anything is waiting, and so
+  does `wb status`.
+- **`wb files status|diff|use|resolve|policy|restore`.** See every file a
+  module deploys and what the next update will do; take a module's version
+  (`use`, moving yours and any competing config aside); settle anything
+  waiting (`resolve … keep|manage|use`); set a per-file or host-wide policy
+  (`skip|seed|managed|follow`); and put things back (`restore`).
+- **`wb add … --use-files [--follow]`, `wb install --bundle … --use-files
+  [--follow]`, and `wb remove … --restore`** for opting in to a module's
+  files at install time and putting yours back on removal.
+- **`deploy[].lifecycle: seed|managed|generated`** (copy mode). `force:
+  true` is the legacy spelling of `generated`. The validator checks
+  `lifecycle` and `yield_to` (flow form, full dest validation).
+
+### Changed
+
+- **An unedited `mode: copy` file without `force: true` now refreshes when
+  the module's version changes**, instead of being seeded once and frozen.
+  Edited files are untouched, as before. Deliberate — see D81.
+- **`wb module reset` is now an alias of `wb files use`**: it covers
+  linked entries too, and without a terminal it needs `--yes`.
+- **`mode: link` no longer repoints a symlink it didn't create** (a
+  stow/chezmoi link, say) — that's yours and is left alone.
+
 ## [2.16.3] - 2026-10-15
 
 ### Changed

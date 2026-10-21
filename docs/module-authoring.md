@@ -11,6 +11,7 @@ and shell loader.
 - [The tag format contract](#the-tag-format-contract)
 - [Registering shell content](#registering-shell-content)
 - [Shipping overridable defaults (`overrides_src`)](#shipping-overridable-defaults-overrides_src)
+- [What core does with your files](#what-core-does-with-your-files)
 - [Declaring installers (`wb tools`)](#declaring-installers-wb-tools)
 - [Declaring function availability (optional but recommended)](#declaring-function-availability-optional-but-recommended)
 - [Publishing module info & docs (optional but recommended)](#publishing-module-info--docs-optional-but-recommended)
@@ -187,6 +188,18 @@ command -v starship &>/dev/null || return 0
 Don't rename an existing, already-working `${VAR:-default}` knob to fit
 this prefix — it doesn't need one. Reserve `WORKBENCH_OVERRIDE_*` for
 opinions that are currently hardcoded with no other escape hatch.
+
+## What core does with your files
+
+You declare what your module provides. Core decides, per host, what happens to each file, keeps a record of what it wrote, and never throws away a change it didn't make (`docs/decisions-log.md` D81). You don't write backup, overwrite-check, migration or uninstall logic — and you mustn't.
+
+For each `deploy[]` entry:
+
+- Copy mode: leave `lifecycle` unset (`managed`) for an opinionated default — a tmux.conf, a starship.toml. Users who haven't touched it get your improvements; users who have keep theirs and are told when yours changes. Use `seed` for something meant to be edited from day one, and `generated` for a file nobody should edit.
+- If the tool reads its config from more than one place, list the others in `yield_to`, so a user who already has one isn't given a second — and so `wb files use` can move theirs aside cleanly when they opt in to yours.
+- Linked modes (`link`, `link_tree`) follow every release. If the tool writes into what you link (a lock file, a cache), each such write holds the entry at its current version until the user decides. Prefer copy mode for a config directory the tool writes into.
+
+Never write outside your own snapshot from a hook. If a hook would need to — appending an `Include`, setting a global git value — that's a gap in core; raise it rather than working around it. (Phase 2 adds `layers[]` for exactly these cases and enforces this rule in CI.)
 
 ## Declaring installers (`wb tools`)
 
@@ -479,6 +492,8 @@ Your hook script receives, as environment variables:
 snapshot — `cwd` is already set there), `WORKBENCH_SYNC_REASON` (`add` |
 `track` | `manual` | `scheduled`). Exit non-zero on failure — it's logged
 and recorded, but never fails your module's sync (or any other module's).
+
+A hook must not write user files — see [What core does with your files](#what-core-does-with-your-files).
 
 **A new or changed hook waits for interactive approval before an
 unattended host will run it** (`docs/decisions-log.md` D76): a scheduled
