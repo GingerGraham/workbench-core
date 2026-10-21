@@ -514,8 +514,17 @@ _wb_maybe_reconverge_core() {
     # default /bin/bash, per docs/architecture.md's compatibility target) raises
     # "unbound variable" expanding an empty array under `set -u`, which this
     # file runs under.
-    local apply_rc=0
-    if [[ "${unattended}" == "true" ]]; then
+    #
+    # The new release's own wb runs it, as a child process (D85): this
+    # process's functions — the core API version it states, the deploy
+    # code — are still the release that was running before the update.
+    local apply_rc=0 next
+    next="$(_wb_core_next_wb)"
+    if [[ -n "${next}" && "${unattended}" == "true" ]]; then
+        "${next}" apply --skip-ansible || apply_rc=$?
+    elif [[ -n "${next}" ]]; then
+        "${next}" apply || apply_rc=$?
+    elif [[ "${unattended}" == "true" ]]; then
         _wb_cmd_apply --skip-ansible || apply_rc=$?
     else
         _wb_cmd_apply || apply_rc=$?
@@ -524,6 +533,68 @@ _wb_maybe_reconverge_core() {
         log_warn "wb: core convergence pass failed after update — the host may not be fully converged (PATH symlink/rc stub/prereqs); run 'wb apply' by hand to retry"
     fi
     return 0
+}
+
+# ── handing the rest of a sync to new core code (docs/decisions-log.md D85) ──
+# _wb_core_next_wb
+# Prints the wb in core's current snapshot when it isn't the one running
+# and knows '__sync-continue'; prints nothing otherwise (no core module, a
+# developer checkout, or a pin back to a release from before D85).
+_wb_core_next_wb() {
+    local next
+    workbench_is_registered core || return 0
+    next="$(workbench_module_current_dir core)/bin/wb"
+    [[ -x "${next}" ]] || return 0
+    [[ "$(cd "$(dirname "${next}")/.." && pwd -P)" == "$(cd "${WB_ROOT}" && pwd -P)" ]] && return 0
+    grep -q '__sync-continue)' "${next}" 2>/dev/null || return 0
+    printf '%s\n' "${next}"
+}
+
+# _wb_sync_modules <reason> <core-sha-before> <module>...
+# Syncs each module in the order given, isolated as workbench_sync_all
+# does, then marks the cadence. core is module zero, first in registered
+# order: when its sync brings in different code, this process stops and
+# the new release's wb syncs the rest ('wb __sync-continue'). Without that,
+# a module needing the new release's Core API would be synced by the old
+# one — its shell content refused, its layers unknown to the deploy code —
+# and never revisited, since its RESOLVED_SHA has moved.
+_wb_sync_modules() {
+    local reason="$1" before="$2" m next
+    shift 2
+    # D36: CORE_API_VERSION states what the running code provides; set it
+    # before anything is rendered against it, not only at the next apply.
+    _workbench_sync_version_facts
+    while [[ $# -gt 0 ]]; do
+        m="$1"
+        shift
+        workbench_sync_run_one "${m}" "${reason}" || true
+        [[ "${m}" == "core" ]] || continue
+        [[ "$(workbench_module_conf_get core RESOLVED_SHA "")" == "${before}" ]] && continue
+        next="$(_wb_core_next_wb)"
+        [[ -z "${next}" ]] && continue
+        log_info "wb: core updated — continuing with its new release"
+        # SC2093: replacing this process is the point — nothing after runs.
+        # shellcheck disable=SC2093
+        exec "${next}" __sync-continue "${reason}" "${before}" "$@"
+    done
+    workbench_cadence_mark_ran
+}
+
+# _wb_cmd_sync_continue <reason> <core-sha-before> <module>... — internal.
+# Run only by an older release's _wb_sync_modules, as above: finishes that
+# command — the remaining modules, then what 'wb update' (reason manual)
+# or 'wb sync run-if-due' (scheduled) does after its sync. Kept stable
+# across releases: every later release must accept these arguments.
+_wb_cmd_sync_continue() {
+    local reason="${1:-manual}" before="${2:-}"
+    shift 2 || true
+    _wb_sync_modules "${reason}" "${before}" "$@"
+    if [[ "${reason}" == "scheduled" ]]; then
+        _wb_maybe_reconverge_core "${before}" true
+    else
+        _wb_files_prompt_pending
+        _wb_maybe_reconverge_core "${before}" false
+    fi
 }
 
 # ── sync ───────────────────────────────────────────────────────────────────
@@ -557,7 +628,16 @@ _wb_cmd_sync() {
             if workbench_sync_due; then
                 local core_sha_before
                 core_sha_before="$(workbench_module_conf_get core RESOLVED_SHA "")"
-                workbench_sync_all "scheduled"
+                local -a loadable=()
+                local lm
+                while IFS= read -r lm; do
+                    [[ -n "${lm}" ]] && loadable+=("${lm}")
+                done < <(workbench_list_loadable_modules)
+                if [[ "${#loadable[@]}" -gt 0 ]]; then
+                    _wb_sync_modules "scheduled" "${core_sha_before}" "${loadable[@]}"
+                else
+                    workbench_cadence_mark_ran
+                fi
                 _wb_maybe_reconverge_core "${core_sha_before}" true
             else
                 log_debug "wb sync run-if-due: not due yet"
@@ -606,17 +686,20 @@ _wb_cmd_update() {
         [[ "${rc}" -eq 3 ]] && quit=("${staged[@]}")
     fi
     if [[ -n "${name}" ]]; then
-        [[ "${#quit[@]}" -gt 0 ]] || workbench_sync_module "${name}" "manual"
-    elif [[ "${#quit[@]}" -gt 0 ]]; then
-        # As workbench_sync_all, minus what the user just said not to touch.
+        [[ "${#quit[@]}" -gt 0 ]] || { _workbench_sync_version_facts; workbench_sync_module "${name}" "manual"; }
+    else
+        # Every loadable module, minus what the user just said not to touch.
+        local -a todo=()
         while IFS= read -r m; do
             [[ -z "${m}" ]] && continue
-            case " ${quit[*]} " in *" ${m} "*) continue ;; esac
-            workbench_sync_run_one "${m}" "manual"
+            case " ${quit[*]:-} " in *" ${m} "*) continue ;; esac
+            todo+=("${m}")
         done < <(workbench_list_loadable_modules)
-        workbench_cadence_mark_ran
-    else
-        workbench_sync_all "manual"
+        if [[ "${#todo[@]}" -gt 0 ]]; then
+            _wb_sync_modules "manual" "${core_sha_before}" "${todo[@]}"
+        else
+            workbench_cadence_mark_ran
+        fi
     fi
     # D81: from a terminal, ask about anything now waiting on the user —
     # a held link, an edited copy whose default moved. Never on non-TTY,
@@ -1641,9 +1724,31 @@ _wb_files_link_labels() {
     fi
 }
 
+# _wb_print_table [indent]
+# Reads tab-separated rows on stdin, the first one the header, and prints
+# them in columns as wide as their widest cell, two spaces apart. The last
+# column isn't padded.
+_wb_print_table() {
+    awk -F'\t' -v indent="${1:-}" '
+        {
+            rows[NR] = $0
+            for (i = 1; i <= NF; i++) {
+                if (length($i) > width[i]) width[i] = length($i)
+            }
+        }
+        END {
+            for (r = 1; r <= NR; r++) {
+                n = split(rows[r], cell, "\t")
+                out = indent
+                for (i = 1; i < n; i++) out = out sprintf("%-" width[i] "s  ", cell[i])
+                print out cell[n]
+            }
+        }'
+}
+
 _wb_cmd_files_status() {
     local module="${1:-}" m line plan policy condition action state next mode_label original star
-    local dest reason pending_any=false entry lstate
+    local dest reason pending_any=false entry lstate pending_rows="" rows layer_rows
     local -a modules=() layer_lines=()
     _wb_engine_require_files
     if [[ -n "${module}" ]]; then
@@ -1663,10 +1768,7 @@ _wb_cmd_files_status() {
         [[ -d "$(workbench_module_current_dir "${m}")" ]] || continue
         workbench_files_write_pending "${m}"
         [[ -s "$(workbench_files_pending_path "${m}")" ]] || continue
-        if [[ "${pending_any}" == "false" ]]; then
-            echo "Waiting on you:"
-            pending_any=true
-        fi
+        pending_any=true
         while IFS='|' read -r dest reason; do
             [[ -z "${dest}" ]] && continue
             case "${reason}" in
@@ -1677,17 +1779,21 @@ _wb_cmd_files_status() {
             if [[ "${dest}" == *'#'* ]]; then
                 # A layer (D82): named by its layer id.
                 line="$(_wb_files_line_for_dest "${m}" "${dest}")"
-                printf '  %-12s %-30s %-30s %s\n' "${m}" "$(_wb_files_display_path "${dest%#*}")" "${reason}" \
-                    "wb files resolve ${m} ${line%%|*} use|keep"
+                pending_rows="${pending_rows}$(printf '%s\t%s\t%s\t%s' "${m}" "$(_wb_files_display_path "${dest%#*}")" "${reason}" \
+                    "wb files resolve ${m} ${line%%|*} use|keep")"$'\n'
                 continue
             fi
-            printf '  %-12s %-30s %-30s %s\n' "${m}" "$(_wb_files_display_path "${dest}")" "${reason}" \
-                "wb files resolve ${m} $(basename "${dest%/}")"
+            pending_rows="${pending_rows}$(printf '%s\t%s\t%s\t%s' "${m}" "$(_wb_files_display_path "${dest}")" "${reason}" \
+                "wb files resolve ${m} $(basename "${dest%/}")")"$'\n'
         done < "$(workbench_files_pending_path "${m}")"
     done
-    [[ "${pending_any}" == "true" ]] && echo
+    if [[ "${pending_any}" == "true" ]]; then
+        echo "Waiting on you:"
+        printf 'MODULE\tFILE\tWHY\tTO DECIDE\n%s' "${pending_rows}" | _wb_print_table "  "
+        echo
+    fi
 
-    printf '%-12s %-30s %-10s %-9s %-28s %s\n' "MODULE" "FILE" "MODE" "POLICY" "STATE" "NEXT UPDATE"
+    rows="$(printf 'MODULE\tFILE\tMODE\tPOLICY\tSTATE\tNEXT UPDATE')"$'\n'
     for m in "${modules[@]}"; do
         [[ -d "$(workbench_module_current_dir "${m}")" ]] || continue
         while IFS= read -r line; do
@@ -1712,14 +1818,15 @@ _wb_cmd_files_status() {
             fi
             original="$(workbench_files_ledger_field "${m}" "${WB_T_DEST}" 5)"
             [[ -n "${original}" && "${original}" != "-" ]] && state="${state} (original kept)"
-            printf '%-12s %-30s %-10s %-9s %-28s %s\n' "${m}" "$(_wb_files_display_path "${WB_T_DEST}")" \
-                "${mode_label}" "${policy}${star}" "${state}" "${next}"
+            rows="${rows}$(printf '%s\t%s\t%s\t%s\t%s\t%s' "${m}" "$(_wb_files_display_path "${WB_T_DEST}")" \
+                "${mode_label}" "${policy}${star}" "${state}" "${next}")"$'\n'
         done < <(workbench_files_targets "${m}")
     done
+    printf '%s' "${rows}" | _wb_print_table
     if [[ "${#layer_lines[@]}" -gt 0 ]]; then
         echo
         echo "Layers — workbench blocks in your own config files; your settings outside a block win:"
-        printf '%-12s %-16s %-30s %-9s %-9s %s\n' "MODULE" "LAYER" "FILE" "POSITION" "POLICY" "STATE"
+        layer_rows="$(printf 'MODULE\tLAYER\tFILE\tPOSITION\tPOLICY\tSTATE')"$'\n'
         for entry in "${layer_lines[@]}"; do
             m="${entry%%|*}"
             line="${entry#*|}"
@@ -1727,9 +1834,10 @@ _wb_cmd_files_status() {
             lstate="$(workbench_layers_state "${m}" "${line}")"
             policy="$(workbench_files_policy_get "${m}" "${WB_T_BASE}")"
             if [[ -n "${policy}" ]]; then policy="${policy}*"; else policy="managed"; fi
-            printf '%-12s %-16s %-30s %-9s %-9s %s\n' "${m}" "${WB_T_BASE}" "$(_wb_files_display_path "${WB_T_DEST%#*}")" \
-                "${WB_T_DEST##*#}" "${policy}" "${lstate}"
+            layer_rows="${layer_rows}$(printf '%s\t%s\t%s\t%s\t%s\t%s' "${m}" "${WB_T_BASE}" "$(_wb_files_display_path "${WB_T_DEST%#*}")" \
+                "${WB_T_DEST##*#}" "${policy}" "${lstate}")"$'\n'
         done
+        printf '%s' "${layer_rows}" | _wb_print_table
     fi
     echo
     echo "* = a per-file policy ('wb files policy <module> <file> ...')."
@@ -3542,6 +3650,7 @@ case "${_wb_cmd}" in
     version)    _wb_cmd_version "$@" ;;
     completion) _wb_cmd_completion "$@" ;;
     __complete) _wb_cmd_complete "$@" ;;
+    __sync-continue) _wb_cmd_sync_continue "$@" ;;
     help)       _wb_cmd_help "$@" ;;
     reload)
         log_error "wb reload: this only works as a shell function, defined by lib/loader.sh — a subprocess (this one) can't reload its own parent shell. Either you're not in a shell that's sourced lib/loader.sh yet, or this host predates this wrapper (docs/decisions-log.md D39). Run 'source ~/.bashrc' (or open a new shell) once — 'wb reload' and every state-changing 'wb' command will auto-reload from then on."
