@@ -3,7 +3,8 @@
 # check. lib/manifest/validate.sh must run standalone (same precedent as
 # D30/D46), so it cannot source its denylist from lib/manifest/parse.sh — the
 # two copies are kept byte-identical by hand instead. This fails the moment
-# they drift.
+# they drift. The layer adapter list (docs/decisions-log.md D82) is duplicated
+# the same way and checked the same way.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,6 +58,23 @@ else
     fail "_WB_DEST_DENYLIST_FILES_REL has drifted between parse.sh and validate.sh"
     echo "  parse.sh:    ${PARSE_FILES}"
     echo "  validate.sh: ${VALIDATE_FILES}"
+fi
+
+PARSE_ADAPTERS="$(grep -E '^_WB_LAYER_ADAPTERS=' "${REPO_ROOT}/lib/manifest/parse.sh")"
+VALIDATE_ADAPTERS="$(grep -E '^_WB_LAYER_ADAPTERS=' "${REPO_ROOT}/lib/manifest/validate.sh")"
+
+if [[ -n "${PARSE_ADAPTERS}" && -n "${VALIDATE_ADAPTERS}" ]]; then
+    ok "parse.sh and validate.sh both declare _WB_LAYER_ADAPTERS"
+else
+    fail "_WB_LAYER_ADAPTERS missing from parse.sh or validate.sh"
+fi
+
+if [[ "${PARSE_ADAPTERS}" == "${VALIDATE_ADAPTERS}" ]]; then
+    ok "_WB_LAYER_ADAPTERS is byte-identical between parse.sh and validate.sh"
+else
+    fail "_WB_LAYER_ADAPTERS has drifted between parse.sh and validate.sh"
+    echo "  parse.sh:    ${PARSE_ADAPTERS}"
+    echo "  validate.sh: ${VALIDATE_ADAPTERS}"
 fi
 
 echo

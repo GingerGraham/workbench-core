@@ -34,6 +34,7 @@ wins** — both cite the relevant section here in their own error output.
 - [Field reference](#field-reference)
 - [`dest` validation](#dest-validation)
 - [Deploy modes, lifecycle and yield_to](#deploy-modes-lifecycle-and-yield_to)
+- [`layers`](#layers)
 - [Hook contract](#hook-contract)
 - [The compatibility boundary — what would actually be breaking](#the-compatibility-boundary)
 - [Validating your manifest](#validating-your-manifest)
@@ -403,6 +404,58 @@ The other places the same tool reads its config from:
 If any of them exists when `dest` doesn't, the user already has their own config and core leaves the entry alone. If the user later opts in to the module's version (`wb files use`), core moves those files aside — so the tool finds only one config — and `wb files restore` puts them back. Because core can move what's at these paths, each must pass the full dest validation above, denylist included.
 
 Older cores ignore `lifecycle` and `yield_to`, and keep their previous behaviour for each mode.
+
+## `layers`
+
+A module's contribution to a config file the user already owns (docs/decisions-log.md D82). Instead of delivering a whole `~/.gitconfig`, a module ships a file of its own, and core adds one marked block to the user's file that includes it — placed so the user's own settings win.
+
+```yaml
+layers:
+  - tool: gitconfig              # required: gitconfig | ssh_config | tmux.conf | vimrc
+    src: files/gitconfig         # required: a file in this module
+    position: under              # optional: under (default) | over
+    adopt: [files/legacy/x]      # optional: legacy content core removes on first apply
+```
+
+| Field | Rules |
+|---|---|
+| `tool` | One of core's adapters (below). A module names an adapter; it never names a target path. |
+| `src` | Safe relative path; must exist in the repo as a regular file, not a symlink (D75). |
+| `position` | `under` (default) — the user's content wins. `over` — the block's content wins; only for content that records the user's *own* choices made through module functions (workbench-git's per-project identities), never module opinions. |
+| `adopt` | Flow-form list of files, each a safe relative path to a regular file. Lines an older version of the module wrote into the user's file from a hook; core removes them on the layer's first apply, after backing the whole target up. |
+
+At most one entry per (`tool`, `position`). Valid in `version: 1` and `version: 2` manifests alike (D46); older cores ignore the key. Modules using it declare `core_api: ">=1.6 <2.0"`.
+
+### Adapters
+
+| Adapter | Candidate targets, in the tool's load order | Target when none exists | `under` | `over` | Validated with |
+|---|---|---|---|---|---|
+| `gitconfig` | `~/.gitconfig` only | `~/.gitconfig` | top | bottom | `git config --file <target> --includes --list` |
+| `ssh_config` | `~/.ssh/config` only | `~/.ssh/config` (600, in a 700 `~/.ssh`) | bottom, after `Match all` | top | `ssh -F <target> -G workbench-validate.invalid` |
+| `tmux.conf` | `~/.tmux.conf`, `$XDG_CONFIG_HOME/tmux/tmux.conf`, `~/.config/tmux/tmux.conf` | `~/.config/tmux/tmux.conf` if `tmux -V` ≥ 3.1, else `~/.tmux.conf` | top | bottom | — |
+| `vimrc` | `~/.vimrc`, `~/.vim/vimrc`, `$XDG_CONFIG_HOME/vim/vimrc` (or `~/.config/vim/vimrc`) | `~/.vimrc` | top | bottom | — |
+
+The target is the first candidate that exists, and stays that file once core has recorded it. `gitconfig` never targets `~/.config/git/config`: when `~/.gitconfig` is absent, `git config --global` writes into the XDG file, so the user's own settings would land inside workbench's file. git, tmux and vim keep the last value they read, so `under` goes at the top; ssh keeps the first, so its `under` block goes at the bottom.
+
+The block holds an absolute-path include of `<module>/current/<src>`, so every update flows through without rewriting it:
+
+```
+# >>> workbench git/gitconfig under >>>
+# Managed by workbench (wb files status). Put your settings outside this block.
+[include]
+	path = "/home/me/.local/share/workbench/modules/git/current/files/gitconfig"
+# <<< workbench git/gitconfig under <<<
+```
+
+`ssh_config` uses `Include "<p>"` (with `Match all` above it in an `under` block, since an `Include` after a `Host` block is scoped to that host), `tmux.conf` `source-file -q "<p>"`, `vimrc` an `if filereadable(...) | execute 'source' ... | endif` line with `"` markers. A vimrc core creates also gets vim's `defaults.vim`, which creating a vimrc would otherwise switch off. A path containing a quote, a backslash or a newline is refused.
+
+### `adopt`
+
+Raw files — no comment lines. For `gitconfig`, each line is `<key> <value>`, removed with `git config --fixed-value --unset-all` in both the `~/` and the expanded `$HOME/` form (git ≥ 2.30). For the other adapters the file is one contiguous block, removed where its lines match exactly (trailing whitespace trimmed, `~/` and `$HOME/` equal), along with one blank line directly above it. Anything that still matches afterwards is warned about and left alone.
+
+### Compatibility
+
+A core that doesn't know an adapter, or a position, skips that layer with a warning and syncs everything else, so a module can adopt a future adapter without breaking hosts on an older core. `lib/manifest/validate.sh` treats both as errors.
 
 ## Hook contract
 

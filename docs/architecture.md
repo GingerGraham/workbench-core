@@ -30,6 +30,17 @@ constraints — carried forward deliberately rather than invented fresh:
 6. **No persistent, incrementally-mutated state for ordinary use.** The default, production path for consuming any tracked content — core, an ecosystem module, or an independent tool — never leaves a live, `git pull`-updated working copy on a user's machine. Content is fetched as an immutable, atomic snapshot and swapped in whole. A persisted, incrementally-updated `git` working tree exists **only** as a deliberate, opt-in developer activity (§9.1) — never as an artifact of ordinary tracking, regardless of whether the underlying repo is public or private.
 7. **Core owns the lifecycle of every file a module causes to exist outside its own snapshot, and never discards a change it didn't make.** A module declares what it provides — `deploy[]`, `overrides_src`, and (later) `layers[]` — and core alone decides whether to write, link, back up, refresh, hold, leave, or restore each file. It records what it wrote in a per-module ledger, and records checksums for every snapshot, so it can always tell its own unedited default from the user's content — including content a tool wrote through a link. The user's file always wins unless they have said otherwise: a change core finds is kept and surfaced for a decision, never overwritten, except under an explicit `follow` or an explicit command, and both back it up first. A module never writes a user path itself, from a hook or otherwise. See docs/decisions-log.md D81.
 
+   **Delivery tiers** (docs/decisions-log.md D82). A module delivers config for a tool using the highest tier the tool supports:
+
+   | Tier | Mechanism | Example |
+   |---|---|---|
+   | 1 | Drop-in directory the tool scans; no user file touched | `~/.config/direnv/lib/` |
+   | 2 | Layer: a workbench block in the user's own file (D82) | gitconfig, ssh_config, tmux.conf, vimrc |
+   | 3 | Environment variable with a default the user can override | `LESS=${LESS:--R}` |
+   | 4 | Whole file (`deploy`), D81 lifecycle | `starship.toml`, `direnv.toml` |
+
+   Tier 1 loads after the user's config, so only use it where the module winning is acceptable.
+
 ---
 
 ## 2. Repo topology

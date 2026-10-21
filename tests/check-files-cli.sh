@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # tests/check-files-cli.sh — D81: the 'wb files' command group, '--use-files'
 # on 'wb add', 'wb remove --restore', and 'wb module reset' as an alias of
-# 'wb files use' — all driven through bin/wb as a subprocess, stdin piped
+# 'wb files use'; D82: layers by id, 'wb files settle', '--skip-layer' — all
+# driven through bin/wb as a subprocess, stdin piped
 # (never a terminal), against local bare-repo fixture modules.
 #
 # SC2088: '~/...' is quoted on purpose — the CLI accepts the literal
@@ -247,6 +248,80 @@ wb files policy --default follow --yes </dev/null
 [[ "${rc}" -eq 0 ]] && grep -qx 'DEFAULT_POLICY=follow' "${XDG_DATA_HOME}/workbench/files.conf" \
     && ok "policy --default follow --yes writes files.conf" || { fail "policy --default (rc ${rc})"; cat "${OUT}"; }
 wb files policy --default managed --yes </dev/null
+
+# ── layers (docs/decisions-log.md D82): status, diff, policy, settle, use,
+#    restore by layer id; wb add --skip-layer ────────────────────────────────
+LM="${WORK}/cli-layers"
+new_repo "${LM}"
+mkdir -p "${LM}/src/files"
+printf 'set -g mouse on\n' > "${LM}/src/files/tmux.conf"
+printf 'set number\n' > "${LM}/src/files/vimrc"
+cat > "${LM}/src/workbench.yml" <<'EOF'
+version: 2
+core_api: ">=1.6 <2.0"
+layers:
+  - tool: tmux.conf
+    src: files/tmux.conf
+  - tool: vimrc
+    src: files/vimrc
+EOF
+release "${LM}" v1.0.0
+rm -rf "${HOME}/.tmux.conf" "${HOME}/.config/tmux" "${HOME}/.vimrc" "${HOME}/.vim"
+printf 'set -g mouse off\n' > "${HOME}/.tmux.conf"
+printf 'set nonumber\n' > "${HOME}/.vimrc"
+
+wb add cli-layers "${LM}/m.git" --private --skip-layer nope </dev/null
+[[ "${rc}" -eq 2 && ! -d "${MODULES}/cli-layers" ]] \
+    && ok "add --skip-layer with an unknown layer id: usage error, nothing registered" || { fail "--skip-layer nope (rc ${rc})"; cat "${OUT}"; }
+wb add cli-layers "${LM}/m.git" --private --skip-layer vimrc </dev/null
+[[ "${rc}" -eq 0 && "$(head -n 1 "${HOME}/.tmux.conf")" == "# >>> workbench cli-layers/tmux.conf under >>>" \
+    && "$(cat "${HOME}/.vimrc")" == "set nonumber" ]] \
+    && ok "add --skip-layer vimrc: tmux layered, vimrc never touched" || { fail "add --skip-layer (rc ${rc})"; cat "${OUT}"; }
+
+wb files status cli-layers
+[[ "${rc}" -eq 0 ]] && grep -Eq 'cli-layers +tmux.conf +~/.tmux.conf +under +managed +active' "${OUT}" \
+    && grep -Eq 'cli-layers +vimrc +~/.vimrc +under +skip\* +skipped' "${OUT}" \
+    && ok "files status lists layers: id, target, position, policy, state" || { fail "files status layers (rc ${rc})"; cat "${OUT}"; }
+
+wb files diff cli-layers tmux.conf
+[[ "${rc}" -eq 0 ]] && grep -q "block is as workbench wrote it" "${OUT}" \
+    && ok "files diff <module> <layer-id>: the block matches" || { fail "files diff layer (rc ${rc})"; cat "${OUT}"; }
+
+wb files policy cli-layers tmux.conf seed --yes </dev/null
+[[ "${rc}" -ne 0 ]] && grep -q "doesn't apply to a layer" "${OUT}" \
+    && ok "files policy <layer> seed is refused" || { fail "policy seed on a layer (rc ${rc})"; cat "${OUT}"; }
+wb files policy cli-layers vimrc default --yes </dev/null
+[[ "${rc}" -eq 0 && "$(head -n 1 "${HOME}/.vimrc")" == '" >>> workbench cli-layers/vimrc under >>>' ]] \
+    && grep -qx 'set nonumber' "${HOME}/.vimrc" \
+    && ok "files policy <layer> default: the skipped layer is added now" || { fail "policy default layer (rc ${rc})"; cat "${OUT}"; }
+
+printf 'set -g status off\n' >> "${HOME}/.tmux.conf"
+printf 'set -g prefix C-a\n' | cat - "${HOME}/.tmux.conf" > "${WORK}/tm" && cat "${WORK}/tm" > "${HOME}/.tmux.conf"
+wb files settle cli-layers
+[[ "${rc}" -eq 0 && "$(head -n 1 "${HOME}/.tmux.conf")" == "# >>> workbench cli-layers/tmux.conf under >>>" ]] \
+    && grep -qx 'set -g prefix C-a' "${HOME}/.tmux.conf" \
+    && ok "files settle: the block is moved back to the top, your lines kept" || { fail "settle (rc ${rc})"; cat "${HOME}/.tmux.conf"; }
+wb files settle cli-layers extra
+[[ "${rc}" -eq 2 ]] && ok "files settle takes at most one module" || fail "settle extra args rc ${rc}"
+
+cp "${HOME}/.tmux.conf" "${WORK}/tmux-before-use"
+wb files use cli-layers tmux.conf </dev/null
+[[ "${rc}" -eq 1 ]] && cmp -s "${HOME}/.tmux.conf" "${WORK}/tmux-before-use" \
+    && ok "files use <layer> without a terminal or --yes: refused, nothing changed" || { fail "use layer no tty (rc ${rc})"; cat "${OUT}"; }
+wb files use cli-layers tmux.conf --yes </dev/null
+[[ "${rc}" -eq 0 ]] && ! grep -q 'mouse off' "${HOME}/.tmux.conf" && grep -q 'back up yours' "${OUT}" \
+    && ok "files use <layer> --yes: preview, then only workbench's block" || { fail "use layer (rc ${rc})"; cat "${OUT}"; }
+wb files restore cli-layers tmux.conf --yes </dev/null
+# Your file as it was before 'use', without workbench's block: restore
+# takes the block out as well as putting your content back.
+grep -v -e '^# >>> workbench' -e '^# Managed by workbench' -e '^source-file -q' -e '^# <<< workbench' \
+    "${WORK}/tmux-before-use" > "${WORK}/tmux-yours"
+[[ "${rc}" -eq 0 ]] && cmp -s "${HOME}/.tmux.conf" "${WORK}/tmux-yours" \
+    && ok "files restore <layer> after use: your lines back, workbench's block gone" || { fail "restore layer (rc ${rc})"; cat "${OUT}"; diff "${HOME}/.tmux.conf" "${WORK}/tmux-yours"; }
+
+wb remove cli-layers --restore --yes </dev/null
+[[ "${rc}" -eq 0 && "$(cat "${HOME}/.vimrc")" == "set nonumber" ]] \
+    && ok "remove --restore: every block removed, your files as they were" || { fail "remove --restore layers (rc ${rc})"; cat "${OUT}"; cat "${HOME}/.vimrc"; }
 
 # ── usage errors ────────────────────────────────────────────────────────────
 wb files

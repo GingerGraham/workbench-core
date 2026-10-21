@@ -12,6 +12,7 @@ and shell loader.
 - [Registering shell content](#registering-shell-content)
 - [Shipping overridable defaults (`overrides_src`)](#shipping-overridable-defaults-overrides_src)
 - [What core does with your files](#what-core-does-with-your-files)
+- [Layering config into a tool the user already uses](#layering-config-into-a-tool-the-user-already-uses)
 - [Declaring installers (`wb tools`)](#declaring-installers-wb-tools)
 - [Declaring function availability (optional but recommended)](#declaring-function-availability-optional-but-recommended)
 - [Publishing module info & docs (optional but recommended)](#publishing-module-info--docs-optional-but-recommended)
@@ -199,7 +200,40 @@ For each `deploy[]` entry:
 - If the tool reads its config from more than one place, list the others in `yield_to`, so a user who already has one isn't given a second — and so `wb files use` can move theirs aside cleanly when they opt in to yours.
 - Linked modes (`link`, `link_tree`) follow every release. If the tool writes into what you link (a lock file, a cache), each such write holds the entry at its current version until the user decides. Prefer copy mode for a config directory the tool writes into.
 
-Never write outside your own snapshot from a hook. If a hook would need to — appending an `Include`, setting a global git value — that's a gap in core; raise it rather than working around it. (Phase 2 adds `layers[]` for exactly these cases and enforces this rule in CI.)
+Never write outside your own snapshot from a hook. If a hook would need to — appending an `Include`, setting a global git value — declare a layer instead (next section). If neither a layer nor a `deploy` entry fits, that's a gap in core; raise it rather than working around it.
+
+## Layering config into a tool the user already uses
+
+Git, ssh, tmux and vim are tools most users already configure. For those, don't ship a whole file: ship your settings as a file in your module and declare a **layer** (`docs/decisions-log.md` D82). Core adds one marked block to the user's own file that includes yours, placed so anything the user sets outside the block wins. Your updates flow through without holds or prompts, and removing the block undoes everything.
+
+Use a layer when the tool can include another file and the user very likely has their own config already. Use a `deploy` entry for a tool that can't include (starship, direnv's `direnv.toml`), or for a file only your module uses.
+
+```yaml
+core_api: ">=1.6 <2.0"
+layers:
+  - tool: gitconfig
+    src: files/gitconfig
+```
+
+```ini
+# files/gitconfig
+[init]
+	defaultBranch = main
+[push]
+	autoSetupRemote = true
+```
+
+On a host whose `~/.gitconfig` sets `init.defaultBranch = trunk`, that stays `trunk`; `push.autoSetupRemote` becomes `true` because the user set nothing for it. `contracts/manifest-spec.md` §layers lists the four adapters (`gitconfig`, `ssh_config`, `tmux.conf`, `vimrc`) and where each puts its block.
+
+Rules:
+
+- **`under` or `over`.** Leave `position` unset (`under`) for your opinions — the user's settings win. Use `over` only for content that records the user's *own* choices made through your module's functions, which has to win over their global settings (workbench-git's per-project identities, created by `git-add-project`). Never use `over` to make a module opinion stick.
+- **Your layer file is replaced on every update.** Never tell users to edit it. Tell them to put their settings in their own file, outside the block, or to opt out: `wb files policy <module> <layer> skip`.
+- **Never write the user's config file from a hook or a registered shell file.** Core owns the file; you own only what the block includes. A module function that has to write there (`git config --global user.email ...`, from a function the user runs) calls `_wb_layers_settle <module>` afterwards, so core can put any block that has to stay last back at the end.
+- **Migrating away from hook-written lines: `adopt`.** If an older version of your module's hook appended lines to the user's file, list them in a raw file and name it in `adopt: [files/legacy/<name>]`. On the layer's first apply, core backs the whole file up, removes those lines, and warns about anything that didn't match exactly. For `gitconfig`, each line is `<key> <value>`; for the others, the file is the exact block your hook wrote.
+- **The include path is absolute** and points through your module's `current` snapshot, so the block itself never changes across releases.
+
+Users see and control layers with `wb files status`, `wb files diff`, `wb files use` (only workbench's block, theirs backed up), `wb files restore`, and `wb add <module> --skip-layer <id>`.
 
 ## Declaring installers (`wb tools`)
 
@@ -583,8 +617,18 @@ against an in-flight core PR branch before it merges.
 If the shared "add to core" check can't verify something specific to your
 module (e.g. a side effect your `post_deploy` hook is supposed to have),
 add an executable `tests/check-add-to-core.sh` to your repo — the shared
-check runs it as an extra step if present, with `WB` and `MODULE_NAME`
-already exported.
+check runs it as an extra step if present, with `WB`, `MODULE_NAME`,
+`MODULE_URL`, `MODULE_BRANCH` and `MODULE_ROOT` exported. It runs inside a
+`HOME` where your module is already added. A test that needs a host seeded
+*before* `wb add` — a user's own `~/.gitconfig`, to prove your layer leaves
+it intact — creates its own scratch `HOME`/`XDG_CONFIG_HOME`/`XDG_DATA_HOME`,
+seeds it, then runs the same sequence as the shared check:
+
+```bash
+"$WB" add "$MODULE_NAME" "$MODULE_URL"
+"$WB" track "$MODULE_NAME" --branch "$MODULE_BRANCH"
+"$WB" update "$MODULE_NAME"
+```
 
 Commit messages are gated by a second thin workflow,
 `.github/workflows/pr-check.yml` (`uses:

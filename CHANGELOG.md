@@ -4,6 +4,30 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Config layers** (D82). A module can now contribute to a config file
+  you already own instead of shipping a whole one: manifest `layers:`
+  names a core-owned adapter — `gitconfig`, `ssh_config`, `tmux.conf`,
+  `vimrc` — and core adds one marked block to your `~/.gitconfig`,
+  `~/.ssh/config`, tmux.conf or vimrc that includes the module's file.
+  Your own settings outside the block always win; module updates flow
+  through without holds or prompts; removing the block undoes everything.
+  Core relocates lines a tool writes inside its block, puts a block back
+  in place when something is appended after one that must stay last,
+  never re-adds a block you deleted, asks before writing through a
+  symlinked file (stow, chezmoi), and validates git and ssh config before
+  and after each write, rolling back if it broke a valid file. A D81 copy
+  of a module's file at a layer's target becomes a layer automatically.
+- **`wb files settle [<module>]`** and **`wb add … --skip-layer <id>`**;
+  `wb files status|diff|use|restore|policy|resolve` cover layers by id.
+- **Core API 1.6**: `_wb_layers_settle <module>` and
+  `_wb_prompt_hook_registered <function>`.
+- Module CI's pattern scan flags gitconfig directives that run commands
+  (`fsmonitor`, `sshCommand`, `hooksPath`, `!` credential helpers, filter
+  `clean`/`smudge`/`process`), and a module's own `tests/check-add-to-core.sh`
+  now also gets `MODULE_URL`, `MODULE_BRANCH` and `MODULE_ROOT`.
+
 ## [2.17.0] - 2026-10-21
 
 ### Added

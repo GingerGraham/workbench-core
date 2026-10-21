@@ -202,6 +202,27 @@ When something needs your decision, a new shell says so in one line. `wb files s
     manage  — keep my changes, keep updating everything else
     use     — take the module's version (mine is backed up)
 
+### Workbench blocks in your own config files
+
+For git, ssh, tmux and vim, a module doesn't replace your file. It adds one marked block to it — `~/.gitconfig`, `~/.ssh/config`, your tmux.conf, your vimrc — that includes the module's settings:
+
+```
+# >>> workbench git/gitconfig under >>>
+# Managed by workbench (wb files status). Put your settings outside this block.
+[include]
+	path = "/home/you/.local/share/workbench/modules/git/current/files/gitconfig"
+# <<< workbench git/gitconfig under <<<
+```
+
+Anything you set outside the block wins: the block sits where the tool reads it first (git, tmux, vim) or last (ssh). The module's settings update with the module, with nothing to approve. Keep your own settings outside the block — workbench rewrites what's inside it. Delete the block's two marker lines and it never comes back. `wb files status` lists every block under "Layers".
+
+    wb files policy <module> <layer> skip     # remove the block, stop adding it
+    wb add <module> --skip-layer <layer>      # never add it in the first place
+    wb files use <module> <layer>             # back up your file, keep only workbench's block
+    wb files restore <module> <layer>         # remove the block (and put back what 'use' backed up)
+
+`<layer>` is the tool's name — `gitconfig`, `ssh_config`, `tmux.conf`, `vimrc` — or `<tool>:over` for the few blocks placed to win, such as workbench-git's per-project identities.
+
 ## Using a module's versions instead of your own
 
 To switch to a module's version of a file you already have:

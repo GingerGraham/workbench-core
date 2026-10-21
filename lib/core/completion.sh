@@ -96,8 +96,31 @@ _wb_cmd_complete() {
         catalog-modules)    _wb_require modules/catalog.sh; workbench_catalog_list_modules ;;
         catalog-bundles)    _wb_require modules/catalog.sh; workbench_catalog_list_bundles ;;
         tools)              workbench_tools_collect 2>/dev/null | cut -d'|' -f4 ;;
+        layer-ids)          _wb_complete_layer_ids "${2:-}" ;;
         *)                  return 1 ;;
     esac
+}
+
+# _wb_complete_layer_ids [<module>]
+# 'wb add <module> --skip-layer <TAB>' (docs/decisions-log.md D82): the
+# module's own layer ids when it has a synced snapshot here, otherwise
+# every id a layer can have — before 'wb add', its manifest isn't on disk.
+_wb_complete_layer_ids() {
+    local module="$1" current_dir manifest tool position
+    if [[ -n "${module}" ]] && workbench_valid_module_name "${module}" 2>/dev/null; then
+        current_dir="$(workbench_module_current_dir "${module}")"
+        manifest="$(workbench_resolve_manifest_path "${current_dir}" 2>/dev/null)"
+        if [[ -n "${manifest}" ]]; then
+            while IFS='|' read -r tool _ position _; do
+                [[ -z "${tool}" ]] && continue
+                if [[ "${position}" == "over" ]]; then printf '%s:over\n' "${tool}"; else printf '%s\n' "${tool}"; fi
+            done < <(workbench_manifest_layer_entries "${manifest}")
+            return 0
+        fi
+    fi
+    for tool in ${_WB_LAYER_ADAPTERS}; do
+        printf '%s\n%s:over\n' "${tool}" "${tool}"
+    done
 }
 
 # _wb_completion_generate_bash
@@ -139,7 +162,11 @@ _wb_completions() {
 
     case "\${cmd}" in
         add)
-            [[ \${COMP_CWORD} -eq 2 ]] && COMPREPLY=( \$(compgen -W "\$(wb __complete catalog-modules 2>/dev/null)" -- "\${cur}") )
+            if [[ \${COMP_CWORD} -eq 2 ]]; then
+                COMPREPLY=( \$(compgen -W "\$(wb __complete catalog-modules 2>/dev/null)" -- "\${cur}") )
+            elif [[ "\${COMP_WORDS[COMP_CWORD-1]}" == "--skip-layer" ]]; then
+                COMPREPLY=( \$(compgen -W "\$(wb __complete layer-ids "\${COMP_WORDS[2]}" 2>/dev/null)" -- "\${cur}") )
+            fi
             ;;
         remove|track|dev|update)
             [[ \${COMP_CWORD} -eq 2 ]] && COMPREPLY=( \$(compgen -W "\$(wb __complete registered-modules 2>/dev/null)" -- "\${cur}") )
@@ -223,6 +250,10 @@ _wb_completions() {
                 local -a _wb_catalog_mods
                 _wb_catalog_mods=(\${(f)"\$(wb __complete catalog-modules 2>/dev/null)"})
                 _describe 'module' _wb_catalog_mods
+            elif [[ "\${words[CURRENT-1]}" == "--skip-layer" ]]; then
+                local -a _wb_layer_ids
+                _wb_layer_ids=(\${(f)"\$(wb __complete layer-ids "\${words[3]}" 2>/dev/null)"})
+                _describe 'layer' _wb_layer_ids
             fi
             ;;
         remove|track|dev|update)

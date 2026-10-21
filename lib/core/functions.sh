@@ -707,3 +707,31 @@ get-functions() {
         return 1
     fi
 }
+
+# ── Config layers and shell hooks (Core API 1.6) ─────────────────────────
+
+# _wb_layers_settle <module>
+# Re-places that module's workbench blocks after a module function has
+# written to one of their target files (docs/decisions-log.md D82). Call it
+# after `git config --global ...` or any other write to a layered file.
+# Shells out to the real binary, like get-functions does — the interactive
+# shell doesn't load lib/files/.
+_wb_layers_settle() {
+    [[ -n "${1:-}" ]] || return 0
+    command wb files settle "$1" >/dev/null 2>&1 || true
+}
+
+# _wb_prompt_hook_registered <function-name>
+# True when <function-name> is already hooked into the prompt cycle —
+# bash PROMPT_COMMAND (scalar or array), zsh precmd_functions. Lets a
+# module install a tool's shell hook (direnv, etc.) only when nothing else
+# has, without duplicating it (docs/decisions-log.md D83).
+_wb_prompt_hook_registered() {
+    local fn="$1"
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+        # shellcheck disable=SC2154  # zsh's own array
+        [[ " ${precmd_functions[*]:-} " == *" ${fn} "* ]]
+    else
+        [[ "${PROMPT_COMMAND[*]:-}" == *"${fn}"* ]]
+    fi
+}

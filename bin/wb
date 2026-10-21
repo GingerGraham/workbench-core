@@ -141,7 +141,7 @@ SETUP & HOST-LEVEL CONVERGENCE
                                per-module layer underneath it.
 
 MANAGING MODULES
-  add <name> [url] [--private] [--allow-hooks] [--use-files [--follow]]
+  add <name> [url] [--private] [--allow-hooks] [--use-files [--follow]] [--skip-layer <id>]
                                Register + immediately sync a new module.
   remove <name> [--restore]    Deregister (content on disk is left alone,
                                unless --restore puts back what it replaced).
@@ -160,7 +160,7 @@ MANAGING MODULES
                                CLI's own usage text.
 
 YOUR CONFIG FILES
-  files status|diff|use|resolve|policy|restore
+  files status|diff|use|resolve|policy|restore|settle
                                See and decide what happens to every file a
                                module deploys: which are yours, which follow
                                the module, what's waiting on you. Workbench
@@ -1465,6 +1465,17 @@ _wb_files_module_changed_count() {
 _wb_files_preview_use() {
     local module="$1" line="$2" real state original path
     _wb_files_target_fields "${line}"
+    if [[ "${WB_T_MODE}" == "layer" ]]; then
+        printf '  %s: only workbench'"'"'s block (%s/%s)\n' "$(_wb_files_display_path "${WB_T_DEST%#*}")" "${module}" "${WB_T_BASE}"
+        if workbench_layers_target_is_users "${line}"; then
+            if [[ -L "$(_wb_expand_dest "${WB_T_DEST%#*}")" ]]; then
+                printf '      back up the file your symlink points to, then write through the link\n'
+            else
+                printf '      back up yours (restore puts it back)\n'
+            fi
+        fi
+        return 0
+    fi
     real="$(_wb_expand_dest "${WB_T_DEST%/}")"
     state="$(workbench_files_ledger_field "${module}" "${WB_T_DEST}" 3)"
     original="$(workbench_files_ledger_field "${module}" "${WB_T_DEST}" 5)"
@@ -1588,8 +1599,8 @@ _wb_files_link_labels() {
 
 _wb_cmd_files_status() {
     local module="${1:-}" m line plan policy condition action state next mode_label original star
-    local dest reason pending_any=false
-    local -a modules=()
+    local dest reason pending_any=false entry lstate
+    local -a modules=() layer_lines=()
     _wb_engine_require_files
     if [[ -n "${module}" ]]; then
         _wb_files_require_module "wb files status" "${module}" synced || return $?
@@ -1615,9 +1626,17 @@ _wb_cmd_files_status() {
         while IFS='|' read -r dest reason; do
             [[ -z "${dest}" ]] && continue
             case "${reason}" in
-                held)  reason="changed locally; update held" ;;
-                moved) reason="your edits; default changed" ;;
+                held)   reason="changed locally; update held" ;;
+                moved)  reason="your edits; default changed" ;;
+                linked) reason="a symlink you manage" ;;
             esac
+            if [[ "${dest}" == *'#'* ]]; then
+                # A layer (D82): named by its layer id.
+                line="$(_wb_files_line_for_dest "${m}" "${dest}")"
+                printf '  %-12s %-30s %-30s %s\n' "${m}" "$(_wb_files_display_path "${dest%#*}")" "${reason}" \
+                    "wb files resolve ${m} ${line%%|*} use|keep"
+                continue
+            fi
             printf '  %-12s %-30s %-30s %s\n' "${m}" "$(_wb_files_display_path "${dest}")" "${reason}" \
                 "wb files resolve ${m} $(basename "${dest%/}")"
         done < "$(workbench_files_pending_path "${m}")"
@@ -1630,6 +1649,10 @@ _wb_cmd_files_status() {
         while IFS= read -r line; do
             [[ -z "${line}" ]] && continue
             _wb_files_target_fields "${line}"
+            if [[ "${WB_T_MODE}" == "layer" ]]; then
+                layer_lines+=("${m}|${line}")
+                continue
+            fi
             star=""
             [[ -n "$(workbench_files_policy_get "${m}" "${WB_T_DEST}")" ]] && star="*"
             if [[ "${WB_T_MODE}" == "copy" ]]; then
@@ -1649,6 +1672,21 @@ _wb_cmd_files_status() {
                 "${mode_label}" "${policy}${star}" "${state}" "${next}"
         done < <(workbench_files_targets "${m}")
     done
+    if [[ "${#layer_lines[@]}" -gt 0 ]]; then
+        echo
+        echo "Layers — workbench blocks in your own config files; your settings outside a block win:"
+        printf '%-12s %-16s %-30s %-9s %-9s %s\n' "MODULE" "LAYER" "FILE" "POSITION" "POLICY" "STATE"
+        for entry in "${layer_lines[@]}"; do
+            m="${entry%%|*}"
+            line="${entry#*|}"
+            _wb_files_target_fields "${line}"
+            lstate="$(workbench_layers_state "${m}" "${line}")"
+            policy="$(workbench_files_policy_get "${m}" "${WB_T_BASE}")"
+            if [[ -n "${policy}" ]]; then policy="${policy}*"; else policy="managed"; fi
+            printf '%-12s %-16s %-30s %-9s %-9s %s\n' "${m}" "${WB_T_BASE}" "$(_wb_files_display_path "${WB_T_DEST%#*}")" \
+                "${WB_T_DEST##*#}" "${policy}" "${lstate}"
+        done
+    fi
     echo
     echo "* = a per-file policy ('wb files policy <module> <file> ...')."
     echo "Host default: $(workbench_files_default_policy) — change it with 'wb files policy --default managed|follow'."
@@ -1660,6 +1698,10 @@ _wb_cmd_files_status() {
 _wb_files_diff_line() {
     local module="$1" line="$2" real state pin left right
     _wb_files_target_fields "${line}"
+    if [[ "${WB_T_MODE}" == "layer" ]]; then
+        workbench_layers_diff "${module}" "${line}"
+        return 0
+    fi
     real="$(_wb_expand_dest "${WB_T_DEST%/}")"
     state="$(workbench_files_ledger_field "${module}" "${WB_T_DEST}" 3)"
     if [[ "${WB_T_MODE}" == "copy" ]]; then
@@ -1752,6 +1794,10 @@ _wb_cmd_files_use() {
 _wb_files_wait_kind() {
     local module="$1" line="$2" state
     _wb_files_target_fields "${line}"
+    if [[ "${WB_T_MODE}" == "layer" ]]; then
+        if [[ "$(workbench_layers_state "${module}" "${line}")" == "linked" ]]; then printf 'layer\n'; else printf 'none\n'; fi
+        return 0
+    fi
     state="$(workbench_files_ledger_field "${module}" "${WB_T_DEST}" 3)"
     if [[ "${state}" == "held" ]]; then
         printf 'held\n'
@@ -1770,6 +1816,8 @@ _wb_files_choice_text() {
     local module="$1" choice="$2" wait="$3"
     case "${choice}:${wait}" in
         keep:moved)   printf 'stays yours; no further notices\n' ;;
+        keep:layer)   printf 'left alone; the layer is skipped\n' ;;
+        use:layer)    printf "write %s's block through the symlink\n" "${module}" ;;
         keep:*)       printf 'becomes your own copy; no more updates\n' ;;
         manage:moved) printf "keep yours; you'll hear again when the default changes\n" ;;
         manage:*)     printf 'your changes stay yours; everything else keeps following %s\n' "${module}" ;;
@@ -1812,6 +1860,31 @@ _wb_files_resolve_interactive() {
             ;;
         linked)
             echo "  Linked to ${module}; nothing is waiting — you can choose ahead of a change."
+            ;;
+        layer)
+            echo "  A symlink you manage (stow, chezmoi, yadm...). ${module} would add its ${WB_T_BASE} block to the file it points to."
+            while true; do
+                echo
+                echo "  [u]se   — add the block, writing through the link (the link stays)"
+                echo "  [k]eep  — leave it alone; skip this layer"
+                echo "  [d]iff  — show the block, then ask again"
+                echo "  [l]ater — decide later"
+                printf '  Choice [u/k/d/l]: '
+                if ! read -r answer; then
+                    echo
+                    answer="l"
+                fi
+                case "${answer}" in
+                    u|U|use)      choice="use" ;;
+                    k|K|keep)     choice="keep" ;;
+                    d|D|diff)     _wb_files_diff_line "${module}" "${line}"; continue ;;
+                    l|L|later|"") echo "  Left as it is."; return 0 ;;
+                    *)            echo "  Please answer u, k, d or l."; continue ;;
+                esac
+                break
+            done
+            _wb_files_resolve_one "${module}" "${line}" "${choice}" false
+            return $?
             ;;
     esac
     while true; do
@@ -1998,6 +2071,7 @@ _wb_files_policy_set_default() {
         while IFS= read -r line; do
             [[ -z "${line}" ]] && continue
             _wb_files_target_fields "${line}"
+            [[ "${WB_T_MODE}" == "layer" ]] && continue
             [[ -n "$(workbench_files_policy_get "${m}" "${WB_T_DEST}")" ]] && continue
             if [[ "${WB_T_MODE}" == "copy" ]]; then
                 [[ "${WB_T_LIFECYCLE}" == "managed" ]] || continue
@@ -2077,6 +2151,10 @@ _wb_files_policy_set_one() {
     _wb_files_require_module "wb files policy" "${module}" synced || return $?
     line="$(_wb_files_resolve_target "${module}" "${file}" "wb files policy")" || return 1
     _wb_files_target_fields "${line}"
+    if [[ "${WB_T_MODE}" == "layer" ]]; then
+        _wb_files_policy_set_layer "${module}" "${line}" "${policy}"
+        return $?
+    fi
     real="$(_wb_expand_dest "${WB_T_DEST%/}")"
     previous="$(workbench_files_policy_get "${module}" "${WB_T_DEST}")"
     [[ -z "${previous}" ]] && previous="default"
@@ -2145,6 +2223,33 @@ _wb_files_policy_set_one() {
     return "${failed}"
 }
 
+# _wb_files_policy_set_layer <module> <target-line> <skip|managed|default>
+# A layer's policy is keyed by its layer id (D82) and takes effect now:
+# skip removes the block; managed or default writes it again — clearing
+# what an earlier skip or restore left in the ledger, but never a block the
+# user edited.
+_wb_files_policy_set_layer() {
+    local module="$1" line="$2" policy="$3" state
+    _wb_files_target_fields "${line}"
+    case "${policy}" in
+        skip|managed|default) ;;
+        *)
+            log_error "wb files policy: '${policy}' doesn't apply to a layer — skip, managed or default (your own settings outside the block always win)"
+            return 1 ;;
+    esac
+    workbench_files_policy_set "${module}" "${WB_T_BASE}" "${policy}" || return 1
+    state="$(workbench_files_ledger_field "${module}" "${WB_T_DEST}" 3)"
+    if [[ "${policy}" != "skip" && ( "${state}" == "user" || "${state}" == "restored" ) ]]; then
+        _wb_layers_fields "${line}"
+        if ! grep -qxF "$(workbench_layers_marker_start "${module}" "${WB_L_TOOL}" "${WB_L_POSITION}")" "${WB_L_REAL}" 2>/dev/null; then
+            workbench_files_ledger_delete "${module}" "${WB_T_DEST}"
+        fi
+    fi
+    workbench_layers_apply "${module}" "${WB_T_BASE}" "${line}" || return 1
+    workbench_files_write_pending "${module}"
+    log_info "wb files policy: ${module} ${WB_T_BASE} is now '${policy}'"
+}
+
 _wb_cmd_files_policy() {
     local yes=false default_value=""
     local -a positional=()
@@ -2195,9 +2300,19 @@ _wb_cmd_files_policy() {
 # ── wb files restore ────────────────────────────────────────────────────────
 
 _wb_files_preview_restore() {
-    local module="$1" dest="$2" row state sha original real o p b
+    local module="$1" dest="$2" row kind state sha original real o p b
     row="$(workbench_files_ledger_get "${module}" "${dest}")"
-    IFS='|' read -r _ _ state sha original _ _ <<< "${row}"
+    IFS='|' read -r _ kind state sha original _ _ <<< "${row}"
+    if [[ "${kind}" == "layer" ]]; then
+        printf '  %s:\n' "$(_wb_files_display_path "${dest%#*}")"
+        printf '      remove workbench'"'"'s %s block (your settings stay)\n' "${dest##*#}"
+        if [[ "${original}" == "+created" ]]; then
+            printf '      remove the file if nothing else is left in it (workbench created it)\n'
+        elif [[ -n "${original}" && "${original}" != "-" ]]; then
+            printf '      put back your original from %s\n' "${original}"
+        fi
+        return 0
+    fi
     real="$(_wb_expand_dest "${dest%/}")"
     printf '  %s:\n' "$(_wb_files_display_path "${dest}")"
     [[ "${state}" == "held" ]] && printf '      back up your held changes first\n'
@@ -2325,6 +2440,10 @@ _wb_files_use_candidates() {
         [[ -z "${line}" ]] && continue
         _wb_files_target_fields "${line}"
         [[ "${WB_T_KIND}" == "overrides" ]] && continue
+        if [[ "${WB_T_MODE}" == "layer" ]]; then
+            workbench_layers_target_is_users "${line}" && printf '%s\n' "${line}"
+            continue
+        fi
         real="$(_wb_expand_dest "${WB_T_DEST%/}")"
         if [[ -n "$(_wb_files_existing_yields "${WB_T_YIELD}")" ]]; then
             printf '%s\n' "${line}"
@@ -2357,6 +2476,11 @@ _wb_files_use_at_install() {
             [[ -z "${dest}" ]] && continue
             workbench_files_ledger_delete "${m}" "${dest}"
             [[ "$(workbench_files_policy_get "${m}" "${dest}")" == "skip" ]] && workbench_files_policy_set "${m}" "${dest}" default
+            # A layer's policy is keyed by its layer id (D82).
+            line="$(_wb_files_line_for_dest "${m}" "${dest}")"
+            if [[ "${dest}" == *'#'* && -n "${line}" && "$(workbench_files_policy_get "${m}" "${line%%|*}")" == "skip" ]]; then
+                workbench_files_policy_set "${m}" "${line%%|*}" default
+            fi
         done < <(workbench_files_ledger_rows "${m}" | awk -F'|' '$3 == "restored" { print $1 }')
         while IFS= read -r line; do
             [[ -z "${line}" ]] && continue
@@ -2415,6 +2539,34 @@ _wb_files_pending_total() {
     printf '%s\n' "${total}"
 }
 
+# ── wb files settle ─────────────────────────────────────────────────────────
+
+# _wb_cmd_files_settle [<module>]
+# Puts workbench blocks back in position after something wrote to their
+# files (docs/decisions-log.md D82, Core API _wb_layers_settle). Moves
+# blocks only: no fetch, no other writes.
+_wb_cmd_files_settle() {
+    local module="${1:-}" m failed=0
+    local -a modules=()
+    if [[ $# -gt 1 ]]; then
+        log_error "wb files settle: usage: wb files settle [<module>]"
+        return 2
+    fi
+    _wb_engine_require_files
+    if [[ -n "${module}" ]]; then
+        _wb_files_require_module "wb files settle" "${module}" synced || return $?
+        modules=("${module}")
+    else
+        while IFS= read -r m; do
+            [[ -n "${m}" && -d "$(workbench_module_current_dir "${m}")" ]] && modules+=("${m}")
+        done < <(workbench_list_registered_modules)
+    fi
+    for m in ${modules[@]+"${modules[@]}"}; do
+        workbench_layers_settle "${m}" || failed=1
+    done
+    return "${failed}"
+}
+
 _wb_cmd_files() {
     local sub="${1:-}"
     [[ $# -gt 0 ]] && shift
@@ -2425,8 +2577,9 @@ _wb_cmd_files() {
         resolve) _wb_cmd_files_resolve "$@" ;;
         policy)  _wb_cmd_files_policy "$@" ;;
         restore) _wb_cmd_files_restore "$@" ;;
+        settle)  _wb_cmd_files_settle "$@" ;;
         *)
-            log_error "wb files: usage: wb files status|diff|use|resolve|policy|restore ... — see 'wb help files'"
+            log_error "wb files: usage: wb files status|diff|use|resolve|policy|restore|settle ... — see 'wb help files'"
             return 2
             ;;
     esac
@@ -2554,7 +2707,7 @@ EOF
 
 _wb_help_add() {
     cat <<'EOF'
-Usage: wb add <name> [url] [--private] [--allow-hooks] [--use-files [--follow] [--yes]]
+Usage: wb add <name> [url] [--private] [--allow-hooks] [--use-files [--follow] [--yes]] [--skip-layer <id>]...
 
 Registers a new module and immediately syncs it once. <url> is optional
 if <name> resolves against the known-modules catalog. New modules default
@@ -2572,9 +2725,15 @@ to TRACK_MODE=latest.
                     following it even after you edit it (edits are
                     backed up each time).
   --yes           Skip the --use-files confirmation.
+  --skip-layer <id>
+                  Don't add this module's block to your own config file for
+                    layer <id> (gitconfig, ssh_config, tmux.conf, vimrc, or
+                    <tool>:over). Repeatable. Same as 'wb files policy
+                    <name> <id> skip', set before anything is written.
 
-Without --use-files, a config you already have is left alone — see
-'wb help files'.
+Without --use-files, a config you already have is left alone — modules
+that layer into it add one marked block your own settings override (see
+'wb help files').
 
 To change what an already-added module tracks, use 'wb track', not 'wb
 add' again.
@@ -2807,6 +2966,7 @@ Usage: wb files status [<module>]
        wb files resolve <module> <file>|all [keep|manage|use] [--follow] [--yes]
        wb files policy [<module> <file> skip|seed|managed|follow|default] [--default managed|follow] [--yes]
        wb files restore <module> <file>|all [--yes]
+       wb files settle [<module>]
 
 Every file a module deploys outside its own snapshot — a tmux.conf, a
 vimrc, a whole nvim config — is core's to manage and yours to own
@@ -2847,9 +3007,29 @@ with local changes is held at its current version until you choose.
               workbench created is removed. Anything you put in place of
               workbench's file is left alone. 'all' leaves out the
               module's local-overrides file.
+  settle    Put workbench blocks back in place after something wrote to
+              your file (a module function running 'git config --global',
+              say). Moves blocks only.
+
+Layers (docs/decisions-log.md D82). For a tool you already configure —
+git, ssh, tmux, vim — a module adds one marked block to your own file
+(~/.gitconfig, ~/.ssh/config, your tmux.conf or vimrc) that includes the
+module's settings, placed so anything you set outside the block wins.
+Module updates flow through without asking. Name a layer by its id: the
+tool (gitconfig, ssh_config, tmux.conf, vimrc), or <tool>:over for the
+few blocks placed to win (workbench-git's per-project identities).
+  status, diff    list layers and show the block against what's in the file
+  use             back up your file and leave only workbench's block
+  restore         remove the block (and put back what 'use' backed up)
+  policy          skip (remove the block, stop adding it), managed or
+                    default (add it again) — seed and follow don't apply
+  resolve         your file is a symlink (stow, chezmoi...): use writes
+                    the block through the link, keep skips the layer
+Delete the block's marker lines yourself and workbench never adds it back.
 
 <file> is the file's dest (~/.config/tmux/tmux.conf), its basename
-(tmux.conf), or its path in the module's repo (files/tmux.conf).
+(tmux.conf), its path in the module's repo (files/tmux.conf), or a layer
+id (gitconfig, gitconfig:over).
 
 Anything that writes shows a preview, names the backup folder, and asks
 first. Without a terminal it refuses unless given --yes.

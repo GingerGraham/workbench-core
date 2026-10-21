@@ -13,3 +13,6 @@ StrictHostKeyChecking[= ]+no	SSH host key verification disabled
 ^[[:space:]]*(ProxyCommand|LocalCommand|KnownHostsCommand)([[:space:]]|=)	ssh_config directive that runs a command — review before shipping
 ^[[:space:]]*PermitLocalCommand([[:space:]]|=)+yes	ssh_config LocalCommand execution enabled
 ^[[:space:]]*Match[[:space:]]+(.*[[:space:]])?exec[[:space:]]	ssh_config Match exec runs a command on every connection
+^[[:space:]]*(fsmonitor|sshCommand|hooksPath)[[:space:]]*=	gitconfig directive that runs a command or redirects hooks — review before shipping
+^[[:space:]]*helper[[:space:]]*=[[:space:]]*!	gitconfig credential helper runs a shell command — review before shipping
+^[[:space:]]*(clean|smudge|process)[[:space:]]*=	gitconfig filter runs a command on checkout/commit — review before shipping

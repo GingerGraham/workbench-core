@@ -181,7 +181,9 @@ _wb_files_copy_tree() {
 #
 #   dest      ~/-form path as declared (directory children as <dest>/<path>),
 #             or the absolute engine-computed path for overrides_src. The key.
-#   kind      deploy | overrides
+#   kind      deploy | overrides | layer (D82 — key '<target>#<position>',
+#             sha of the block text, original '-', '+created' or a backup;
+#             see lib/files/layers.sh)
 #   state     active    — core wrote (or linked) it
 #             user      — the user chose to own it ('resolve keep', or 'skip'
 #                         on a linked entry); never written by core again
@@ -504,7 +506,8 @@ _wb_files_backup_drift() {
 # kind 'overrides', lifecycle 'seed'. D75 lexical checks, plus a field check
 # on every path emitted (a '|' or newline in a filename inside a snapshot
 # would otherwise forge fields); --log reports each refusal (the deploy
-# path), otherwise silent.
+# path), otherwise silent. Layers (D82) follow, one line each:
+#   <layer-id>|<src>|<target>#<position>|layer|managed||layer|<abs-src>
 workbench_files_targets() {
     local module="$1" log_refusals="${2:-}" current_dir manifest
     local src dest dest_macos mode force platforms lifecycle yield_to
@@ -585,6 +588,12 @@ workbench_files_targets() {
     if [[ -n "${src}" && -f "${current_dir}/${src}" ]]; then
         dest="${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/local/overrides/${module}.sh"
         _wb_files_key_ok "${dest}" && printf '%s|%s|%s|overrides|seed||copy|%s\n' "$(basename "${dest}")" "${src}" "${dest}" "${current_dir}/${src}"
+    fi
+
+    # D82: layers, after the deploy targets — kind and mode 'layer', dest
+    # '<target>#<position>', the layer id in the basename field.
+    if command -v workbench_layers_target_lines &>/dev/null; then
+        workbench_layers_target_lines "${module}" "${manifest}" "${current_dir}" "${log_refusals}"
     fi
 }
 
@@ -1077,11 +1086,18 @@ workbench_files_before_swap() {
 
 # workbench_files_pending <module>
 # One line per target waiting on the user: <dest>|held or <dest>|moved
-# (a copy the user edited, whose default has since changed).
+# (a copy the user edited, whose default has since changed), or
+# <target>#<position>|linked (a layer whose target is a symlink the user
+# manages, waiting on 'wb files resolve ... use|keep' — D82).
 workbench_files_pending() {
-    local module="$1" src dest kind lifecycle yield mode source plan
+    local module="$1" base src dest kind lifecycle yield mode source plan
     workbench_files_ledger_rows "${module}" | awk -F'|' '$3 == "held" { print $1 "|held" }'
-    while IFS='|' read -r _ src dest kind lifecycle yield mode source; do
+    while IFS='|' read -r base src dest kind lifecycle yield mode source; do
+        if [[ "${mode}" == "layer" ]]; then
+            [[ "$(workbench_layers_state "${module}" "${base}|${src}|${dest}|${kind}|${lifecycle}|${yield}|${mode}|${source}")" == "linked" ]] \
+                && printf '%s|linked\n' "${dest}"
+            continue
+        fi
         [[ "${mode}" == "copy" ]] || continue
         plan="$(workbench_files_plan "${module}" "${dest}" "${source}" "${src}" "${lifecycle}" "${yield}")"
         [[ "${plan##*|}" == "notify" ]] && printf '%s|moved\n' "${dest}"
@@ -1134,6 +1150,10 @@ workbench_files_use() {
     local module="$1" line="$2" follow="${3:-}"
     local real row state pin snap drift original backup
     _wb_files_target_fields "${line}"
+    if [[ "${WB_T_MODE}" == "layer" ]]; then
+        workbench_layers_use "${module}" "${line}"
+        return $?
+    fi
     _wb_files_path_safe "${module}" "${WB_T_DEST}" "${WB_T_KIND}" || return 1
     real="$(_wb_expand_dest "${WB_T_DEST%/}")"
     row="$(workbench_files_ledger_get "${module}" "${WB_T_DEST}")"
@@ -1219,6 +1239,13 @@ workbench_files_resolve() {
         *) log_error "workbench_files_resolve: unknown choice '${choice}'"; return 2 ;;
     esac
     _wb_files_target_fields "${line}"
+    if [[ "${WB_T_MODE}" == "layer" ]]; then
+        # A layer has one thing to decide: a symlinked target (D82).
+        [[ "$(workbench_layers_state "${module}" "${line}")" == "linked" ]] || return 3
+        [[ "${choice}" == "manage" ]] && { log_error "workbench_files_resolve: 'manage' isn't a choice for a layer — keep or use"; return 2; }
+        workbench_layers_resolve "${module}" "${line}" "${choice}"
+        return $?
+    fi
     _wb_files_path_safe "${module}" "${WB_T_DEST}" "${WB_T_KIND}" || return 1
     row="$(workbench_files_ledger_get "${module}" "${WB_T_DEST}")"
     state="$(printf '%s\n' "${row}" | awk -F'|' '{ print $3 }')"
@@ -1362,6 +1389,10 @@ workbench_files_restore() {
     row="$(workbench_files_ledger_get "${module}" "${dest}")"
     [[ -z "${row}" ]] && return 3
     IFS='|' read -r _ kind state sha original _ pin <<< "${row}"
+    if [[ "${kind}" == "layer" ]]; then
+        workbench_layers_restore "${module}" "${dest}"
+        return $?
+    fi
     [[ "${state}" == "user" || "${state}" == "restored" ]] && return 3
     _wb_files_path_safe "${module}" "${dest}" "${kind}" || return 1
 

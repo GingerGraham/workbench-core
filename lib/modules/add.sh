@@ -12,13 +12,16 @@
 # shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/add.sh" "0.3.0" || true
 
-# workbench_cmd_add <name> [url] [--private] [--allow-hooks] [--use-files [--follow] [--yes]]
+# workbench_cmd_add <name> [url] [--private] [--allow-hooks] [--use-files [--follow] [--yes]] [--skip-layer <id>]...
 # --use-files (docs/decisions-log.md D81): after the sync, use the module's
 # version wherever the user already has their own config — one preview, one
 # confirmation (bin/wb's _wb_files_use_at_install). On an already-registered
 # module, only that step runs.
+# --skip-layer <id> (repeatable, docs/decisions-log.md D82): a 'skip' policy
+# row for that layer, written before the first deploy.
 workbench_cmd_add() {
     local name="" url="" private="false" allow_hooks="false" use_files="false" follow="false" yes="false"
+    local skip_layers="" layer_id
     local args=("$@")
     local i=0
     while [[ "${i}" -lt "${#args[@]}" ]]; do
@@ -29,6 +32,18 @@ workbench_cmd_add() {
             --use-files)   use_files="true" ;;
             --follow)      follow="true" ;;
             --yes|-y)      yes="true" ;;
+            --skip-layer)
+                i=$((i + 1))
+                layer_id="${args[${i}]:-}"
+                case "${layer_id}" in
+                    gitconfig|ssh_config|tmux.conf|vimrc|gitconfig:over|ssh_config:over|tmux.conf:over|vimrc:over) ;;
+                    *)
+                        log_error "wb add: --skip-layer needs a layer id — gitconfig, ssh_config, tmux.conf or vimrc, optionally with ':over'"
+                        return 2
+                        ;;
+                esac
+                skip_layers="${skip_layers} ${layer_id}"
+                ;;
             --*)
                 log_error "wb add: unknown flag '${a}'"
                 return 2
@@ -48,7 +63,7 @@ workbench_cmd_add() {
     done
 
     if [[ -z "${name}" ]]; then
-        log_error "wb add: usage: wb add <name> [url] [--private] [--allow-hooks] [--use-files [--follow] [--yes]]"
+        log_error "wb add: usage: wb add <name> [url] [--private] [--allow-hooks] [--use-files [--follow] [--yes]] [--skip-layer <id>]..."
         return 2
     fi
     if [[ "${follow}" == "true" && "${use_files}" != "true" ]]; then
@@ -69,6 +84,10 @@ workbench_cmd_add() {
     fi
 
     if workbench_is_registered "${name}"; then
+        if [[ -n "${skip_layers}" ]]; then
+            log_error "wb add: '${name}' is already registered — skip a layer with 'wb files policy ${name} <layer> skip'"
+            return 1
+        fi
         if [[ "${use_files}" == "true" ]]; then
             _wb_files_use_at_install "${follow}" "${yes}" "${name}"
             return $?
@@ -101,6 +120,14 @@ workbench_cmd_add() {
     workbench_module_conf_set "${name}" REGISTERED "true"
     workbench_module_conf_set "${name}" SYNC_ENABLED "true"
     workbench_module_conf_set "${name}" ALLOW_HOOKS "${allow_hooks}"
+
+    if [[ -n "${skip_layers}" ]]; then
+        _wb_engine_require_files
+        for layer_id in ${skip_layers}; do
+            workbench_files_policy_set "${name}" "${layer_id}" skip
+            log_info "wb add: ${name}: layer '${layer_id}' will be skipped"
+        done
+    fi
 
     if [[ "${private}" == "true" ]]; then
         _wb_require ssh/bootstrap.sh

@@ -186,6 +186,48 @@ EOF
     && ok "a wb.yml with no version: key is skipped as not-ours, falls through to .dotfiles-sync.yml" || fail "unrelated wb.yml was not skipped"
 rm -f "${RESOLVEDIR}/wb.yml" "${RESOLVEDIR}/.dotfiles-sync.yml"
 
+# ── layers[] (docs/decisions-log.md D82) ─────────────────────────────────────
+LAYERDIR="$(mktemp -d)"
+mkdir -p "${LAYERDIR}/files/legacy"
+touch "${LAYERDIR}/files/gitconfig" "${LAYERDIR}/files/ctx" "${LAYERDIR}/files/legacy/a" "${LAYERDIR}/files/legacy/b"
+cat > "${LAYERDIR}/workbench.yml" <<'EOF'
+version: 2
+layers:
+  # a comment
+  - tool: gitconfig
+    src: files/gitconfig   # trailing comment
+    adopt: [files/legacy/a, "files/legacy/b"]
+  - tool: "gitconfig"
+    src: files/ctx
+    position: over
+register:
+  shell: []
+EOF
+layer_out="$(workbench_manifest_layer_entries "${LAYERDIR}/workbench.yml")"
+expected_layers="gitconfig|files/gitconfig||files/legacy/a,files/legacy/b
+gitconfig|files/ctx|over|"
+# shellcheck disable=SC2015
+[[ "${layer_out}" == "${expected_layers}" ]] \
+    && ok "workbench_manifest_layer_entries emits tool|src|position|adopt per entry" \
+    || fail "workbench_manifest_layer_entries: got '${layer_out}'"
+# shellcheck disable=SC2015
+workbench_manifest_paths_safe "${LAYERDIR}/workbench.yml" demo >/dev/null 2>&1 \
+    && ok "paths_safe accepts layers whose src and adopt files exist" || fail "paths_safe rejected a valid layers block"
+sed 's#files/legacy/b#../escape#' "${LAYERDIR}/workbench.yml" > "${LAYERDIR}/wb.yml"
+# shellcheck disable=SC2015
+workbench_manifest_paths_safe "${LAYERDIR}/wb.yml" demo >/dev/null 2>&1 \
+    && fail "paths_safe accepted an adopt path with '..'" || ok "paths_safe refuses an adopt path with '..'"
+ln -s gitconfig "${LAYERDIR}/files/link"
+sed 's#src: files/ctx#src: files/link#' "${LAYERDIR}/workbench.yml" > "${LAYERDIR}/wb.yml"
+# shellcheck disable=SC2015
+workbench_manifest_paths_safe "${LAYERDIR}/wb.yml" demo >/dev/null 2>&1 \
+    && fail "paths_safe accepted a symlinked layer src" || ok "paths_safe refuses a symlinked layer src (D75)"
+sed 's#src: files/ctx#src: files/nope#' "${LAYERDIR}/workbench.yml" > "${LAYERDIR}/wb.yml"
+# shellcheck disable=SC2015
+workbench_manifest_paths_safe "${LAYERDIR}/wb.yml" demo >/dev/null 2>&1 \
+    && fail "paths_safe accepted a missing layer src" || ok "paths_safe refuses a layer src missing from the snapshot"
+rm -rf "${LAYERDIR}"
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."
