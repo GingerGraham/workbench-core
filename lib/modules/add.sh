@@ -35,13 +35,12 @@ workbench_cmd_add() {
             --skip-layer)
                 i=$((i + 1))
                 layer_id="${args[${i}]:-}"
-                case "${layer_id}" in
-                    gitconfig|ssh_config|tmux.conf|vimrc|gitconfig:over|ssh_config:over|tmux.conf:over|vimrc:over) ;;
-                    *)
-                        log_error "wb add: --skip-layer needs a layer id — gitconfig, ssh_config, tmux.conf or vimrc, optionally with ':over'"
-                        return 2
-                        ;;
-                esac
+                # A layer id is an adapter (lib/manifest/parse.sh's one list),
+                # optionally with ':over'.
+                if ! _wb_layer_adapter_known "${layer_id%:over}"; then
+                    log_error "wb add: --skip-layer needs a layer id — one of ${_WB_LAYER_ADAPTERS}, optionally with ':over'"
+                    return 2
+                fi
                 skip_layers="${skip_layers} ${layer_id}"
                 ;;
             --*)
