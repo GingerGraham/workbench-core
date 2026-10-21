@@ -347,18 +347,6 @@ _wb_layers_strip_blocks() {
     ' "$1"
 }
 
-# _wb_layers_only_blocks <file>
-# Only the workbench blocks of <file>, to stdout.
-_wb_layers_only_blocks() {
-    [[ -f "$1" ]] || return 0
-    awk '
-        BEGIN { bs = "^[#\"] >>> workbench [^ ]+ (under|over) >>>$"; be = "^[#\"] <<< workbench [^ ]+ (under|over) <<<$" }
-        { l = $0; sub(/[ \t\r]+$/, "", l) }
-        inb { print; if (l ~ be) inb = 0; next }
-        l ~ bs { inb = 1; print }
-    ' "$1"
-}
-
 # _wb_layers_remove_block <file> <start> <end>, to stdout.
 _wb_layers_remove_block() {
     awk -v s="$2" -v e="$3" 'NR < s || NR > e' "$1"
