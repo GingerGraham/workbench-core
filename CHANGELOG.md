@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.19.1] - 2026-10-21
+
 ### Fixed
 
 - **An update that brings in a new core finishes on that core** (D85).
