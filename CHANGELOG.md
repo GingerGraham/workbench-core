@@ -42,6 +42,12 @@ All notable changes to `workbench-core` are documented here.
 - **`mode: link` no longer repoints a symlink it didn't create** (a
   stow/chezmoi link, say) — that's yours and is left alone.
 
+## [2.16.3] - 2026-10-15
+
+### Changed
+
+- Publish module-consumed CI changes since v2.16.2 (.github/actions, module-*.yml) so module CI picks them up (D80).
+
 ## [2.16.2] - 2026-10-10
 
 ### Security
