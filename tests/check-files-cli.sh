@@ -115,6 +115,16 @@ grep -E '~/\.vimrc +copy +managed +workbench default' "${OUT}" >/dev/null \
     && ok "files status: seeded file is 'workbench default', hand-edited one is 'your edits'" || { fail "files status rows"; cat "${OUT}"; }
 grep -q "Host default: managed" "${OUT}" \
     && ok "files status names the host default" || fail "files status: no host-default line"
+# Columns are as wide as their widest cell: every row's POLICY and STATE
+# start where the header's do, however long the paths before them.
+awk '
+    /^MODULE/ { p = index($0, "POLICY"); s = index($0, "STATE"); next }
+    p && /^cli-mod / {
+        rows++
+        if (substr($0, p - 2, 3) !~ /^  [^ ]/ || substr($0, s - 2, 3) !~ /^  [^ ]/) bad++
+    }
+    END { exit !(p && rows >= 2 && !bad) }' "${OUT}" \
+    && ok "files status: columns line up under their headers" || { fail "files status columns"; cat "${OUT}"; }
 
 # ── 8. diff exits 0 and shows both labels for a copy target. ───────────────
 wb files diff cli-mod starship.toml

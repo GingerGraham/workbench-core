@@ -4,6 +4,23 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **An update that brings in a new core finishes on that core** (D85).
+  Before, `wb update` and the scheduled sync kept running the release
+  that started them: a module released alongside a new core (for example
+  workbench-git 0.3.0 with core 2.19.0) was synced by the old code — its
+  layers not applied, its shell content refused on the old Core API
+  version — and later syncs saw it as up to date. Now core syncs first
+  and, when it changes, the new release syncs the remaining modules and
+  runs the follow-up `wb apply`. Every sync also records the running Core
+  API version before checking modules against it. On a host already in
+  that state, run `wb apply`, then `wb files policy <module> <layer-id>
+  default` for each layer `wb files status` shows as `not applied`.
+- **`wb files status` columns line up.** Each column is as wide as its
+  longest entry, so long paths no longer push the rest of a row out of
+  line; the same for the Layers and "Waiting on you" tables.
+
 ## [2.19.0] - 2026-10-21
 
 ### Added
