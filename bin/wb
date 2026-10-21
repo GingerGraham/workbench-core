@@ -3035,7 +3035,8 @@ runs the Ansible convergence pass for whatever else it still covers
                       registering anything. '--use-files --yes' is the
                       scripted "give me everything" install.
 
-Through bootstrap: curl … | bash -s -- --bundle workstation --use-files --yes
+Through bootstrap, the same flags go after 'bash -s --' (see
+docs/getting-started.md).
   --skip-ansible    Skip the Ansible convergence step even if
                       ansible-playbook is available. Does not affect the
                       scheduled-sync timer, which never depended on Ansible.

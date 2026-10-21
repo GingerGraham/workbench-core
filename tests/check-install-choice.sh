@@ -102,18 +102,30 @@ run_notty() {
     fi
 }
 
-# run_tty <answers> <wb args...> — a pty attached, stdin a pipe; <answers>
-# (printf escapes) are typed at /dev/tty
-run_tty() {
-    local answers="$1" cmd
-    shift
-    cmd="$(printf '%q ' bash "${WB}" "$@")"
+# pty_run <answers> <command-string> — runs the command in a pty and types
+# <answers> (printf escapes) at it. Input stays open until the command has
+# finished: BSD script(1) (macOS) sends ^D the moment its stdin ends, which
+# the command would read as end-of-input before the answers. Sets rc.
+pty_run() {
+    local answers="$1" cmd="$2" done_flag="${WORK}/pty.done" n=0
+    rm -f "${done_flag}"
+    cmd="${cmd}; rc=\$?; touch $(printf '%q' "${done_flag}"); exit \${rc}"
     rc=0
-    if script --version 2>/dev/null | grep -q util-linux; then
-        printf '%b' "${answers}" | script -qec "echo | ${cmd}" /dev/null >"${OUT}" 2>&1 || rc=$?
+    {
+        printf '%b' "${answers}"
+        while [[ ! -e "${done_flag}" && "${n}" -lt 1200 ]]; do sleep 0.1; n=$((n + 1)); done
+    } | if script --version 2>/dev/null | grep -q util-linux; then
+        script -qec "${cmd}" /dev/null
     else
-        printf '%b' "${answers}" | script -q /dev/null bash -c "echo | ${cmd}" >"${OUT}" 2>&1 || rc=$?
-    fi
+        script -q /dev/null bash -c "${cmd}"
+    fi >"${OUT}" 2>&1 || rc=$?
+}
+
+# run_tty <answers> <wb args...> — a pty attached, stdin a pipe
+run_tty() {
+    local answers="$1"
+    shift
+    pty_run "${answers}" "echo | $(printf '%q ' bash "${WB}" "$@")"
 }
 
 asked()    { grep -q "These modules would touch config you already have" "${OUT}"; }
@@ -249,8 +261,8 @@ run_notty add choice "${URL}" --private --use-files --yes
     && ok "--use-files --yes: no questions, workbench's files, your identity kept" || { fail "--use-files --yes (rc ${rc})"; cat "${OUT}"; }
 
 # ── 10. bootstrap path: stdin a pipe, a pty attached → still asks ───────────
-# bootstrap.sh hands off with 'exec wb install "$@"', so under curl … | bash
-# the question's process inherits the pipe as stdin. A stub wb (bootstrap's
+# bootstrap.sh hands off with 'exec wb install "$@"', so when bootstrap is
+# piped into bash the question's process inherits the pipe as stdin. A stub wb (bootstrap's
 # own test pattern: mock curl, fixture tarball) asks through /dev/tty the
 # way _wb_install_ask does, and reports what it read.
 BS="${WORK}/bootstrap"
@@ -285,12 +297,7 @@ EOF
 chmod +x "${BS}/mockbin/curl"
 new_home bootstrap
 cmd="$(printf '%q ' env PATH="${BS}/mockbin:${PATH}" HOME="${HOME}" XDG_DATA_HOME="${XDG_DATA_HOME}" bash -s -- --bundle minimal)"
-rc=0
-if script --version 2>/dev/null | grep -q util-linux; then
-    printf 'k\n' | script -qec "cat $(printf '%q' "${REPO_ROOT}/bootstrap.sh") | ${cmd}" /dev/null >"${OUT}" 2>&1 || rc=$?
-else
-    printf 'k\n' | script -q /dev/null bash -c "cat $(printf '%q' "${REPO_ROOT}/bootstrap.sh") | ${cmd}" >"${OUT}" 2>&1 || rc=$?
-fi
+pty_run 'k\n' "cat $(printf '%q' "${REPO_ROOT}/bootstrap.sh") | ${cmd}"
 grep -q "stub-wb: asked, answer 'k', args: install --bundle minimal" "${OUT}" \
     && ok "bootstrap via 'cat bootstrap.sh | bash -s -- --bundle minimal' with a pty: the question reaches the terminal" \
     || { fail "bootstrap pipe+pty (rc ${rc})"; cat "${OUT}"; }
