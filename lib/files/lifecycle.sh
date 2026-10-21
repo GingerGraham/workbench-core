@@ -35,7 +35,7 @@
 # log_info/log_warn/log_error.
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/files/lifecycle.sh" "0.2.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/files/lifecycle.sh" "0.3.0" || true
 
 # ── Paths ───────────────────────────────────────────────────────────────────
 
