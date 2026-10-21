@@ -347,18 +347,6 @@ _wb_layers_strip_blocks() {
     ' "$1"
 }
 
-# _wb_layers_only_blocks <file>
-# Only the workbench blocks of <file>, to stdout.
-_wb_layers_only_blocks() {
-    [[ -f "$1" ]] || return 0
-    awk '
-        BEGIN { bs = "^[#\"] >>> workbench [^ ]+ (under|over) >>>$"; be = "^[#\"] <<< workbench [^ ]+ (under|over) <<<$" }
-        { l = $0; sub(/[ \t\r]+$/, "", l) }
-        inb { print; if (l ~ be) inb = 0; next }
-        l ~ bs { inb = 1; print }
-    ' "$1"
-}
-
 # _wb_layers_remove_block <file> <start> <end>, to stdout.
 _wb_layers_remove_block() {
     awk -v s="$2" -v e="$3" 'NR < s || NR > e' "$1"
@@ -840,12 +828,111 @@ workbench_layers_target_is_users() {
     _wb_layers_has_user_lines "${WB_L_REAL}" "$(_wb_layers_comment_class "${WB_L_TOOL}")"
 }
 
+# ── Carry-over on use (docs/decisions-log.md D84) ──────────────────────────
+#
+# 'Use workbench's' replaces the user's opinions, not their data. What's
+# carried from the user's file into the new one, the full original backed
+# up first in every case:
+#   gitconfig    every [user] section, all keys — below the top block
+#   ssh_config   top-level Include lines, and every Host/Match block whose
+#                pattern isn't exactly '*' or 'all' — above the bottom
+#                block, in their original order. The user's global defaults
+#                (lines before the first Host/Match, Host *, Match all) are
+#                what workbench's defaults replace.
+#   tmux.conf, vimrc   nothing
+
+# _wb_layers_carry <tool> <file> <out> [<notes-out>]
+# Writes the carried lines of <file> (workbench blocks ignored) to <out>.
+# ssh blocks kept but not obviously host-specific (Match exec, a Host
+# pattern mixing '*' with names) are listed in <notes-out>: kept rather than
+# guessed at.
+_wb_layers_carry() {
+    local tool="$1" file="$2" out="$3" notes="${4:-/dev/null}"
+    : > "${out}"; : > "${notes}"
+    [[ -f "${file}" ]] || return 0
+    case "${tool}" in
+        gitconfig)
+            _wb_layers_strip_blocks "${file}" | awk '
+                { t = tolower($0); sub(/^[ \t]+/, "", t) }
+                t ~ /^\[/ { in_user = (t ~ /^\[user\][ \t]*([#;].*)?$/) }
+                in_user { print }
+            ' > "${out}" ;;
+        ssh_config)
+            _wb_layers_strip_blocks "${file}" | awk -v notes="${notes}" '
+                {
+                    t = $0; sub(/^[ \t]+/, "", t); lt = tolower(t)
+                }
+                lt ~ /^(host|match)([ \t]|=)/ {
+                    args = t; sub(/^[A-Za-z]+[ \t]*=?[ \t]*/, "", args); sub(/[ \t]+#.*$/, "", args); sub(/[ \t]+$/, "", args)
+                    kw = (lt ~ /^host/) ? "host" : "match"
+                    in_block = 1
+                    drop = (kw == "host" && args == "*") || (kw == "match" && tolower(args) == "all")
+                    if (!drop && kw == "match" && tolower(args) ~ /(^|[ \t])exec([ \t]|$)/) print "Match " args > notes
+                    if (!drop && kw == "host" && args ~ /\*/ && args !~ /^[^ \t]+$/) print "Host " args > notes
+                    if (!drop) print
+                    next
+                }
+                !in_block { if (lt ~ /^include([ \t]|=)/) print; next }
+                !drop { print }
+            ' > "${out}" ;;
+    esac
+}
+
+# workbench_layers_carry_summary <target-line>
+# One preview line per kind of thing 'use' would carry over, indented.
+workbench_layers_carry_summary() {
+    local line="$1" w keys names count
+    _wb_layers_fields "${line}"
+    [[ -f "${WB_L_REAL}" ]] || return 0
+    w="$(mktemp -d "${TMPDIR:-/tmp}/wb-layer.XXXXXX")" || return 0
+    _wb_layers_carry "${WB_L_TOOL}" "$(_wb_layers_resolve "${WB_L_REAL}")" "${w}/carry" "${w}/notes"
+    case "${WB_L_TOOL}" in
+        gitconfig)
+            keys="$(awk -F'=' '/^[ \t]*[A-Za-z][A-Za-z0-9-]*[ \t]*=/ { k = $1; gsub(/[ \t]/, "", k); printf "%s%s", (n++ ? ", " : ""), k }' "${w}/carry")"
+            [[ -n "${keys}" ]] && printf '      keep your [user] section (%s)\n' "${keys}" ;;
+        ssh_config)
+            count="$(grep -ciE '^[[:space:]]*(host|match)([[:space:]]|=)' "${w}/carry")"
+            if [[ "${count}" -gt 0 ]]; then
+                names="$(awk '{ t = $0; sub(/^[ \t]+/, "", t) } tolower(t) ~ /^(host|match)([ \t]|=)/ { sub(/^[A-Za-z]+[ \t]*=?[ \t]*/, "", t); printf "%s%s", (n++ ? ", " : ""), t }' "${w}/carry" | cut -c1-70)"
+                printf '      keep %s Host/Match entr%s: %s\n' "${count}" "$([[ "${count}" -eq 1 ]] && echo y || echo ies)" "${names}"
+            fi
+            count="$(grep -ciE '^[[:space:]]*include([[:space:]]|=)' "${w}/carry")"
+            [[ "${count}" -gt 0 ]] && printf '      keep %s Include line(s)\n' "${count}"
+            while IFS= read -r names; do
+                [[ -n "${names}" ]] && printf '      kept as it is — check it yourself: %s\n' "${names}"
+            done < "${w}/notes" ;;
+    esac
+    rm -rf "${w}"
+}
+
+# _wb_layers_split_blocks <file> <top-out> <bottom-out>
+# Every workbench block in <file>, sorted by where its adapter places it.
+_wb_layers_split_blocks() {
+    awk -v top="$2" -v bottom="$3" '
+        BEGIN { printf "" > top; printf "" > bottom
+                bs = "^[#\"] >>> workbench [^ ]+ (under|over) >>>$"; be = "^[#\"] <<< workbench [^ ]+ (under|over) <<<$" }
+        { l = $0; sub(/[ \t\r]+$/, "", l) }
+        !inb && l ~ bs {
+            split(l, f, " "); split(f[4], mt, "/"); tool = mt[2]; pos = f[5]
+            dest = ((tool == "ssh_config") ? (pos == "over") : (pos == "under")) ? top : bottom
+            inb = 1
+        }
+        inb { print > dest; if (l ~ be) inb = 0 }
+    ' "$1"
+}
+
+# _wb_layers_user_text <file> — the user's lines (outside every block),
+# blank lines dropped and trailing whitespace trimmed: for comparing.
+_wb_layers_user_text() {
+    _wb_layers_strip_blocks "$1" | awk '{ sub(/[ \t\r]+$/, "") } $0 != ""'
+}
+
 # ── User-invoked operations ─────────────────────────────────────────────────
 
 # workbench_layers_use <module> <target-line>
 # "Use the module's version": the whole target is backed up, and replaced
-# with a file holding only workbench's blocks (this one, written fresh, and
-# any other block already there). Through a symlink, this is the consent
+# with a file holding workbench's blocks (this one, written fresh, and any
+# other block already there) and what carries over (above). Through a symlink, this is the consent
 # to write through it (policy managed); otherwise the per-layer policy is
 # cleared.
 workbench_layers_use() {
@@ -881,25 +968,28 @@ workbench_layers_use() {
     workbench_layers_block "${module}" "${WB_L_TOOL}" "${WB_L_POSITION}" "${WB_L_SOURCE}" true > "${w}/block"
     start="$(workbench_layers_marker_start "${module}" "${WB_L_TOOL}" "${WB_L_POSITION}")"
     end="$(workbench_layers_marker_end "${module}" "${WB_L_TOOL}" "${WB_L_POSITION}")"
-    _wb_layers_only_blocks "${WB_L_REAL}" > "${w}/others"
+    : > "${w}/others"
+    [[ "${existed}" == "true" ]] && cp "${w}/before" "${w}/others"
     read -r s e <<< "$(_wb_layers_locate "${w}/others" "${start}" "${end}")"
     if [[ "${s}" -gt 0 && "${e}" -gt 0 ]]; then
         _wb_layers_remove_block "${w}/others" "${s}" "${e}" > "${w}/rest"
     else
         cp "${w}/others" "${w}/rest"
     fi
+    _wb_layers_split_blocks "${w}/rest" "${w}/top" "${w}/bottom"
     if _wb_layers_is_top "${WB_L_TOOL}" "${WB_L_POSITION}"; then
-        cat "${w}/block" "${w}/rest" > "${w}/new"
+        cat "${w}/block" "${w}/top" > "${w}/top.new" && mv "${w}/top.new" "${w}/top"
     else
-        cat "${w}/rest" "${w}/block" > "${w}/new"
+        cat "${w}/bottom" "${w}/block" > "${w}/bottom.new" && mv "${w}/bottom.new" "${w}/bottom"
     fi
+    _wb_layers_carry "${WB_L_TOOL}" "${w}/rest" "${w}/carry"
+    cat "${w}/top" "${w}/carry" "${w}/bottom" > "${w}/new"
     [[ "${WB_L_TOOL}" == "ssh_config" ]] && chmod go-w "${WB_L_SOURCE}" 2>/dev/null
 
     if ! _wb_layers_commit "${module}" "${WB_L_REAL}" "${w}/new" "${w}/before" "${existed}" "${before_rc}"; then
         rm -rf "${w}"
         return 1
     fi
-    rm -rf "${w}"
     workbench_files_ledger_set "${module}" "${WB_L_KEY}" layer active \
         "$(workbench_layers_block "${module}" "${WB_L_TOOL}" "${WB_L_POSITION}" "${WB_L_SOURCE}" true | _wb_layers_sha_stdin)" "${original}"
     if [[ -L "${WB_L_REAL}" ]]; then
@@ -907,7 +997,12 @@ workbench_layers_use() {
     else
         workbench_files_policy_set "${module}" "${WB_L_ID}" default
     fi
-    log_info "  ${WB_L_TARGET}: now only workbench's block ('wb files restore ${module} ${WB_L_ID}' puts yours back)"
+    if [[ -s "${w}/carry" ]]; then
+        log_info "  ${WB_L_TARGET}: now workbench's block, with your $([[ "${WB_L_TOOL}" == "gitconfig" ]] && echo "[user] section" || echo "hosts and includes") kept ('wb files restore ${module} ${WB_L_ID}' puts yours back)"
+    else
+        log_info "  ${WB_L_TARGET}: now only workbench's block ('wb files restore ${module} ${WB_L_ID}' puts yours back)"
+    fi
+    rm -rf "${w}"
     workbench_files_write_pending "${module}"
 }
 
@@ -981,7 +1076,7 @@ workbench_layers_restore() {
             cat "${real}" > "${w}/rest"
         fi
         if [[ "${original}" != "-" && "${original}" != "+created" && -f "${original}" ]] \
-            && ! _wb_layers_has_user_lines "${w}/rest" "$(_wb_layers_comment_class "${tool}")"; then
+            && _wb_layers_unchanged_since_use "${tool}" "${w}/rest" "${original}"; then
             # Put back what 'use' backed up, minus this block if it held one.
             read -r s e <<< "$(_wb_layers_locate "${original}" \
                 "$(workbench_layers_marker_start "${module}" "${tool}" "${position}")" \
@@ -1009,6 +1104,22 @@ workbench_layers_restore() {
     workbench_files_policy_set "${module}" "${id}" skip
     workbench_files_write_pending "${module}"
     return 0
+}
+
+# _wb_layers_unchanged_since_use <tool> <current-minus-block> <backup>
+# True when nothing of the user's has been added since 'use': the user's
+# lines are none, exactly what 'use' carried over, or what the backup
+# already holds.
+_wb_layers_unchanged_since_use() {
+    local tool="$1" rest="$2" backup="$3" now w rc=1
+    now="$(_wb_layers_user_text "${rest}")"
+    [[ -z "${now}" ]] && return 0
+    [[ "${now}" == "$(_wb_layers_user_text "${backup}")" ]] && return 0
+    w="$(mktemp "${TMPDIR:-/tmp}/wb-layer-carry.XXXXXX")" || return 1
+    _wb_layers_carry "${tool}" "${backup}" "${w}"
+    [[ "${now}" == "$(_wb_layers_user_text "${w}")" ]] && rc=0
+    rm -f "${w}"
+    return "${rc}"
 }
 
 # An adapter for a target with no manifest entry left (restore after a

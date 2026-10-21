@@ -4,6 +4,36 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Install asks about your existing config before writing anything**
+  (D84). `wb add`, `wb install --bundle` and bootstrap now fetch first,
+  then — if a module would touch config you already have — list those
+  files and ask once: keep mine (default; layered files get workbench's
+  defaults underneath, whole files are left alone), use workbench's
+  (backed up and replaced), choose per file (keep, use or skip), show
+  differences, or quit with nothing changed. A fresh machine sees no
+  question; with no terminal (cloud-init, CI, the scheduled sync) the
+  answer is always keep. After a quit, the next `wb update` asks again.
+  Enter repeats your last whole-host answer (`INSTALL_DEFAULT` in
+  `files.conf`).
+- **`--keep-files`** on `wb add` and `wb install --bundle` answers keep
+  without asking; `--use-files --yes` is the scripted "give me
+  everything" install, through bootstrap too.
+- **"Use workbench's" keeps your personal entries**: your `[user]`
+  section is carried into the new `~/.gitconfig`; top-level `Include`
+  lines and host-specific `Host`/`Match` blocks into the new
+  `~/.ssh/config` (`Match exec` and mixed `Host *` patterns are kept and
+  flagged for you to check). The whole original is still backed up, and
+  `wb files restore` puts it back byte-for-byte.
+
+### Fixed
+
+- Questions are asked through `/dev/tty`, so they work under
+  `curl … | bash`, where stdin is the pipe — `wb files` confirmations,
+  `wb files resolve`, the `wb update` resolve prompt, and the hook
+  approval prompt previously checked stdin and could never ask there.
+
 ## [2.18.0] - 2026-10-21
 
 ### Added

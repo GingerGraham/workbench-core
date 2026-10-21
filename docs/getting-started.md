@@ -9,6 +9,39 @@ needs, it installs itself.
 
 ## Install
 
+Two ways in, depending on what you want from workbench:
+
+- **A new machine, or "just give me workbench's setup".** Run bootstrap
+  with a bundle:
+
+  ```sh
+  curl -fsSL https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh | bash -s -- --bundle workstation
+  ```
+
+  On a fresh machine there's nothing of yours to ask about, so nothing is
+  asked. On a machine that already has config (a `~/.gitconfig`, a
+  tmux.conf), you're shown which files would be touched — answer `u` to
+  use workbench's, or add `--use-files --yes` to script it. Your files are
+  backed up first; your git identity and ssh hosts are carried into the
+  new files.
+- **"I like my config, I want your tooling."** Run bootstrap, or `wb add
+  <module>` later, and press Enter at the question (keep mine), or add
+  `--keep-files`. What keep means:
+  - git, ssh, tmux and vim config: your file stays as it is, and the module
+    adds one marked block your own settings override (see "Workbench
+    blocks in your own config files" below).
+  - Whole files (a starship.toml): yours is left alone, and the module's
+    isn't used.
+  - Changed your mind about one file later? `wb files use <module> <file>`
+    switches it; `wb files restore` switches it back.
+
+At the question, `c` chooses per file (keep, use, or skip — leave it
+completely alone), `d` shows each file of yours against workbench's, and
+`q` quits with nothing changed: the module stays registered and the next
+`wb update` asks again. Without a terminal — cloud-init, CI, the
+scheduled sync — the answer is always keep; workbench never replaces a
+file unasked.
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh | bash
 ```

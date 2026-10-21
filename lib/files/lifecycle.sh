@@ -1449,3 +1449,114 @@ workbench_files_restore() {
     workbench_files_write_pending "${module}"
     return "${rc}"
 }
+
+# ── Install plan (docs/decisions-log.md D84) ────────────────────────────────
+
+# _wb_files_line_count <path> — lines in a file (through a symlink), '-'
+# for anything else.
+_wb_files_line_count() {
+    if [[ -f "$1" ]]; then
+        wc -l < "$1" | tr -d ' '
+    else
+        printf -- '-\n'
+    fi
+}
+
+# workbench_files_install_plan <module>...
+# What adding these modules would do to files the user may already have,
+# read-only. One line per target file:
+#   module|id|display-path|kind|condition|lines
+#   id         a layer file: its layer ids, comma-joined (gitconfig,gitconfig:over)
+#              a deploy entry: its dest
+#   kind       layer | file
+#   condition  new      nothing there (or at any yield_to path) — created
+#              ours     already core's
+#              existing the user has their own config there
+#              linked   a symlink the user manages
+# Layers with a 'skip' policy (wb add --skip-layer) and anything already
+# settled (removed, restored, the user's) aren't listed; neither is
+# overrides_src, which is the user's by design.
+workbench_files_install_plan() {
+    local m line layers base dest kind mode real cond display policy target
+    for m in "$@"; do
+        [[ -d "$(workbench_module_current_dir "${m}")" ]] || continue
+        layers=""
+        while IFS= read -r line; do
+            [[ -z "${line}" ]] && continue
+            _wb_files_target_fields "${line}"
+            base="${WB_T_BASE}"; dest="${WB_T_DEST}"; kind="${WB_T_KIND}"; mode="${WB_T_MODE}"
+            [[ "${kind}" == "overrides" ]] && continue
+            if [[ "${mode}" == "layer" ]]; then
+                [[ "$(workbench_files_policy_get "${m}" "${base}")" == "skip" ]] && continue
+                case "$(workbench_files_ledger_field "${m}" "${dest}" 3)" in
+                    user|removed|restored) continue ;;
+                esac
+                layers="${layers}${dest%#*}|${base}"$'\n'
+                continue
+            fi
+            policy="$(workbench_files_policy_get "${m}" "${dest}")"
+            [[ "${policy}" == "skip" ]] && continue
+            real="$(_wb_expand_dest "${dest%/}")"
+            display="${dest}"
+            cond=""
+            if [[ "${mode}" == "copy" ]]; then
+                case "$(workbench_files_plan "${m}" "${dest}" "${WB_T_SOURCE}" "${WB_T_SRC}" "${WB_T_LIFECYCLE}" "${WB_T_YIELD}" | cut -d'|' -f2)" in
+                    new)             cond="new" ;;
+                    clean|adoptable) cond="ours" ;;
+                    foreign|edited)  cond="existing"; [[ -L "${real}" ]] && cond="linked" ;;
+                    yielded)         _wb_files_yield_hit "${WB_T_YIELD}"; display="${WB_FILES_YIELD_PATH}"; cond="existing" ;;
+                esac
+            elif _wb_files_is_our_link "${m}" "${real}"; then
+                cond="ours"
+            elif [[ -L "${real}" ]]; then
+                cond="linked"
+            elif [[ -e "${real}" ]]; then
+                cond="existing"
+            elif _wb_files_yield_hit "${WB_T_YIELD}"; then
+                display="${WB_FILES_YIELD_PATH}"; cond="existing"
+            else
+                cond="new"
+            fi
+            [[ -z "${cond}" ]] && continue
+            printf '%s|%s|%s|file|%s|%s\n' "${m}" "${dest}" "${display}" "${cond}" \
+                "$(_wb_files_line_count "$(_wb_expand_dest "${display%/}")")"
+        done < <(workbench_files_targets "${m}")
+
+        # Layers, one line per target file, in first-seen order.
+        while IFS='|' read -r target base; do
+            [[ -z "${target}" ]] && continue
+            real="$(_wb_expand_dest "${target}")"
+            if [[ -L "${real}" ]]; then
+                cond="linked"
+            elif [[ ! -e "${real}" ]] || ! grep -q '[^[:space:]]' "${real}" 2>/dev/null; then
+                cond="new"
+            elif _wb_layers_has_user_lines "${real}" "$(_wb_layers_comment_class "${base%%:*}")"; then
+                cond="existing"
+            else
+                cond="ours"
+            fi
+            printf '%s|%s|%s|layer|%s|%s\n' "${m}" \
+                "$(printf '%s' "${layers}" | awk -F'|' -v t="${target}" '$1 == t { printf "%s%s", (n++ ? "," : ""), $2 }')" \
+                "${target}" "${cond}" "$(_wb_files_line_count "${real}")"
+        done < <(printf '%s' "${layers}" | awk -F'|' '!seen[$1]++')
+    done
+}
+
+# Host-wide files.conf keys other than DEFAULT_POLICY: KEY=value lines,
+# read as data.
+workbench_files_conf_get() {
+    local file
+    file="$(workbench_files_conf_path)"
+    [[ -f "${file}" ]] || return 0
+    grep "^$1=" "${file}" 2>/dev/null | tail -1 | cut -d= -f2-
+}
+
+workbench_files_conf_set() {
+    local key="$1" value="$2" file tmp
+    file="$(workbench_files_conf_path)"
+    mkdir -p "$(dirname "${file}")"
+    tmp="$(mktemp "${file}.XXXXXX")" || return 1
+    [[ -f "${file}" ]] && grep -v "^${key}=" "${file}" > "${tmp}"
+    printf '%s=%s\n' "${key}" "${value}" >> "${tmp}"
+    mv "${tmp}" "${file}"
+}

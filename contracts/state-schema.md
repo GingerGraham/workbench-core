@@ -253,6 +253,10 @@ ${XDG_DATA_HOME:-~/.local/share}/workbench/files.conf
 
 `DEFAULT_POLICY=managed|follow` (absent: `managed`). Applies to `lifecycle: managed` copy entries and linked entries only, and never moves a real directory. Set with `wb files policy --default`.
 
+`INSTALL_DEFAULT=keep|use` (absent: `keep`): the last whole-host answer to the install question (docs/decisions-log.md D84). It only chooses what Enter picks at the next question; it never answers for the user, and an install with no terminal always keeps.
+
+A module whose `sync.conf` has no `RESOLVED_SHA` but has a `current` snapshot was fetched and never deployed — the user quit at the install question. The next interactive `wb update` asks again; the next unattended sync deploys it with the default answer, keep.
+
 ## User-local overrides
 
 ```

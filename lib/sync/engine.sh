@@ -460,10 +460,13 @@ workbench_run_post_deploy_hook() {
                 : # --allow-hooks on this very command is the consent
                 ;;
             manual|track)
-                if [[ -t 0 && -t 1 ]]; then
-                    _wb_hook_describe_change "${name}" "${approved_sha}" "${current_sha}" "${argv[0]}"
+                # /dev/tty, not stdin: a person can be asked even when stdin
+                # is a pipe (docs/decisions-log.md D84).
+                if command -v _wb_have_tty &>/dev/null && _wb_have_tty; then
+                    _wb_hook_describe_change "${name}" "${approved_sha}" "${current_sha}" "${argv[0]}" >/dev/tty
                     local answer=""
-                    read -r -p "Run ${name}'s post_deploy hook for ${current_sha:0:7}? [y/N]: " answer
+                    printf "Run %s's post_deploy hook for %s? [y/N]: " "${name}" "${current_sha:0:7}" >/dev/tty
+                    IFS= read -r answer </dev/tty || answer=""
                     case "${answer}" in
                         y|Y|yes|YES) : ;;
                         *)
@@ -726,6 +729,18 @@ workbench_sync_module() {
 
     workbench_snapshot_swap "${name}" "${new_snapshot}"
     workbench_snapshot_prune "${name}"
+
+    # D84: 'wb add', 'wb install --bundle' and bootstrap stage the first
+    # sync — fetched and current, nothing deployed, no hook run — so the
+    # user can be asked about their existing config before anything outside
+    # workbench's own directories changes. RESOLVED_SHA stays unset: the
+    # next sync of any kind finds this snapshot on disk and completes the
+    # cycle (deploy, hook), unattended ones with the default answer, keep.
+    if [[ "${reason}" == "stage" ]]; then
+        log_info "${name}: fetched ${ref_label} (${shortsha}) — nothing deployed yet"
+        return 0
+    fi
+
     workbench_module_conf_set "${name}" RESOLVED_SHA "${new_sha}"
     workbench_module_conf_set "${name}" TRACK_REF "${ref_value:-${ref_label}}"
     workbench_module_conf_set "${name}" PENDING_SHA ""
