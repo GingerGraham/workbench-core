@@ -91,6 +91,22 @@ once core's own `core`-tier registration is sourced:
   key>` is the author's own choice, never derived from `<command>` — see
   `docs/module-authoring.md`, "Declaring function availability", for a
   worked example. **New in `CORE_API_VERSION` 1.3.**
+- `_wb_layers_settle <module>` — puts that module's workbench blocks back
+  in position after a module function wrote to one of their target files
+  (docs/decisions-log.md D82). Call it after `git config --global ...` or
+  any other write to a layered file: git appends a new section at the end
+  of the file, after a block that has to stay last. Runs `wb files
+  settle <module>` (the interactive shell doesn't load `lib/files/`);
+  silent, never fails the caller. **New in `CORE_API_VERSION` 1.6.**
+- `_wb_prompt_hook_registered <function-name>` — true when
+  `<function-name>` is already hooked into the prompt cycle: bash
+  `PROMPT_COMMAND` (scalar or array) or zsh `precmd_functions`. Lets a
+  module install a tool's shell hook (direnv's `_direnv_hook`, say) only
+  when nothing else has, without duplicating it (docs/decisions-log.md
+  D83). **New in `CORE_API_VERSION` 1.6.**
+
+Modules that declare `layers:` or call either 1.6 function declare
+`core_api: ">=1.6 <2.0"`.
 
 ## Install-helper functions (`lib/core/installers-common.sh`)
 

@@ -112,6 +112,14 @@ Checks (fail the manifest) — unchanged from schema version 1:
   - hooks.post_deploy.run_on, when given, is changed/always/initial
   - hooks.post_deploy.timeout, when given, is a positive integer
 
+layers[] (docs/decisions-log.md D82):
+  - tool is required and one of the core-owned adapters: gitconfig,
+    ssh_config, tmux.conf, vimrc
+  - src is required, a safe relative path, an existing regular file (not a
+    symlink); each adopt item likewise; adopt uses flow form
+  - position, when given, is under or over; at most one entry per
+    (tool, position)
+
 New checks (register:, additive per docs/architecture.md §5):
   - core_api, when given, is a non-empty string (a semver range consumed by
     the Core API gate — not deeply validated here, just checked non-empty)
@@ -369,6 +377,79 @@ if [[ "${_deploy_count}" -gt 0 ]]; then
     done
 fi
 
+# ── layers[] (docs/decisions-log.md D82) ─────────────────────────────────────
+
+# Byte-identical to lib/manifest/parse.sh's copy (this file runs standalone);
+# tests/check-dest-denylist-sync.sh fails if the two copies drift.
+_WB_LAYER_ADAPTERS="gitconfig ssh_config tmux.conf vimrc"
+
+# _check_layer_path <label> <field> <path>
+_check_layer_path() {
+    local label="$1" field="$2" p="$3"
+    if [[ -z "${p}" || "${p}" == "null" ]]; then
+        err "${label}: ${field} is required (contracts/manifest-spec.md §layers)."
+    elif ! _is_safe_relative_path "${p}"; then
+        err "${label}: ${field} '${p}' must be a path relative to the repo root, without '..' segments or a leading '/'."
+    elif [[ "${p}" == *'|'* || "${p}" == *,* ]]; then
+        err "${label}: ${field} '${p}' must not contain '|' or ','."
+    elif [[ -L "${REPO_ROOT}/${p}" ]]; then
+        err "${label}: ${field} '${p}' is a symlink — layer files must be regular files (docs/decisions-log.md D75)."
+    elif [[ ! -f "${REPO_ROOT}/${p}" ]]; then
+        err "${label}: ${field} '${p}' does not exist in the repo (checked ${REPO_ROOT}/${p})."
+    fi
+}
+
+_layers_count=$(yq eval '.layers // [] | length' "${MANIFEST}")
+_layers_seen=" "
+_li=0
+while [[ "${_li}" -lt "${_layers_count}" ]]; do
+    _ltool=$(yq eval ".layers[${_li}].tool" "${MANIFEST}")
+    _lsrc=$(yq eval ".layers[${_li}].src" "${MANIFEST}")
+    _lpos=$(yq eval ".layers[${_li}].position" "${MANIFEST}")
+    _llabel="layers[${_li}] (tool: ${_ltool})"
+
+    if [[ -z "${_ltool}" || "${_ltool}" == "null" ]]; then
+        err "${_llabel}: tool is required — one of ${_WB_LAYER_ADAPTERS}."
+    elif [[ " ${_WB_LAYER_ADAPTERS} " != *" ${_ltool} "* ]]; then
+        err "${_llabel}: unknown adapter '${_ltool}' — one of ${_WB_LAYER_ADAPTERS} (contracts/manifest-spec.md §layers)."
+    fi
+
+    _check_layer_path "${_llabel}" src "${_lsrc}"
+
+    if [[ -z "${_lpos}" || "${_lpos}" == "null" ]]; then
+        _lpos="under"
+    elif [[ "${_lpos}" != "under" && "${_lpos}" != "over" ]]; then
+        err "${_llabel}: position must be 'under' or 'over' — found '${_lpos}'."
+    fi
+
+    if [[ "${_layers_seen}" == *" ${_ltool}#${_lpos} "* ]]; then
+        err "${_llabel}: more than one layer for ${_ltool} at position ${_lpos} — at most one per (tool, position)."
+    fi
+    _layers_seen="${_layers_seen}${_ltool}#${_lpos} "
+
+    _adopt_type=$(yq eval ".layers[${_li}].adopt | type" "${MANIFEST}")
+    if [[ "${_adopt_type}" != "!!null" ]]; then
+        if [[ "${_adopt_type}" != "!!seq" ]]; then
+            err "${_llabel}: adopt must be a list of paths — found ${_adopt_type}."
+        elif [[ "$(yq eval ".layers[${_li}].adopt | style" "${MANIFEST}")" != "flow" ]]; then
+            err "${_llabel}: adopt must use flow form, e.g. adopt: [files/legacy/x] — core's parser reads only that form."
+        else
+            _adopt_count=$(yq eval ".layers[${_li}].adopt | length" "${MANIFEST}")
+            _a=0
+            while [[ "${_a}" -lt "${_adopt_count}" ]]; do
+                _check_layer_path "${_llabel}" "adopt[${_a}]" "$(yq eval ".layers[${_li}].adopt[${_a}]" "${MANIFEST}")"
+                _a=$((_a + 1))
+            done
+        fi
+    fi
+
+    _li=$((_li + 1))
+done
+
+if [[ "${_layers_count}" -gt 0 ]]; then
+    info "layers: ${_layers_count} entr$([[ "${_layers_count}" -eq 1 ]] && echo y || echo ies) — needs workbench-core with Core API 1.6 or later; declare core_api: \">=1.6 <2.0\"."
+fi
+
 # ── core_api / sync.enabled (new, additive) ─────────────────────────────────
 
 _core_api=$(yq eval '.core_api' "${MANIFEST}")
@@ -522,7 +603,7 @@ if [[ "${_hook_declared}" == "true" ]]; then
     fi
 fi
 
-if [[ "${_deploy_count}" -eq 0 && "${_hook_declared}" != "true" && "${_shell_count}" -eq 0 && ( -z "${_overrides_src}" || "${_overrides_src}" == "null" ) ]]; then
+if [[ "${_deploy_count}" -eq 0 && "${_layers_count}" -eq 0 && "${_hook_declared}" != "true" && "${_shell_count}" -eq 0 && ( -z "${_overrides_src}" || "${_overrides_src}" == "null" ) ]]; then
     warn "manifest has no deploy entries, no register.shell entries, no hooks, and no overrides_src — this is a valid clone-only manifest, but confirm that was deliberate."
 fi
 

@@ -216,6 +216,65 @@ workbench_manifest_deploy_entries() {
     ' "${file}"
 }
 
+# workbench_manifest_layer_entries <file>
+# Emits one line per layers[] entry (docs/decisions-log.md D82):
+#   tool|src|position|adopt
+# position as written — empty if unset; the engine applies the default
+# (under). adopt comma-joined, flow-sequence form only, same as yield_to.
+workbench_manifest_layer_entries() {
+    local file="$1"
+    [[ -f "${file}" ]] || return 0
+    awk '
+        function clean(s) {
+            sub(/[[:space:]]+#.*$/, "", s)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+            gsub(/^"|"$/, "", s)
+            gsub(/^'"'"'|'"'"'$/, "", s)
+            return s
+        }
+        function flush() {
+            if (have_item) print tool "|" src "|" position "|" adopt
+            have_item = 0; tool = ""; src = ""; position = ""; adopt = ""
+        }
+        /^layers:[[:space:]]*$/ { in_block = 1; next }
+        in_block && /^[A-Za-z]/ { flush(); in_block = 0 }
+        in_block && /^[[:space:]]+-[[:space:]]*tool:/ {
+            flush()
+            line = $0
+            sub(/^[[:space:]]+-[[:space:]]*tool:[[:space:]]*/, "", line)
+            tool = clean(line)
+            have_item = 1
+            next
+        }
+        in_block && have_item && /^[[:space:]]+src:/ {
+            line = $0; sub(/^[[:space:]]+src:[[:space:]]*/, "", line); src = clean(line); next
+        }
+        in_block && have_item && /^[[:space:]]+position:/ {
+            line = $0; sub(/^[[:space:]]+position:[[:space:]]*/, "", line); position = clean(line); next
+        }
+        in_block && have_item && /^[[:space:]]+adopt:/ {
+            line = $0
+            sub(/^[[:space:]]+adopt:[[:space:]]*\[/, "", line)
+            sub(/\][[:space:]]*$/, "", line)
+            gsub(/[[:space:]"'"'"']/, "", line)
+            adopt = line
+            next
+        }
+        END { flush() }
+    ' "${file}"
+}
+
+# The layer adapters this running core knows (docs/decisions-log.md D82).
+# Deliberately duplicated in lib/manifest/validate.sh, which runs standalone
+# (same precedent as the dest denylist below); tests/check-dest-denylist-
+# sync.sh fails if the two copies drift.
+_WB_LAYER_ADAPTERS="gitconfig ssh_config tmux.conf vimrc"
+
+# _wb_layer_adapter_known <tool>
+_wb_layer_adapter_known() {
+    [[ -n "$1" && " ${_WB_LAYER_ADAPTERS} " == *" $1 "* ]]
+}
+
 # workbench_manifest_register_shell_entries <file>
 # Emits src|tier per register.shell[] entry. tier defaults to "tools" (§5.3).
 workbench_manifest_register_shell_entries() {
@@ -509,6 +568,35 @@ workbench_manifest_paths_safe() {
             bad=1
         fi
     done < <(workbench_manifest_register_installer_entries "${file}")
+
+    # D82: layers[].src and every adopt path — safe relative, present in
+    # the snapshot, never a symlink (D75). Unknown adapters, positions and
+    # duplicate entries are not path problems: the engine skips those with a
+    # warning (workbench_files_targets), so a module using a future adapter
+    # still syncs everything else on this core.
+    local manifest_dir tool position adopt layer_path
+    manifest_dir="$(dirname "${file}")"
+    # shellcheck disable=SC2034 # tool/position unused — only path fields need checking here
+    while IFS='|' read -r tool src position adopt; do
+        [[ -z "${tool}" && -z "${src}" ]] && continue
+        if [[ -z "${src}" ]]; then
+            log_error "manifest: layers entry (tool: ${tool}) has no src"
+            bad=1
+        fi
+        while IFS= read -r layer_path; do
+            [[ -z "${layer_path}" ]] && continue
+            if ! _wb_path_is_safe_relative "${layer_path}"; then
+                log_error "manifest: layers path '${layer_path}' is absolute or contains '..'"
+                bad=1
+            elif [[ -L "${manifest_dir}/${layer_path}" ]]; then
+                log_error "manifest: layers path '${layer_path}' is a symlink"
+                bad=1
+            elif [[ ! -f "${manifest_dir}/${layer_path}" ]]; then
+                log_error "manifest: layers path '${layer_path}' does not exist in the snapshot"
+                bad=1
+            fi
+        done < <(printf '%s\n%s\n' "${src}" "${adopt}" | tr ',' '\n')
+    done < <(workbench_manifest_layer_entries "${file}")
 
     hook_line="$(workbench_manifest_hook_post_deploy "${file}")"
     if [[ -n "${hook_line}" ]]; then

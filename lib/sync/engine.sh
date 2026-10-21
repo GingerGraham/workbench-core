@@ -267,8 +267,16 @@ workbench_deploy_module() {
     current_dir="$(workbench_module_current_dir "${name}")"
     [[ -d "${current_dir}" ]] || { log_warn "workbench_deploy_module: ${name}: no current snapshot yet"; return 1; }
 
-    while IFS='|' read -r _ src dest kind lifecycle yield mode source; do
+    local base
+    while IFS='|' read -r base src dest kind lifecycle yield mode source; do
         [[ -z "${dest}" ]] && continue
+        # Layers run their own physical check: their targets (~/.gitconfig,
+        # ~/.ssh/config) are engine-computed and sit on the deploy denylist
+        # by design (D82).
+        if [[ "${mode}" == "layer" ]]; then
+            workbench_layers_apply "${name}" "${base}" "${base}|${src}|${dest}|${kind}|${lifecycle}|${yield}|${mode}|${source}"
+            continue
+        fi
         if [[ "${kind}" != "overrides" ]] && ! _wb_dest_physical_is_safe "$(_wb_expand_dest "${dest%/}")" "${name}"; then
             log_error "workbench_deploy_module: ${name}: refusing ${dest} — resolves through a symlink to a denied location"
             continue
@@ -518,17 +526,18 @@ workbench_run_post_deploy_hook() {
 
 # ── Per-module sync ────────────────────────────────────────────────────────────
 # _wb_engine_require_files
-# Lazy-loads lib/files/lifecycle.sh (D81) and its one dependency,
+# Lazy-loads lib/files/lifecycle.sh (D81), lib/files/layers.sh (D82) and
+# their one dependency,
 # core/installers-common.sh (_wb_sha256), at first deploy — same
 # _wb_require-or-private-fallback shape as workbench_sync_module below, so
 # this file still works sourced standalone with no bin/wb in the picture.
 _wb_engine_require_files() {
     if command -v _wb_require &>/dev/null; then
-        _wb_require core/installers-common.sh files/lifecycle.sh
+        _wb_require core/installers-common.sh files/lifecycle.sh files/layers.sh
         return 0
     fi
     local _wb_ef_dep
-    for _wb_ef_dep in core/installers-common.sh files/lifecycle.sh; do
+    for _wb_ef_dep in core/installers-common.sh files/lifecycle.sh files/layers.sh; do
         if command -v _workbench_script_version_registered &>/dev/null \
             && _workbench_script_version_registered "lib/${_wb_ef_dep}"; then
             continue

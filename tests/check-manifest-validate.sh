@@ -495,6 +495,85 @@ _d81_case yield-pipe fail "yield_to[0] '~/.a|b' must not contain" "a '|' in a yi
     yield_to: ["~/.a|b"]
 EOF
 
+# ── layers[] (docs/decisions-log.md D82) ─────────────────────────────────────
+# _d82_case <name> <expect> <message-grep-or-empty> <description>
+# The layers: entries come from stdin. files/gitconfig, files/legacy and a
+# symlink files/link exist in the fixture.
+_d82_case() {
+    local expect="$2" pattern="$3" desc="$4" dir="${WORK}/d82-$1" log rc=0
+    mkdir -p "${dir}/files"
+    printf '[init]\n\tdefaultBranch = main\n' > "${dir}/files/gitconfig"
+    echo 'core.excludesfile ~/x' > "${dir}/files/legacy"
+    ln -sf gitconfig "${dir}/files/link"
+    {
+        printf 'version: 2\ncore_api: ">=1.6 <2.0"\nlayers:\n'
+        cat
+    } > "${dir}/workbench.yml"
+    log="${dir}/validate.log"
+    "${VALIDATE}" "${dir}/workbench.yml" > "${log}" 2>&1 || rc=$?
+    if [[ "${expect}" == "pass" && "${rc}" -ne 0 ]]; then
+        fail "${desc} — rejected, expected valid:"; cat "${log}"; return
+    fi
+    if [[ "${expect}" == "fail" && "${rc}" -eq 0 ]]; then
+        fail "${desc} — accepted, expected an error"; return
+    fi
+    if [[ -n "${pattern}" ]] && ! grep -qF -- "${pattern}" "${log}"; then
+        fail "${desc} — expected message '${pattern}' missing:"; cat "${log}"; return
+    fi
+    ok "${desc}"
+}
+
+_d82_case ok pass "" "layers: under and over entries with adopt validate cleanly" <<'EOF'
+  - tool: gitconfig
+    src: files/gitconfig
+    adopt: [files/legacy]
+  - tool: gitconfig
+    src: files/gitconfig
+    position: over
+EOF
+
+_d82_case unknown-adapter fail "unknown adapter 'fishconfig'" "layers: an unknown adapter is an error" <<'EOF'
+  - tool: fishconfig
+    src: files/gitconfig
+EOF
+
+_d82_case bad-position fail "position must be 'under' or 'over'" "layers: an unknown position is an error" <<'EOF'
+  - tool: gitconfig
+    src: files/gitconfig
+    position: middle
+EOF
+
+_d82_case duplicate fail "more than one layer for gitconfig at position under" "layers: two entries for the same (tool, position) are an error" <<'EOF'
+  - tool: gitconfig
+    src: files/gitconfig
+  - tool: gitconfig
+    src: files/gitconfig
+    position: under
+EOF
+
+_d82_case missing-src fail "does not exist in the repo" "layers: a src that doesn't exist is an error" <<'EOF'
+  - tool: vimrc
+    src: files/vimrc
+EOF
+
+_d82_case symlink-src fail "is a symlink" "layers: a symlinked src is an error (D75)" <<'EOF'
+  - tool: tmux.conf
+    src: files/link
+EOF
+
+_d82_case unsafe-adopt fail "adopt[0] '../x'" "layers: an adopt path with '..' is an error" <<'EOF'
+  - tool: gitconfig
+    src: files/gitconfig
+    adopt: [../x]
+EOF
+
+_d82_case block-adopt fail "adopt must use flow form" "layers: a block-style adopt list is an error" <<'EOF'
+  - tool: gitconfig
+    src: files/gitconfig
+    adopt:
+      - files/legacy
+EOF
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."

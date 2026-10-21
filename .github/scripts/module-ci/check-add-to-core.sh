@@ -150,7 +150,11 @@ fi
 
 # 8. Optional module-specific verification (e.g. a hook's side effects) --
 #    deliberately NOT hardcoded here; a module opts in by shipping this file.
+#    It gets MODULE_URL/MODULE_BRANCH/MODULE_ROOT too, so a test that needs a
+#    host seeded *before* 'wb add' (a user's own ~/.gitconfig, say — D82)
+#    can build its own scratch HOME and repeat steps 1-2 there.
 if [[ -x "${MODULE_ROOT}/tests/check-add-to-core.sh" ]]; then
+    export MODULE_URL MODULE_BRANCH MODULE_ROOT
     if WB="${WB}" MODULE_NAME="${MODULE_NAME}" "${MODULE_ROOT}/tests/check-add-to-core.sh" >"${WORK}/module-specific.log" 2>&1; then
         ok "module-specific tests/check-add-to-core.sh passed"
     else

@@ -170,23 +170,28 @@ Engine-owned ledger (docs/decisions-log.md D81). Pipe-delimited, one row per tar
 ~/.config/tmux/tmux.conf|deploy|active|<sha256>|-|-|-
 ~/.vimrc|deploy|user|-|-|-|-
 ~/.config/nvim|deploy|held|link:.|-|-|v1.0.0-c2f7760
+~/.gitconfig#under|layer|active|<sha256>|-|-|-
 ```
 
 | Field | Values |
 |---|---|
-| `dest` | `~/`-form dest from the manifest (directory children as `<dest>/<path>`), or the absolute engine-computed path for `overrides_src`. The key. |
-| `kind` | `deploy` \| `overrides` |
+| `dest` | `~/`-form dest from the manifest (directory children as `<dest>/<path>`), or the absolute engine-computed path for `overrides_src`, or — for a layer — `<target>#<position>` (`~/.gitconfig#under`). The key. |
+| `kind` | `deploy` \| `overrides` \| `layer` (docs/decisions-log.md D82) |
 | `state` | `active` — core wrote or linked it. `user` — the user chose to own it (`wb files resolve … keep`, or `skip` on a linked entry); never written again. `removed` — core wrote it, the user deleted it; never recreated. `restored` — `wb files restore` ran. `held` — linked, with changes made through the link; pinned until resolved. `converted` — a linked directory now delivered as managed copies (its children have their own rows). |
 | `sha` | Copy: sha256 of what core last wrote. Linked: `link:<src>`. |
-| `original` | Backup of the pre-workbench content core displaced at `dest`, or `-`. Under the backup root. |
+| `original` | Backup of the pre-workbench content core displaced at `dest`, or `-`. Under the backup root. Layers: `-` (the target existed), `+created` (core created it), or a backup path (after `wb files use` displaced the user's content). |
 | `ack` | Copy: the upstream sha256 the user chose to keep their edit over (`wb files resolve … manage`); no notice until the default moves again. Otherwise `-`. |
 | `pin` | `held`: the snapshot basename the entry is pinned to. Otherwise `-`. |
 
 Content core found at a dest that isn't its own has no row — it's re-evaluated on every deploy, so a later `follow` applies to it. Rewritten atomically (temp file + rename) one row at a time. Safe to delete: the next deploy re-derives each row, treating a byte-identical copy of a retained default (or a link into the module's own state) as core's and anything else as the user's. What's lost is `original`, `ack` and `pin` — the backups themselves stay, and a held entry's snapshot becomes prunable, so don't delete it while anything is held.
 
+**Layer rows** (`kind: layer`, docs/decisions-log.md D82). `state`: `active` — core's block is in the target as core wrote it (lines found inside it that core didn't write are moved out, just below it). `user` — the user edited the block (an expected line is gone), or the layer's policy is `skip`; never written. `removed` — the user deleted the block's markers; never re-added. `restored` — `wb files restore` removed the block. `sha` is the sha256 of the exact block text written, markers included. Once a row exists, its target is the layer's target from then on, even if another candidate file appears later.
+
 ### `files.policy`
 
 Host-owned. One `<dest>|<policy>` row per target the user has overridden with `wb files policy`; `<policy>` is `skip`, `seed`, `managed` or `follow` (`seed` is copy-only). No row: the entry's lifecycle and the host default decide. Never written by sync.
+
+A layer's row is keyed by its layer id instead of a path — `<tool>` for an `under` layer, `<tool>:over` for an `over` one (`gitconfig|skip`) — and takes only `skip` or `managed`. That lets `wb add --skip-layer` write it before the module's first deploy, when the target isn't known yet. `managed` on a layer is the explicit consent to write through a symlinked target.
 
 ### `files.forms`
 
@@ -198,7 +203,7 @@ Host-owned. One `<dest>|<policy>` row per target the user has overridden with `w
 
 ### `files.pending`
 
-`<dest>|held` or `<dest>|moved` (an edited copy whose default has changed since). Rewritten after every deploy and every `wb files` change; deleted when empty. Read by the loader's shell-start notice and `wb status`, by existence and line count only.
+`<dest>|held` or `<dest>|moved` (an edited copy whose default has changed since), or `<target>#<position>|linked` (a layer whose target is a symlink the user manages, waiting on `wb files resolve <module> <layer-id> use|keep` — D82). Rewritten after every deploy and every `wb files` change; deleted when empty. Read by the loader's shell-start notice and `wb status`, by existence and line count only.
 
 ### `sums/<snapshot>`
 
