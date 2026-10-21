@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.17.0] - 2026-10-21
+
 ### Added
 
 - **Core now owns the whole lifecycle of every file a module deploys, and

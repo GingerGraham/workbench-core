@@ -10,7 +10,7 @@ _wb_snapshot_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 [[ -f "${_wb_snapshot_lib_dir}/../sync/state.sh" ]] && source "${_wb_snapshot_lib_dir}/../sync/state.sh"
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/distribution/snapshot.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/distribution/snapshot.sh" "0.2.0" || true
 
 # Default retention: keep this many snapshots per module, pruning the rest.
 : "${WORKBENCH_SNAPSHOT_KEEP:=3}"
