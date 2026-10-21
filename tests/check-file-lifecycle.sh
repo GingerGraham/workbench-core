@@ -604,7 +604,7 @@ workbench_sync_module e2e-nvim manual >>"${LOG}" 2>&1
 E_CUR_BEFORE="$(readlink "$(workbench_module_dir e2e-nvim)/current")"
 # Simulated failure, in a subshell so the stub doesn't outlive this check.
 rc=0
-# shellcheck disable=SC2329  # called by workbench_sync_module
+# shellcheck disable=SC2317,SC2329  # called by workbench_sync_module (SC2317 on shellcheck < 0.11)
 ( workbench_files_before_swap() { return 1; }; workbench_sync_module e2e-nvim manual ) >>"${LOG}" 2>&1 || rc=$?
 [[ "${rc}" -ne 0 && "$(readlink "$(workbench_module_dir e2e-nvim)/current")" == "${E_CUR_BEFORE}" ]] \
     && ok "real sync: if changes can't be secured, the update is refused and nothing swaps" || fail "sync swapped despite before_swap failing (rc ${rc})"
