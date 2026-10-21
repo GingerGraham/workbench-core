@@ -126,7 +126,7 @@ DAILY USE
                                modules told you how to install current.
 
 SETUP & HOST-LEVEL CONVERGENCE
-  install [--bundle <name>] [--skip-ansible]
+  install [--bundle <name> [--use-files [--follow]]] [--skip-ansible]
                                First-run setup: prereqs, core bootstrap, PATH
                                symlink, shell rc stub, SSH deploy keys,
                                Ansible.
@@ -141,9 +141,10 @@ SETUP & HOST-LEVEL CONVERGENCE
                                per-module layer underneath it.
 
 MANAGING MODULES
-  add <name> [url] [--private] [--allow-hooks]
+  add <name> [url] [--private] [--allow-hooks] [--use-files [--follow]]
                                Register + immediately sync a new module.
-  remove <name>                Deregister (content on disk is left alone).
+  remove <name> [--restore]    Deregister (content on disk is left alone,
+                               unless --restore puts back what it replaced).
   track <name> --latest | --branch <b> | --tag <t> | --commit <sha>
                                Pin what a module tracks, then sync it once.
   dev [<name>]                 Guided, interactive prompt wrapping 'track'.
@@ -157,6 +158,14 @@ MANAGING MODULES
                                docs (its HELP.md/README.md in full). Not the
                                same as 'wb help <command>' — that's this
                                CLI's own usage text.
+
+YOUR CONFIG FILES
+  files status|diff|use|resolve|policy|restore
+                               See and decide what happens to every file a
+                               module deploys: which are yours, which follow
+                               the module, what's waiting on you. Workbench
+                               never removes or replaces a file it didn't
+                               put there — 'wb help files' for the details.
 
 ADVANCED / INTERNAL
   sync run-if-due              Used by the background timer; a no-op unless
@@ -350,9 +359,12 @@ EOF
 }
 
 _wb_cmd_install() {
-    local bundle="" skip_ansible="false"
+    local bundle="" skip_ansible="false" use_files="false" follow="false" yes="false"
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            --use-files) use_files="true" ;;
+            --follow)    follow="true" ;;
+            --yes|-y)    yes="true" ;;
             --bundle)
                 if [[ -z "${2:-}" ]]; then
                     log_error "wb install: --bundle requires a value"
@@ -365,6 +377,20 @@ _wb_cmd_install() {
         esac
         shift
     done
+    if [[ "${use_files}" == "true" && -z "${bundle}" ]]; then
+        log_error "wb install: --use-files goes with --bundle <name> (for a single module: wb add <name> --use-files)"
+        return 2
+    fi
+    if [[ "${follow}" == "true" && "${use_files}" != "true" ]]; then
+        log_error "wb install: --follow goes with --use-files"
+        return 2
+    fi
+    # Refuse before registering anything: the --use-files confirmation
+    # can't be asked without a terminal (D81).
+    if [[ "${use_files}" == "true" && "${yes}" != "true" && ! -t 0 ]]; then
+        log_error "wb install: --use-files needs a terminal to confirm — re-run with --yes. Nothing was changed."
+        return 1
+    fi
 
     log_info "wb install: workbench-core release: $(_workbench_release_version)"
     log_info "wb install: checking prerequisites..."
@@ -395,10 +421,18 @@ _wb_cmd_install() {
     if [[ -n "${bundle}" ]]; then
         _wb_require modules/catalog.sh modules/add.sh
         local member
+        local -a members=()
         while IFS= read -r member; do
             [[ -z "${member}" ]] && continue
+            members+=("${member}")
             workbench_cmd_add "${member}"
         done < <(workbench_catalog_bundle_modules "${bundle}")
+        # After the loop, not inside it: the confirmation reads stdin,
+        # which inside the loop is the bundle list.
+        if [[ "${use_files}" == "true" && "${#members[@]}" -gt 0 ]]; then
+            _wb_files_use_at_install "${follow}" "${yes}" "${members[@]}" \
+                || log_warn "wb install: --use-files didn't complete for every file — see above; 'wb files status' shows where things stand"
+        fi
     fi
 
     _wb_require ssh/bootstrap.sh
@@ -541,6 +575,10 @@ _wb_cmd_update() {
     else
         workbench_sync_all "manual"
     fi
+    # D81: from a terminal, ask about anything now waiting on the user —
+    # a held link, an edited copy whose default moved. Never on non-TTY,
+    # and never from the scheduled path (which doesn't come through here).
+    _wb_files_prompt_pending
     _wb_maybe_reconverge_core "${core_sha_before}" false
 }
 
@@ -619,6 +657,12 @@ _wb_cmd_status() {
     echo "Fast (5-minute) cadence active: ${fast}"
 
     _wb_status_check_rendered_lists
+
+    local files_waiting
+    files_waiting="$(_wb_files_pending_total)"
+    if [[ "${files_waiting}" -gt 0 ]]; then
+        echo "Files waiting on you: ${files_waiting} — run 'wb files status'"
+    fi
 }
 
 # ── functions ──────────────────────────────────────────────────────────────
@@ -1203,132 +1247,11 @@ _wb_cmd_module_docs() {
     echo
 }
 
+# _wb_cmd_module_reset <module> <name>|all [--follow] [--yes]
+# D51's command, kept for anyone used to it: since D81 it is exactly
+# 'wb files use' — same arguments, same matching, same confirmation.
 _wb_cmd_module_reset() {
-    local name="${1:-}" target="${2:-}"
-
-    if [[ -z "${name}" || -z "${target}" ]]; then
-        log_error "wb module reset: usage: wb module reset <module> <name>|all"
-        return 2
-    fi
-    if ! workbench_is_registered "${name}"; then
-        log_error "wb module reset: '${name}' is not registered — run 'wb add ${name}' first"
-        return 1
-    fi
-    local current_dir
-    current_dir="$(workbench_module_current_dir "${name}")"
-    if [[ ! -d "${current_dir}" ]]; then
-        log_error "wb module reset: '${name}' is registered but has never been synced — run 'wb update ${name}' first"
-        return 1
-    fi
-
-    local entries
-    entries="$(workbench_module_reset_targets "${name}")"
-    if [[ -z "${entries}" ]]; then
-        log_info "wb module reset: '${name}' has no copy-mode deploy files to reset."
-        return 0
-    fi
-
-    local base src real_dest
-    local -a chosen_bases=() chosen_srcs=() chosen_dests=()
-
-    if [[ "${target}" == "all" ]]; then
-        while IFS='|' read -r base src real_dest; do
-            chosen_bases+=("${base}"); chosen_srcs+=("${src}"); chosen_dests+=("${real_dest}")
-        done <<< "${entries}"
-    else
-        local match_count=0
-        local -a src_bases=() src_srcs=() src_dests=()
-        while IFS='|' read -r base src real_dest; do
-            if [[ "${base}" == "${target}" ]]; then
-                chosen_bases+=("${base}"); chosen_srcs+=("${src}"); chosen_dests+=("${real_dest}")
-                match_count=$((match_count + 1))
-            fi
-            # Tracked independently of the basename match above, so a
-            # full src path resolves regardless of whether it also
-            # collides with another entry's basename — this is what
-            # actually makes the "name it by its full src path instead"
-            # disambiguation reachable (a target typed as a full src
-            # path never equals any entry's bare basename, so relying on
-            # the basename match above to find it first would never work).
-            if [[ "${src}" == "${target}" ]]; then
-                src_bases+=("${base}"); src_srcs+=("${src}"); src_dests+=("${real_dest}")
-            fi
-        done <<< "${entries}"
-
-        if [[ "${match_count}" -eq 0 ]]; then
-            if [[ "${#src_srcs[@]}" -eq 1 ]]; then
-                chosen_bases=("${src_bases[@]}"); chosen_srcs=("${src_srcs[@]}"); chosen_dests=("${src_dests[@]}")
-            else
-                log_error "wb module reset: '${target}' doesn't match any of ${name}'s deploy files. Available:"
-                while IFS='|' read -r base src real_dest; do
-                    printf '    %s\n' "${base}"
-                done <<< "${entries}"
-                return 1
-            fi
-        elif [[ "${match_count}" -gt 1 ]]; then
-            # Ambiguous by basename — disambiguate by full src path instead.
-            if [[ "${#src_srcs[@]}" -eq 1 ]]; then
-                chosen_bases=("${src_bases[@]}"); chosen_srcs=("${src_srcs[@]}"); chosen_dests=("${src_dests[@]}")
-            else
-                log_error "wb module reset: '${target}' matches more than one of ${name}'s deploy files — name it by its full src path instead:"
-                local j
-                for j in "${!chosen_bases[@]}"; do
-                    printf '    %-24s (src: %s)\n' "${chosen_bases[$j]}" "${chosen_srcs[$j]}"
-                done
-                return 1
-            fi
-        fi
-    fi
-
-    echo
-    echo "[INFO] About to discard any local edits and restore the workbench default for:"
-    local k
-    for k in "${!chosen_dests[@]}"; do
-        printf '    %s\n' "${chosen_dests[$k]}"
-    done
-    echo
-    echo "[INFO] Any file that currently differs from the workbench default is backed up first, under"
-    echo "       ${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/backups/ — see the log lines below for the exact path."
-    echo
-
-    local answer
-    printf 'Proceed? [y/N]: '
-    if ! read -r answer; then
-        echo
-        log_info "wb module reset: aborted (no input) — nothing was reset."
-        return 0
-    fi
-    case "${answer}" in
-        y|Y|yes|YES) ;;
-        *)
-            log_info "wb module reset: aborted — nothing was reset."
-            return 0
-            ;;
-    esac
-
-    local abs_src failed=0
-    for k in "${!chosen_dests[@]}"; do
-        abs_src="${current_dir}/${chosen_srcs[$k]%/}"
-        # Same D75 checks the sync-time deploy applies (security review
-        # follow-up R6): never copy through a symlinked src, never write
-        # through a symlinked parent into a denied location.
-        if [[ -L "${abs_src}" ]]; then
-            log_error "wb module reset: refusing ${chosen_srcs[$k]} — it is a symlink"
-            failed=1
-            continue
-        fi
-        if ! _wb_dest_physical_is_safe "${chosen_dests[$k]}" "${name}"; then
-            log_error "wb module reset: refusing ${chosen_dests[$k]} — resolves through a symlink to a denied location"
-            failed=1
-            continue
-        fi
-        workbench_deploy_copy_file "${abs_src}" "${chosen_dests[$k]}" "true" "${name}" || failed=1
-    done
-
-    if [[ "${failed}" -eq 1 ]]; then
-        log_error "wb module reset: one or more files failed to reset — see errors above."
-        return 1
-    fi
+    _wb_cmd_files_use "$@"
 }
 
 _wb_cmd_module() {
@@ -1341,6 +1264,1169 @@ _wb_cmd_module() {
         reset) _wb_cmd_module_reset "$@" ;;
         *)
             log_error "wb module: usage: wb module info <name> | wb module docs <name> | wb module reset <name> <target>|all"
+            return 2
+            ;;
+    esac
+}
+
+# ── files (docs/decisions-log.md D81) ───────────────────────────────────────
+# The user's view of, and say over, every file a module deploys outside its
+# own snapshot. All decisions and every write live in lib/files/lifecycle.sh;
+# this layer only resolves names, previews, confirms, and reports.
+#
+# Shared rules: anything that writes previews first, names the backup root,
+# then asks [y/N]. On non-TTY stdin without --yes it refuses (exit 1) and
+# changes nothing. Exit codes: 0 success, 1 failure or refusal, 2 usage. A
+# run over several targets attempts every one, then exits 1 if any failed.
+
+_wb_files_backup_root() {
+    printf '%s/workbench/backups\n' "${XDG_DATA_HOME:-${HOME}/.local/share}"
+}
+
+# ~/-form for display; dests are stored that way already, overrides_src's
+# engine-computed path isn't.
+# shellcheck disable=SC2088  # a literal ~/ for display, never expanded
+_wb_files_display_path() {
+    local path="$1"
+    case "${path}" in
+        "${HOME}"/*) printf '~/%s\n' "${path#"${HOME}"/}" ;;
+        *)           printf '%s\n' "${path}" ;;
+    esac
+}
+
+# _wb_files_confirm <yes:true|false> <label>
+# 0 = go ahead, 1 = refused (non-TTY without --yes), 2 = the user declined.
+_wb_files_confirm() {
+    local yes="$1" label="$2" answer
+    [[ "${yes}" == "true" ]] && return 0
+    if [[ ! -t 0 ]]; then
+        log_error "${label}: not running in a terminal — re-run with --yes to confirm. Nothing was changed."
+        return 1
+    fi
+    printf 'Proceed? [y/N]: '
+    if ! read -r answer; then
+        echo
+        log_info "${label}: aborted — nothing was changed."
+        return 2
+    fi
+    case "${answer}" in
+        y|Y|yes|YES) return 0 ;;
+    esac
+    log_info "${label}: aborted — nothing was changed."
+    return 2
+}
+
+# _wb_files_require_module <label> <module> [synced]
+# The module must be a valid name with state on this host; 'synced' also
+# requires a current snapshot (anything that reads the manifest needs one).
+_wb_files_require_module() {
+    local label="$1" module="$2" need="${3:-}"
+    if ! workbench_valid_module_name "${module}"; then
+        log_error "${label}: '${module}' is not a valid module name"
+        return 2
+    fi
+    if [[ "${need}" == "synced" ]]; then
+        if ! workbench_is_registered "${module}"; then
+            log_error "${label}: '${module}' is not registered — run 'wb add ${module}' first"
+            return 1
+        fi
+        if [[ ! -d "$(workbench_module_current_dir "${module}")" ]]; then
+            log_error "${label}: '${module}' is registered but has never been synced — run 'wb update ${module}' first"
+            return 1
+        fi
+    elif [[ ! -d "$(workbench_module_dir "${module}")" ]]; then
+        log_error "${label}: '${module}' has no state on this host"
+        return 1
+    fi
+    return 0
+}
+
+# _wb_files_resolve_target <module> <file> <label> [restore|resolve]
+# Prints the one target line (workbench_files_targets) <file> names. Rules
+# in order, the first with exactly one match wins:
+#   1. exact dest — ~/-form, expanded absolute, or overrides_src's path
+#   2. exact basename
+#   3. exact src_rel
+# Then, for entries no longer in the manifest: 'resolve' falls back to a
+# linked ledger row (workbench_files_row_as_target), 'restore' to any
+# ledger row by dest or basename (a minimal line: only dest and kind set).
+# Zero matches lists the basenames; several list dest (src: ...) — both on
+# stderr, since callers capture stdout.
+_wb_files_resolve_target() {
+    local module="$1" file="$2" label="$3" fallback="${4:-}"
+    local entries line base src dest kind row_dest row_kind
+    local -a by_dest=() by_base=() by_src=() by_row=() ambiguous=()
+    entries="$(workbench_files_targets "${module}" --log)"
+    while IFS= read -r line; do
+        [[ -z "${line}" ]] && continue
+        IFS='|' read -r base src dest kind _ <<< "${line}"
+        if [[ "${dest%/}" == "${file%/}" || "$(_wb_expand_dest "${dest%/}")" == "${file%/}" ]]; then
+            by_dest+=("${line}")
+        fi
+        [[ "${base}" == "${file}" ]] && by_base+=("${line}")
+        [[ "${src}" == "${file}" ]] && by_src+=("${line}")
+    done <<< "${entries}"
+
+    if [[ "${#by_dest[@]}" -eq 1 ]]; then printf '%s\n' "${by_dest[0]}"; return 0; fi
+    if [[ "${#by_base[@]}" -eq 1 ]]; then printf '%s\n' "${by_base[0]}"; return 0; fi
+    if [[ "${#by_src[@]}" -eq 1 ]]; then printf '%s\n' "${by_src[0]}"; return 0; fi
+
+    if [[ -n "${fallback}" ]]; then
+        while IFS='|' read -r row_dest row_kind _; do
+            [[ -z "${row_dest}" ]] && continue
+            if [[ "${row_dest%/}" == "${file%/}" || "$(_wb_expand_dest "${row_dest%/}")" == "${file%/}" \
+                || "$(basename "${row_dest}")" == "${file}" ]]; then
+                if [[ "${fallback}" == "resolve" ]]; then
+                    line="$(workbench_files_row_as_target "${module}" "${row_dest}")"
+                    [[ -n "${line}" ]] && by_row+=("${line}")
+                else
+                    by_row+=("$(basename "${row_dest}")||${row_dest}|${row_kind}|||ledger|")
+                fi
+            fi
+        done < <(workbench_files_ledger_rows "${module}")
+        if [[ "${#by_row[@]}" -eq 1 ]]; then printf '%s\n' "${by_row[0]}"; return 0; fi
+    fi
+
+    if [[ "${#by_dest[@]}" -gt 1 ]]; then
+        ambiguous=("${by_dest[@]}")
+    elif [[ "${#by_base[@]}" -gt 1 ]]; then
+        ambiguous=("${by_base[@]}")
+    elif [[ "${#by_src[@]}" -gt 1 ]]; then
+        ambiguous=("${by_src[@]}")
+    elif [[ "${#by_row[@]}" -gt 1 ]]; then
+        ambiguous=("${by_row[@]}")
+    fi
+    if [[ "${#ambiguous[@]}" -gt 0 ]]; then
+        log_error "${label}: '${file}' matches more than one of ${module}'s files — name it by its dest instead:"
+        for line in "${ambiguous[@]}"; do
+            IFS='|' read -r base src dest _ <<< "${line}"
+            printf '    %-36s (src: %s)\n' "$(_wb_files_display_path "${dest}")" "${src:--}" >&2
+        done
+        return 1
+    fi
+    log_error "${label}: '${file}' doesn't match any of ${module}'s files. Available:"
+    printf '%s\n' "${entries}" | awk -F'|' 'NF > 1 && !seen[$1]++ { print "    " $1 }' >&2
+    return 1
+}
+
+# The target line for <dest>: from the manifest-derived targets, else from a
+# linked ledger row whose manifest entry is gone.
+_wb_files_line_for_dest() {
+    local module="$1" dest="$2" line
+    line="$(workbench_files_targets "${module}" | awk -F'|' -v d="${dest}" '$3 == d { print; exit }')"
+    [[ -z "${line}" ]] && line="$(workbench_files_row_as_target "${module}" "${dest}")"
+    [[ -n "${line}" ]] && printf '%s\n' "${line}"
+}
+
+# Prints the yield_to paths of <yield_csv> that exist right now.
+_wb_files_existing_yields() {
+    local path
+    while IFS= read -r path; do
+        [[ -z "${path}" ]] && continue
+        [[ -e "$(_wb_expand_dest "${path}")" || -L "$(_wb_expand_dest "${path}")" ]] && printf '%s\n' "${path}"
+    done < <(printf '%s\n' "$1" | tr ',' '\n')
+}
+
+# Prints drift lines indented, for previews and the resolve prompt.
+_wb_files_print_drift() {
+    local module="$1" dest="$2" src="$3" pin snap
+    pin="$(workbench_files_ledger_field "${module}" "${dest}" 7)"
+    snap="$(_wb_files_link_snapshot "${module}" "${pin}")"
+    workbench_files_snapshot_drift "${module}" "${snap}" "${src}" | sort -k2 | sed 's/^/        /'
+}
+
+# _wb_files_module_changed_count <module> <pin> <src_rel>
+# How many files the module itself changed at or under <src_rel> between
+# the held snapshot and current — from the checksums recorded at fetch, so
+# the user's own changes through the link don't count.
+_wb_files_module_changed_count() {
+    local module="$1" pin="$2" rel="$3" module_dir old new
+    module_dir="$(workbench_module_dir "${module}")"
+    old="$(workbench_files_sums_path "${module}" "${pin}")"
+    new="$(workbench_files_sums_path "${module}" "$(readlink "${module_dir}/current")")"
+    if [[ ! -f "${old}" || ! -f "${new}" ]]; then
+        printf '?\n'
+        return 0
+    fi
+    awk -v pre="${rel}" '
+        function inscope(p) { return pre == "." || p == pre || index(p, pre "/") == 1 }
+        FNR == NR { p = substr($0, 67); if (inscope(p)) a[p] = substr($0, 1, 64); next }
+        { p = substr($0, 67); if (inscope(p)) b[p] = substr($0, 1, 64) }
+        END {
+            n = 0
+            for (p in a) if (!(p in b) || a[p] != b[p]) n++
+            for (p in b) if (!(p in a)) n++
+            print n
+        }
+    ' "${old}" "${new}"
+}
+
+# One target's 'wb files use' preview lines (C.5 wording).
+_wb_files_preview_use() {
+    local module="$1" line="$2" real state original path
+    _wb_files_target_fields "${line}"
+    real="$(_wb_expand_dest "${WB_T_DEST%/}")"
+    state="$(workbench_files_ledger_field "${module}" "${WB_T_DEST}" 3)"
+    original="$(workbench_files_ledger_field "${module}" "${WB_T_DEST}" 5)"
+    if [[ "${WB_T_MODE}" == "copy" ]]; then
+        printf '  %s: write the module'"'"'s version\n' "$(_wb_files_display_path "${WB_T_DEST}")"
+    else
+        printf '  %s: link to the module'"'"'s version\n' "$(_wb_files_display_path "${WB_T_DEST}")"
+    fi
+    if [[ "${state}" == "held" ]]; then
+        printf '      back up your changes:\n'
+        _wb_files_print_drift "${module}" "${WB_T_DEST}" "${WB_T_SRC}"
+    fi
+    while IFS= read -r path; do
+        [[ -z "${path}" ]] && continue
+        printf '      move %s aside (restore puts it back)\n' "${path}"
+    done < <(_wb_files_existing_yields "${WB_T_YIELD}")
+    if [[ -e "${real}" || -L "${real}" ]] && ! _wb_files_is_our_link "${module}" "${real}"; then
+        if [[ "${WB_T_MODE}" == "copy" && -f "${real}" && ! -L "${real}" ]] && cmp -s "${WB_T_SOURCE}" "${real}"; then
+            return 0
+        fi
+        if [[ "${WB_T_MODE}" != "copy" || -d "${real}" || -L "${real}" ]]; then
+            printf '      move %s aside' "$(_wb_files_display_path "${WB_T_DEST}")"
+        else
+            printf '      back up %s' "$(_wb_files_display_path "${WB_T_DEST}")"
+        fi
+        if [[ ( -z "${state}" || "${state}" == "user" ) && ( -z "${original}" || "${original}" == "-" ) ]]; then
+            printf ' (kept as your original)'
+        fi
+        printf '\n'
+    fi
+}
+
+# _wb_files_use_lines <module> <follow:true|false> <yes:true|false> <label> <line>...
+# Preview, confirm, then workbench_files_use for each line.
+_wb_files_use_lines() {
+    local module="$1" follow="$2" yes="$3" label="$4" line rc failed=0 follow_arg=""
+    shift 4
+    [[ "${follow}" == "true" ]] && follow_arg="follow"
+    echo
+    echo "${label}: about to use ${module}'s version of:"
+    for line in "$@"; do
+        _wb_files_preview_use "${module}" "${line}"
+    done
+    [[ "${follow}" == "true" ]] && echo "  ...and keep following ${module} after you edit them (edits are backed up each time)."
+    echo
+    echo "Backups go under $(_wb_files_backup_root)/ — the log lines below name each one."
+    echo
+    _wb_files_confirm "${yes}" "${label}"; rc=$?
+    [[ "${rc}" -eq 1 ]] && return 1
+    [[ "${rc}" -eq 2 ]] && return 0
+    for line in "$@"; do
+        workbench_files_use "${module}" "${line}" ${follow_arg:+"${follow_arg}"} || failed=1
+    done
+    if [[ "${failed}" -eq 1 ]]; then
+        log_error "${label}: one or more files failed — see errors above."
+        return 1
+    fi
+    return 0
+}
+
+# ── wb files status ─────────────────────────────────────────────────────────
+
+_wb_files_copy_state_label() {
+    local policy="$1" condition="$2" action="$3"
+    if [[ "${policy}" == "skip" ]]; then printf 'skipped\n'; return 0; fi
+    case "${condition}" in
+        new)               printf 'not deployed yet\n' ;;
+        clean)             printf 'workbench default\n' ;;
+        edited)            if [[ "${action}" == "notify" ]]; then printf 'your edits, default changed\n'; else printf 'your edits\n'; fi ;;
+        foreign|yielded)   printf 'yours\n' ;;
+        user)              printf 'yours (you chose to keep it)\n' ;;
+        held)              printf 'changed locally; held\n' ;;
+        adoptable)         printf 'older workbench default\n' ;;
+        gone|removed)      printf 'removed by you\n' ;;
+        restored)          printf 'restored\n' ;;
+        *)                 printf '%s\n' "${condition}" ;;
+    esac
+}
+
+_wb_files_copy_next_label() {
+    local condition="$1" action="$2"
+    case "${action}" in
+        write)          if [[ "${condition}" == "new" ]]; then printf 'create\n'; else printf 'refresh\n'; fi ;;
+        write-backup)   printf 'replace (backup first)\n' ;;
+        write-original) printf 'replace (yours kept as original)\n' ;;
+        write-warn)     printf 'create (yours elsewhere stays)\n' ;;
+        adopt)          printf 'adopt as-is\n' ;;
+        *)              printf 'leave\n' ;;
+    esac
+}
+
+# Prints "<state>|<next>" for one linked target.
+_wb_files_link_labels() {
+    local module="$1" dest="$2" yield="$3" policy="$4" real state
+    real="$(_wb_expand_dest "${dest%/}")"
+    state="$(workbench_files_ledger_field "${module}" "${dest}" 3)"
+    case "${state}" in
+        held)     printf 'changed locally; held|waiting on you\n'; return 0 ;;
+        user)     printf 'yours (your own copy)|leave\n'; return 0 ;;
+        removed)  printf 'removed by you|leave\n'; return 0 ;;
+        restored) printf 'restored|leave\n'; return 0 ;;
+    esac
+    if [[ "${state}" == "active" ]] && _wb_files_is_our_link "${module}" "${real}"; then
+        if [[ "${policy}" == "skip" ]]; then
+            printf 'linked|becomes your copy\n'
+        elif [[ "$(workbench_files_policy_get "${module}" "${dest}")" == "follow" ]]; then
+            printf 'linked|backup and follow\n'
+        else
+            printf 'linked|follows\n'
+        fi
+        return 0
+    fi
+    if [[ -e "${real}" || -L "${real}" ]]; then
+        printf 'yours|leave\n'
+    elif [[ "${policy}" == "skip" || -n "$(_wb_files_existing_yields "${yield}")" ]]; then
+        printf 'not deployed yet|leave\n'
+    else
+        printf 'not deployed yet|link\n'
+    fi
+}
+
+_wb_cmd_files_status() {
+    local module="${1:-}" m line plan policy condition action state next mode_label original star
+    local dest reason pending_any=false
+    local -a modules=()
+    _wb_engine_require_files
+    if [[ -n "${module}" ]]; then
+        _wb_files_require_module "wb files status" "${module}" synced || return $?
+        modules=("${module}")
+    else
+        while IFS= read -r m; do
+            [[ -n "${m}" ]] && modules+=("${m}")
+        done < <(workbench_list_registered_modules)
+    fi
+    if [[ "${#modules[@]}" -eq 0 ]]; then
+        echo "No modules registered."
+        return 0
+    fi
+
+    for m in "${modules[@]}"; do
+        [[ -d "$(workbench_module_current_dir "${m}")" ]] || continue
+        workbench_files_write_pending "${m}"
+        [[ -s "$(workbench_files_pending_path "${m}")" ]] || continue
+        if [[ "${pending_any}" == "false" ]]; then
+            echo "Waiting on you:"
+            pending_any=true
+        fi
+        while IFS='|' read -r dest reason; do
+            [[ -z "${dest}" ]] && continue
+            case "${reason}" in
+                held)  reason="changed locally; update held" ;;
+                moved) reason="your edits; default changed" ;;
+            esac
+            printf '  %-12s %-30s %-30s %s\n' "${m}" "$(_wb_files_display_path "${dest}")" "${reason}" \
+                "wb files resolve ${m} $(basename "${dest%/}")"
+        done < "$(workbench_files_pending_path "${m}")"
+    done
+    [[ "${pending_any}" == "true" ]] && echo
+
+    printf '%-12s %-30s %-10s %-9s %-28s %s\n' "MODULE" "FILE" "MODE" "POLICY" "STATE" "NEXT UPDATE"
+    for m in "${modules[@]}"; do
+        [[ -d "$(workbench_module_current_dir "${m}")" ]] || continue
+        while IFS= read -r line; do
+            [[ -z "${line}" ]] && continue
+            _wb_files_target_fields "${line}"
+            star=""
+            [[ -n "$(workbench_files_policy_get "${m}" "${WB_T_DEST}")" ]] && star="*"
+            if [[ "${WB_T_MODE}" == "copy" ]]; then
+                plan="$(workbench_files_plan "${m}" "${WB_T_DEST}" "${WB_T_SOURCE}" "${WB_T_SRC}" "${WB_T_LIFECYCLE}" "${WB_T_YIELD}")"
+                IFS='|' read -r policy condition action <<< "${plan}"
+                state="$(_wb_files_copy_state_label "${policy}" "${condition}" "${action}")"
+                next="$(_wb_files_copy_next_label "${condition}" "${action}")"
+                mode_label="copy"
+            else
+                policy="$(workbench_files_effective_policy "${m}" "${WB_T_DEST}" link)"
+                IFS='|' read -r state next <<< "$(_wb_files_link_labels "${m}" "${WB_T_DEST}" "${WB_T_YIELD}" "${policy}")"
+                mode_label="${WB_T_MODE}"
+            fi
+            original="$(workbench_files_ledger_field "${m}" "${WB_T_DEST}" 5)"
+            [[ -n "${original}" && "${original}" != "-" ]] && state="${state} (original kept)"
+            printf '%-12s %-30s %-10s %-9s %-28s %s\n' "${m}" "$(_wb_files_display_path "${WB_T_DEST}")" \
+                "${mode_label}" "${policy}${star}" "${state}" "${next}"
+        done < <(workbench_files_targets "${m}")
+    done
+    echo
+    echo "* = a per-file policy ('wb files policy <module> <file> ...')."
+    echo "Host default: $(workbench_files_default_policy) — change it with 'wb files policy --default managed|follow'."
+}
+
+# ── wb files diff ───────────────────────────────────────────────────────────
+
+# _wb_files_diff_line <module> <target-line> — read-only, always returns 0.
+_wb_files_diff_line() {
+    local module="$1" line="$2" real state pin left right
+    _wb_files_target_fields "${line}"
+    real="$(_wb_expand_dest "${WB_T_DEST%/}")"
+    state="$(workbench_files_ledger_field "${module}" "${WB_T_DEST}" 3)"
+    if [[ "${WB_T_MODE}" == "copy" ]]; then
+        if [[ ! -e "${real}" ]]; then
+            log_error "wb files diff: $(_wb_files_display_path "${WB_T_DEST}") doesn't exist — nothing to compare"
+            return 1
+        fi
+        diff -u -L "yours: $(_wb_files_display_path "${WB_T_DEST}")" -L "${module} default" "${real}" "${WB_T_SOURCE}"
+        return 0
+    fi
+    if [[ "${state}" != "held" ]]; then
+        echo "$(_wb_files_display_path "${WB_T_DEST}"): linked to ${module}'s version — nothing to compare."
+        return 0
+    fi
+    pin="$(workbench_files_ledger_field "${module}" "${WB_T_DEST}" 7)"
+    # Relative to the module's state dir, so diff's headers stay readable:
+    # current/<src> is the module now, snapshots/<pin>/<src> is yours.
+    if [[ "${WB_T_SRC}" == "." ]]; then
+        left="current/"; right="snapshots/${pin}/"
+    else
+        left="current/${WB_T_SRC}"; right="snapshots/${pin}/${WB_T_SRC}"
+    fi
+    echo "== Changed locally (since ${pin}) =="
+    echo "   (M modified, A added, D deleted — the earlier bytes aren't kept, so this is a list)"
+    _wb_files_print_drift "${module}" "${WB_T_DEST}" "${WB_T_SRC}"
+    echo
+    echo "== Yours vs the module now ('use' would replace this) =="
+    echo "   ${left} = ${module} now, ${right} = yours"
+    ( cd "$(workbench_module_dir "${module}")" && diff -ru "${left}" "${right}" )
+    return 0
+}
+
+_wb_cmd_files_diff() {
+    local module="${1:-}" file="${2:-}" line
+    if [[ -z "${module}" || -z "${file}" ]]; then
+        log_error "wb files diff: usage: wb files diff <module> <file>"
+        return 2
+    fi
+    _wb_engine_require_files
+    _wb_files_require_module "wb files diff" "${module}" synced || return $?
+    line="$(_wb_files_resolve_target "${module}" "${file}" "wb files diff" resolve)" || return 1
+    _wb_files_diff_line "${module}" "${line}"
+}
+
+# ── wb files use ────────────────────────────────────────────────────────────
+
+_wb_cmd_files_use() {
+    local module="" file="" follow=false yes=false line kind
+    local -a positional=() chosen=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --follow) follow=true ;;
+            --yes|-y) yes=true ;;
+            -*) log_error "wb files use: unknown flag '$1'"; return 2 ;;
+            *)  positional+=("$1") ;;
+        esac
+        shift
+    done
+    [[ "${#positional[@]}" -ge 1 ]] && module="${positional[0]}"
+    [[ "${#positional[@]}" -ge 2 ]] && file="${positional[1]}"
+    if [[ -z "${module}" || -z "${file}" || "${#positional[@]}" -gt 2 ]]; then
+        log_error "wb files use: usage: wb files use <module> <file>|all [--follow] [--yes]"
+        return 2
+    fi
+    _wb_engine_require_files
+    _wb_files_require_module "wb files use" "${module}" synced || return $?
+
+    if [[ "${file}" == "all" ]]; then
+        # overrides_src is the user's permanently (D48) — only by name.
+        while IFS= read -r line; do
+            [[ -z "${line}" ]] && continue
+            IFS='|' read -r _ _ _ kind _ <<< "${line}"
+            [[ "${kind}" == "overrides" ]] && continue
+            chosen+=("${line}")
+        done < <(workbench_files_targets "${module}" --log)
+        if [[ "${#chosen[@]}" -eq 0 ]]; then
+            log_info "wb files use: '${module}' deploys no files."
+            return 0
+        fi
+    else
+        line="$(_wb_files_resolve_target "${module}" "${file}" "wb files use")" || return 1
+        chosen=("${line}")
+    fi
+    _wb_files_use_lines "${module}" "${follow}" "${yes}" "wb files use" "${chosen[@]}"
+}
+
+# ── wb files resolve ────────────────────────────────────────────────────────
+
+# Prints held | moved | linked | none for one target.
+_wb_files_wait_kind() {
+    local module="$1" line="$2" state
+    _wb_files_target_fields "${line}"
+    state="$(workbench_files_ledger_field "${module}" "${WB_T_DEST}" 3)"
+    if [[ "${state}" == "held" ]]; then
+        printf 'held\n'
+    elif [[ "${WB_T_MODE}" == "copy" ]] && \
+        [[ "$(workbench_files_plan "${module}" "${WB_T_DEST}" "${WB_T_SOURCE}" "${WB_T_SRC}" "${WB_T_LIFECYCLE}" "${WB_T_YIELD}")" == *"|notify" ]]; then
+        printf 'moved\n'
+    elif [[ "${WB_T_MODE}" != "copy" && "${state}" == "active" ]] \
+        && _wb_files_is_our_link "${module}" "$(_wb_expand_dest "${WB_T_DEST%/}")"; then
+        printf 'linked\n'
+    else
+        printf 'none\n'
+    fi
+}
+
+_wb_files_choice_text() {
+    local module="$1" choice="$2" wait="$3"
+    case "${choice}:${wait}" in
+        keep:moved)   printf 'stays yours; no further notices\n' ;;
+        keep:*)       printf 'becomes your own copy; no more updates\n' ;;
+        manage:moved) printf "keep yours; you'll hear again when the default changes\n" ;;
+        manage:*)     printf 'your changes stay yours; everything else keeps following %s\n' "${module}" ;;
+        use:*)        printf "take %s's version (yours is backed up)\n" "${module}" ;;
+    esac
+}
+
+# _wb_files_resolve_one <module> <line> <choice> <follow:true|false>
+# Calls the library and turns its return codes into messages. 0 or 1.
+_wb_files_resolve_one() {
+    local module="$1" line="$2" choice="$3" follow="$4" rc=0 follow_arg=""
+    [[ "${follow}" == "true" ]] && follow_arg="follow"
+    _wb_files_target_fields "${line}"
+    workbench_files_resolve "${module}" "${line}" "${choice}" ${follow_arg:+"${follow_arg}"} || rc=$?
+    case "${rc}" in
+        0|4) return 0 ;;
+        3)   log_info "wb files resolve: nothing to resolve for $(_wb_files_display_path "${WB_T_DEST}")"; return 0 ;;
+        *)   return 1 ;;
+    esac
+}
+
+# _wb_files_resolve_interactive <module> <line> <wait-kind>
+# The keep/manage/use/diff/later prompt. Returns 0 unless the chosen action
+# failed.
+_wb_files_resolve_interactive() {
+    local module="$1" line="$2" wait="$3" answer choice="" pin changed
+    _wb_files_target_fields "${line}"
+    echo
+    echo "${module}: $(_wb_files_display_path "${WB_T_DEST}")"
+    case "${wait}" in
+        held)
+            echo "  Changed locally (M modified, A added, D deleted):"
+            _wb_files_print_drift "${module}" "${WB_T_DEST}" "${WB_T_SRC}"
+            pin="$(workbench_files_ledger_field "${module}" "${WB_T_DEST}" 7)"
+            changed="$(_wb_files_module_changed_count "${module}" "${pin}" "${WB_T_SRC}")"
+            echo "  ${module} has changed ${changed} file(s) here since — the update is held until you choose."
+            ;;
+        moved)
+            echo "  You edited it; the module's default has changed since."
+            ;;
+        linked)
+            echo "  Linked to ${module}; nothing is waiting — you can choose ahead of a change."
+            ;;
+    esac
+    while true; do
+        echo
+        echo "  [k]eep mine — mine from now on, no more updates"
+        echo "  [m]anage    — keep my changes, keep updating everything else"
+        echo "  [u]se       — take the module's version (mine is backed up)"
+        echo "  [d]iff      — show the differences, then ask again"
+        echo "  [l]ater     — decide later (stays held/pending)"
+        printf '  Choice [k/m/u/d/l]: '
+        if ! read -r answer; then
+            echo
+            answer="l"
+        fi
+        case "${answer}" in
+            k|K|keep)    choice="keep" ;;
+            m|M|manage)  choice="manage" ;;
+            u|U|use)     choice="use" ;;
+            d|D|diff)    _wb_files_diff_line "${module}" "${line}"; continue ;;
+            l|L|later|"") echo "  Left as it is."; return 0 ;;
+            *)           echo "  Please answer k, m, u, d or l."; continue ;;
+        esac
+        break
+    done
+    _wb_files_resolve_one "${module}" "${line}" "${choice}" false
+}
+
+_wb_cmd_files_resolve() {
+    local module="" file="" choice="" follow=false yes=false line dest wait failed=0 rc
+    local -a positional=() lines=() waits=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --follow) follow=true ;;
+            --yes|-y) yes=true ;;
+            -*) log_error "wb files resolve: unknown flag '$1'"; return 2 ;;
+            *)  positional+=("$1") ;;
+        esac
+        shift
+    done
+    [[ "${#positional[@]}" -ge 1 ]] && module="${positional[0]}"
+    [[ "${#positional[@]}" -ge 2 ]] && file="${positional[1]}"
+    [[ "${#positional[@]}" -ge 3 ]] && choice="${positional[2]}"
+    if [[ -z "${module}" || -z "${file}" || "${#positional[@]}" -gt 3 ]]; then
+        log_error "wb files resolve: usage: wb files resolve <module> <file>|all [keep|manage|use] [--follow] [--yes]"
+        return 2
+    fi
+    case "${choice}" in
+        ""|keep|manage|use) ;;
+        *) log_error "wb files resolve: choice must be keep, manage or use — got '${choice}'"; return 2 ;;
+    esac
+    if [[ "${follow}" == "true" && "${choice}" != "use" ]]; then
+        log_error "wb files resolve: --follow only goes with 'use'"
+        return 2
+    fi
+    if [[ -z "${choice}" && ! -t 0 ]]; then
+        log_error "wb files resolve: not running in a terminal — name the choice: wb files resolve ${module} ${file} keep|manage|use [--yes]"
+        return 2
+    fi
+    _wb_engine_require_files
+    _wb_files_require_module "wb files resolve" "${module}" synced || return $?
+
+    if [[ "${file}" == "all" ]]; then
+        while IFS='|' read -r dest _; do
+            [[ -z "${dest}" ]] && continue
+            line="$(_wb_files_line_for_dest "${module}" "${dest}")"
+            [[ -n "${line}" ]] && lines+=("${line}")
+        done < <(workbench_files_pending "${module}")
+        if [[ "${#lines[@]}" -eq 0 ]]; then
+            log_info "wb files resolve: nothing of ${module}'s is waiting on you."
+            return 0
+        fi
+    else
+        line="$(_wb_files_resolve_target "${module}" "${file}" "wb files resolve" resolve)" || return 1
+        lines=("${line}")
+    fi
+
+    # Keep only what has something to decide; say so for the rest.
+    local -a todo=()
+    for line in "${lines[@]}"; do
+        wait="$(_wb_files_wait_kind "${module}" "${line}")"
+        if [[ "${wait}" == "none" || ( "${choice}" == "use" && "${wait}" == "linked" ) ]]; then
+            _wb_files_target_fields "${line}"
+            # A held entry the user replaced is settled by the library (rc 4)
+            # even though it no longer looks like core's link.
+            if [[ "$(workbench_files_ledger_field "${module}" "${WB_T_DEST}" 3)" != "held" ]]; then
+                log_info "wb files resolve: nothing to resolve for $(_wb_files_display_path "${WB_T_DEST}")"
+                continue
+            fi
+            wait="held"
+        fi
+        todo+=("${line}")
+        waits+=("${wait}")
+    done
+    [[ "${#todo[@]}" -eq 0 ]] && return 0
+
+    local i=0
+    if [[ -z "${choice}" ]]; then
+        while [[ "${i}" -lt "${#todo[@]}" ]]; do
+            _wb_files_resolve_interactive "${module}" "${todo[${i}]}" "${waits[${i}]}" || failed=1
+            i=$((i + 1))
+        done
+        return "${failed}"
+    fi
+
+    echo
+    echo "wb files resolve: about to settle:"
+    while [[ "${i}" -lt "${#todo[@]}" ]]; do
+        _wb_files_target_fields "${todo[${i}]}"
+        printf '  %s: %s — %s\n' "$(_wb_files_display_path "${WB_T_DEST}")" "${choice}" \
+            "$(_wb_files_choice_text "${module}" "${choice}" "${waits[${i}]}")"
+        if [[ "${waits[${i}]}" == "held" && "${choice}" == "use" ]]; then
+            printf '      back up your changes:\n'
+            _wb_files_print_drift "${module}" "${WB_T_DEST}" "${WB_T_SRC}"
+        fi
+        i=$((i + 1))
+    done
+    [[ "${follow}" == "true" ]] && echo "  ...and keep following ${module} after you edit them (edits are backed up each time)."
+    echo
+    echo "Backups go under $(_wb_files_backup_root)/ — the log lines below name each one."
+    echo
+    _wb_files_confirm "${yes}" "wb files resolve"; rc=$?
+    [[ "${rc}" -eq 1 ]] && return 1
+    [[ "${rc}" -eq 2 ]] && return 0
+    for line in "${todo[@]}"; do
+        _wb_files_resolve_one "${module}" "${line}" "${choice}" "${follow}" || failed=1
+    done
+    return "${failed}"
+}
+
+# _wb_files_prompt_pending
+# 'wb update' on a TTY: offer the resolve prompt for everything waiting,
+# across every registered module. Never on non-TTY or the scheduled path.
+_wb_files_prompt_pending() {
+    local m dest line wait
+    [[ -t 0 ]] || return 0
+    command -v workbench_files_pending &>/dev/null || return 0
+    while IFS= read -r m; do
+        [[ -z "${m}" ]] && continue
+        [[ -s "$(workbench_files_pending_path "${m}")" ]] || continue
+        while IFS='|' read -r dest _; do
+            [[ -z "${dest}" ]] && continue
+            line="$(_wb_files_line_for_dest "${m}" "${dest}")"
+            [[ -z "${line}" ]] && continue
+            wait="$(_wb_files_wait_kind "${m}" "${line}")"
+            [[ "${wait}" == "none" ]] && continue
+            _wb_files_resolve_interactive "${m}" "${line}" "${wait}" </dev/tty
+        done < <(cat "$(workbench_files_pending_path "${m}")")
+    done < <(workbench_list_registered_modules)
+}
+
+# ── wb files policy ─────────────────────────────────────────────────────────
+
+_wb_files_policy_list() {
+    local m file dest policy any=false
+    echo "Host default: $(workbench_files_default_policy)"
+    while IFS= read -r m; do
+        [[ -z "${m}" ]] && continue
+        file="$(workbench_files_policy_path "${m}")"
+        [[ -f "${file}" ]] || continue
+        while IFS='|' read -r dest policy; do
+            [[ -z "${dest}" || "${dest}" == \#* ]] && continue
+            if [[ "${any}" == "false" ]]; then
+                echo
+                printf '%-12s %-36s %s\n' "MODULE" "FILE" "POLICY"
+                any=true
+            fi
+            printf '%-12s %-36s %s\n' "${m}" "$(_wb_files_display_path "${dest}")" "${policy}"
+        done < "${file}"
+    done < <(workbench_list_registered_modules)
+    [[ "${any}" == "false" ]] && echo "No per-file policies set."
+    return 0
+}
+
+# _wb_files_policy_set_default <managed|follow> <yes>
+_wb_files_policy_set_default() {
+    local value="$1" yes="$2" previous m line plan action real rc failed=0
+    local -a apply_m=() apply_l=() stays=()
+    previous="$(workbench_files_default_policy)"
+    workbench_files_default_policy_set "${value}" || return 1
+
+    while IFS= read -r m; do
+        [[ -z "${m}" ]] && continue
+        [[ -d "$(workbench_module_current_dir "${m}")" ]] || continue
+        while IFS= read -r line; do
+            [[ -z "${line}" ]] && continue
+            _wb_files_target_fields "${line}"
+            [[ -n "$(workbench_files_policy_get "${m}" "${WB_T_DEST}")" ]] && continue
+            if [[ "${WB_T_MODE}" == "copy" ]]; then
+                [[ "${WB_T_LIFECYCLE}" == "managed" ]] || continue
+                plan="$(workbench_files_plan "${m}" "${WB_T_DEST}" "${WB_T_SOURCE}" "${WB_T_SRC}" "${WB_T_LIFECYCLE}" "${WB_T_YIELD}")"
+                action="${plan##*|}"
+                case "${action}" in
+                    write-backup|write-original) apply_m+=("${m}"); apply_l+=("${line}") ;;
+                esac
+            elif [[ "${value}" == "follow" ]]; then
+                real="$(_wb_expand_dest "${WB_T_DEST%/}")"
+                [[ -n "$(workbench_files_ledger_field "${m}" "${WB_T_DEST}" 3)" && \
+                    "$(workbench_files_ledger_field "${m}" "${WB_T_DEST}" 3)" != "active" ]] && continue
+                if [[ -e "${real}" || -L "${real}" ]] && ! _wb_files_is_our_link "${m}" "${real}"; then
+                    if [[ -d "${real}" && ! -L "${real}" ]]; then
+                        stays+=("${m}|${WB_T_DEST}")
+                    else
+                        apply_m+=("${m}"); apply_l+=("${line}")
+                    fi
+                fi
+            fi
+        done < <(workbench_files_targets "${m}")
+    done < <(workbench_list_registered_modules)
+
+    if [[ "${#apply_l[@]}" -eq 0 ]]; then
+        log_info "wb files policy: host default is now '${value}' — nothing changes on disk right now."
+        if [[ "${#stays[@]}" -gt 0 ]]; then
+            for line in "${stays[@]}"; do
+                printf '  %s %s: stays yours — use '"'"'wb files use'"'"' to switch\n' "${line%%|*}" "$(_wb_files_display_path "${line#*|}")"
+            done
+        fi
+        return 0
+    fi
+
+    echo
+    echo "wb files policy: with the host default '${value}', these change now:"
+    local i=0
+    while [[ "${i}" -lt "${#apply_l[@]}" ]]; do
+        _wb_files_target_fields "${apply_l[${i}]}"
+        if [[ "${WB_T_MODE}" == "copy" ]]; then
+            printf '  %-12s %s: replace with %s'"'"'s version (yours backed up)\n' "${apply_m[${i}]}" "$(_wb_files_display_path "${WB_T_DEST}")" "${apply_m[${i}]}"
+        else
+            printf '  %-12s %s: move yours aside, link %s'"'"'s version\n' "${apply_m[${i}]}" "$(_wb_files_display_path "${WB_T_DEST}")" "${apply_m[${i}]}"
+        fi
+        i=$((i + 1))
+    done
+    if [[ "${#stays[@]}" -gt 0 ]]; then
+        for line in "${stays[@]}"; do
+            printf '  %-12s %s: stays yours — use '"'"'wb files use'"'"' to switch\n' "${line%%|*}" "$(_wb_files_display_path "${line#*|}")"
+        done
+    fi
+    echo
+    echo "Backups go under $(_wb_files_backup_root)/ — the log lines below name each one."
+    echo
+    _wb_files_confirm "${yes}" "wb files policy"; rc=$?
+    if [[ "${rc}" -ne 0 ]]; then
+        workbench_files_default_policy_set "${previous}"
+        [[ "${rc}" -eq 1 ]] && return 1
+        return 0
+    fi
+    i=0
+    while [[ "${i}" -lt "${#apply_l[@]}" ]]; do
+        _wb_files_target_fields "${apply_l[${i}]}"
+        if [[ "${WB_T_MODE}" == "copy" ]]; then
+            workbench_files_apply "${apply_m[${i}]}" "${WB_T_DEST}" "${WB_T_SOURCE}" "${WB_T_SRC}" "${WB_T_KIND}" "${WB_T_LIFECYCLE}" "${WB_T_YIELD}" || failed=1
+        else
+            workbench_files_apply_link "${apply_m[${i}]}" "${WB_T_DEST}" "${WB_T_SOURCE}" "${WB_T_SRC}" "${WB_T_KIND}" "${WB_T_YIELD}" || failed=1
+        fi
+        workbench_files_write_pending "${apply_m[${i}]}"
+        i=$((i + 1))
+    done
+    return "${failed}"
+}
+
+# _wb_files_policy_set_one <module> <file> <policy> <yes>
+_wb_files_policy_set_one() {
+    local module="$1" file="$2" policy="$3" yes="$4" line previous plan action real rc failed=0
+    _wb_files_require_module "wb files policy" "${module}" synced || return $?
+    line="$(_wb_files_resolve_target "${module}" "${file}" "wb files policy")" || return 1
+    _wb_files_target_fields "${line}"
+    real="$(_wb_expand_dest "${WB_T_DEST%/}")"
+    previous="$(workbench_files_policy_get "${module}" "${WB_T_DEST}")"
+    [[ -z "${previous}" ]] && previous="default"
+
+    if [[ "${WB_T_MODE}" != "copy" && "${policy}" == "seed" ]]; then
+        log_error "wb files policy: 'seed' is for copied files; $(_wb_files_display_path "${WB_T_DEST}") is linked — 'wb files resolve ${module} ${file} keep' gives you your own copy"
+        return 1
+    fi
+
+    if [[ "${WB_T_MODE}" != "copy" && "${policy}" == "skip" ]] && _wb_files_is_our_link "${module}" "${real}"; then
+        echo
+        echo "wb files policy: $(_wb_files_display_path "${WB_T_DEST}") becomes your own copy and stops following ${module}."
+        echo
+        _wb_files_confirm "${yes}" "wb files policy"; rc=$?
+        [[ "${rc}" -eq 1 ]] && return 1
+        [[ "${rc}" -eq 2 ]] && return 0
+        workbench_files_policy_set "${module}" "${WB_T_DEST}" skip || return 1
+        workbench_files_apply_link "${module}" "${WB_T_DEST}" "${WB_T_SOURCE}" "${WB_T_SRC}" "${WB_T_KIND}" "${WB_T_YIELD}" || failed=1
+        workbench_files_write_pending "${module}"
+        return "${failed}"
+    fi
+
+    workbench_files_policy_set "${module}" "${WB_T_DEST}" "${policy}" || return 1
+
+    # Apply it now rather than at the module's next release.
+    if [[ "${WB_T_MODE}" == "copy" ]]; then
+        plan="$(workbench_files_plan "${module}" "${WB_T_DEST}" "${WB_T_SOURCE}" "${WB_T_SRC}" "${WB_T_LIFECYCLE}" "${WB_T_YIELD}")"
+        action="${plan##*|}"
+        if [[ "${action}" == "write-backup" || "${action}" == "write-original" ]]; then
+            echo
+            if [[ "${action}" == "write-backup" ]]; then
+                echo "wb files policy: $(_wb_files_display_path "${WB_T_DEST}"): your edits are backed up and replaced with ${module}'s version — now, and at every update."
+            else
+                echo "wb files policy: $(_wb_files_display_path "${WB_T_DEST}"): yours is backed up (kept as your original) and replaced with ${module}'s version."
+            fi
+            echo
+            echo "Backups go under $(_wb_files_backup_root)/ — the log lines below name each one."
+            echo
+            _wb_files_confirm "${yes}" "wb files policy"; rc=$?
+            if [[ "${rc}" -ne 0 ]]; then
+                workbench_files_policy_set "${module}" "${WB_T_DEST}" "${previous}"
+                [[ "${rc}" -eq 1 ]] && return 1
+                return 0
+            fi
+        fi
+        workbench_files_apply "${module}" "${WB_T_DEST}" "${WB_T_SOURCE}" "${WB_T_SRC}" "${WB_T_KIND}" "${WB_T_LIFECYCLE}" "${WB_T_YIELD}" || failed=1
+    elif [[ "${policy}" == "follow" ]] && [[ -e "${real}" || -L "${real}" ]] && ! _wb_files_is_our_link "${module}" "${real}"; then
+        echo
+        echo "wb files policy: $(_wb_files_display_path "${WB_T_DEST}"): yours is moved aside and ${module}'s version linked in its place."
+        _wb_files_preview_use "${module}" "${line}"
+        echo
+        echo "Backups go under $(_wb_files_backup_root)/ — the log lines below name each one."
+        echo
+        _wb_files_confirm "${yes}" "wb files policy"; rc=$?
+        if [[ "${rc}" -ne 0 ]]; then
+            workbench_files_policy_set "${module}" "${WB_T_DEST}" "${previous}"
+            [[ "${rc}" -eq 1 ]] && return 1
+            return 0
+        fi
+        workbench_files_use "${module}" "${line}" follow || failed=1
+    else
+        workbench_files_apply_link "${module}" "${WB_T_DEST}" "${WB_T_SOURCE}" "${WB_T_SRC}" "${WB_T_KIND}" "${WB_T_YIELD}" || failed=1
+    fi
+    workbench_files_write_pending "${module}"
+    [[ "${failed}" -eq 0 ]] && log_info "wb files policy: $(_wb_files_display_path "${WB_T_DEST}") is now '${policy}'"
+    return "${failed}"
+}
+
+_wb_cmd_files_policy() {
+    local yes=false default_value=""
+    local -a positional=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --yes|-y) yes=true ;;
+            --default)
+                if [[ -z "${2:-}" ]]; then
+                    log_error "wb files policy: --default requires managed or follow"
+                    return 2
+                fi
+                default_value="$2"; shift
+                ;;
+            -*) log_error "wb files policy: unknown flag '$1'"; return 2 ;;
+            *)  positional+=("$1") ;;
+        esac
+        shift
+    done
+    _wb_engine_require_files
+
+    if [[ -n "${default_value}" ]]; then
+        case "${default_value}" in
+            managed|follow) ;;
+            *) log_error "wb files policy: --default must be managed or follow — got '${default_value}'"; return 2 ;;
+        esac
+        if [[ "${#positional[@]}" -ne 0 ]]; then
+            log_error "wb files policy: --default takes no module or file"
+            return 2
+        fi
+        _wb_files_policy_set_default "${default_value}" "${yes}"
+        return $?
+    fi
+    if [[ "${#positional[@]}" -eq 0 ]]; then
+        _wb_files_policy_list
+        return 0
+    fi
+    if [[ "${#positional[@]}" -ne 3 ]]; then
+        log_error "wb files policy: usage: wb files policy [<module> <file> skip|seed|managed|follow|default] [--default managed|follow] [--yes]"
+        return 2
+    fi
+    case "${positional[2]}" in
+        skip|seed|managed|follow|default) ;;
+        *) log_error "wb files policy: policy must be skip, seed, managed, follow or default — got '${positional[2]}'"; return 2 ;;
+    esac
+    _wb_files_policy_set_one "${positional[0]}" "${positional[1]}" "${positional[2]}" "${yes}"
+}
+
+# ── wb files restore ────────────────────────────────────────────────────────
+
+_wb_files_preview_restore() {
+    local module="$1" dest="$2" row state sha original real o p b
+    row="$(workbench_files_ledger_get "${module}" "${dest}")"
+    IFS='|' read -r _ _ state sha original _ _ <<< "${row}"
+    real="$(_wb_expand_dest "${dest%/}")"
+    printf '  %s:\n' "$(_wb_files_display_path "${dest}")"
+    [[ "${state}" == "held" ]] && printf '      back up your held changes first\n'
+    if [[ "${state}" == "converted" ]]; then
+        printf '      restore each file under it; remove the ones workbench created\n'
+    elif [[ "${sha}" == link:* ]]; then
+        if _wb_files_is_our_link "${module}" "${real}"; then
+            printf '      remove (workbench created it)\n'
+        elif [[ -e "${real}" || -L "${real}" ]]; then
+            printf '      leave yours in place\n'
+        fi
+    elif [[ -f "${real}" && ! -L "${real}" ]]; then
+        printf '      remove (workbench created it; a copy goes to backups)\n'
+    elif [[ -e "${real}" || -L "${real}" ]]; then
+        printf '      leave yours in place\n'
+    fi
+    if [[ -n "${original}" && "${original}" != "-" ]]; then
+        printf '      put back your original from %s\n' "${original}"
+    fi
+    if [[ -f "$(workbench_files_displaced_path "${module}")" ]]; then
+        while IFS='|' read -r o p b; do
+            [[ "${o}" == "${dest}" ]] && printf '      put back %s (from %s)\n' "${p}" "${b}"
+        done < <(grep -v '^#' "$(workbench_files_displaced_path "${module}")")
+    fi
+    return 0
+}
+
+# Ledger dests 'restore all' covers: not already the user's or restored,
+# not overrides_src (the user's, D48 — only by name), and not a child of a
+# converted directory (restoring the directory restores its children).
+_wb_files_restore_all_dests() {
+    local module="$1"
+    workbench_files_ledger_rows "${module}" | awk -F'|' '
+        $3 == "converted" { conv[++n] = $1 "/" }
+        { rows[++r] = $0 }
+        END {
+            for (i = 1; i <= r; i++) {
+                split(rows[i], f, "|")
+                if (f[2] == "overrides" || f[3] == "user" || f[3] == "restored") continue
+                child = 0
+                for (j = 1; j <= n; j++) if (index(f[1], conv[j]) == 1) child = 1
+                if (!child) print f[1]
+            }
+        }'
+}
+
+# _wb_files_restore_run <module> <file>|all <yes> <label>
+# 0 done (or nothing to do), 1 failure or refusal, 2 declined.
+_wb_files_restore_run() {
+    local module="$1" file="$2" yes="$3" label="$4" line dest rc failed=0
+    local -a dests=()
+    if [[ "${file}" == "all" ]]; then
+        while IFS= read -r dest; do
+            [[ -n "${dest}" ]] && dests+=("${dest}")
+        done < <(_wb_files_restore_all_dests "${module}")
+        if [[ "${#dests[@]}" -eq 0 ]]; then
+            log_info "${label}: nothing of ${module}'s to restore."
+            return 0
+        fi
+    else
+        line="$(_wb_files_resolve_target "${module}" "${file}" "${label}" restore)" || return 1
+        IFS='|' read -r _ _ dest _ <<< "${line}"
+        if [[ -z "$(workbench_files_ledger_get "${module}" "${dest}")" ]]; then
+            log_info "${label}: nothing of workbench's to restore at $(_wb_files_display_path "${dest}")"
+            return 0
+        fi
+        dests=("${dest}")
+    fi
+
+    echo
+    echo "${label}: about to put back how things were before ${module}:"
+    for dest in "${dests[@]}"; do
+        _wb_files_preview_restore "${module}" "${dest}"
+    done
+    echo
+    echo "Backups go under $(_wb_files_backup_root)/ — the log lines below name each one."
+    echo
+    _wb_files_confirm "${yes}" "${label}"; rc=$?
+    [[ "${rc}" -ne 0 ]] && return "${rc}"
+    for dest in "${dests[@]}"; do
+        rc=0
+        workbench_files_restore "${module}" "${dest}" || rc=$?
+        case "${rc}" in
+            0) ;;
+            3) log_info "${label}: nothing of workbench's to restore at $(_wb_files_display_path "${dest}")" ;;
+            4) ;;
+            *) log_error "${label}: $(_wb_files_display_path "${dest}") was not fully restored — see errors above"; failed=1 ;;
+        esac
+    done
+    return "${failed}"
+}
+
+_wb_cmd_files_restore() {
+    local module="" file="" yes=false rc
+    local -a positional=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --yes|-y) yes=true ;;
+            -*) log_error "wb files restore: unknown flag '$1'"; return 2 ;;
+            *)  positional+=("$1") ;;
+        esac
+        shift
+    done
+    [[ "${#positional[@]}" -ge 1 ]] && module="${positional[0]}"
+    [[ "${#positional[@]}" -ge 2 ]] && file="${positional[1]}"
+    if [[ -z "${module}" || -z "${file}" || "${#positional[@]}" -gt 2 ]]; then
+        log_error "wb files restore: usage: wb files restore <module> <file>|all [--yes]"
+        return 2
+    fi
+    _wb_engine_require_files
+    _wb_files_require_module "wb files restore" "${module}" || return $?
+    rc=0
+    _wb_files_restore_run "${module}" "${file}" "${yes}" "wb files restore" || rc=$?
+    [[ "${rc}" -eq 2 ]] && return 0
+    return "${rc}"
+}
+
+# ── --use-files at install time (wb add / wb install --bundle) ──────────────
+
+# Every target of <module> where the user already has a config of their own
+# — what 'wb files use' would move aside. Excludes overrides_src.
+_wb_files_use_candidates() {
+    local module="$1" line plan condition real
+    while IFS= read -r line; do
+        [[ -z "${line}" ]] && continue
+        _wb_files_target_fields "${line}"
+        [[ "${WB_T_KIND}" == "overrides" ]] && continue
+        real="$(_wb_expand_dest "${WB_T_DEST%/}")"
+        if [[ -n "$(_wb_files_existing_yields "${WB_T_YIELD}")" ]]; then
+            printf '%s\n' "${line}"
+        elif [[ "${WB_T_MODE}" == "copy" ]]; then
+            plan="$(workbench_files_plan "${module}" "${WB_T_DEST}" "${WB_T_SOURCE}" "${WB_T_SRC}" "${WB_T_LIFECYCLE}" "${WB_T_YIELD}")"
+            condition="$(printf '%s\n' "${plan}" | cut -d'|' -f2)"
+            [[ "${condition}" == "foreign" || "${condition}" == "yielded" ]] && printf '%s\n' "${line}"
+        elif [[ -e "${real}" || -L "${real}" ]] && ! _wb_files_is_our_link "${module}" "${real}"; then
+            printf '%s\n' "${line}"
+        fi
+    done < <(workbench_files_targets "${module}")
+}
+
+# _wb_files_use_at_install <follow> <yes> <module>...
+# One combined preview and one confirmation for every named module, then
+# workbench_files_use per target. Explicit opt-in, so it first clears each
+# module's 'restored' rows and their skip policies (an earlier
+# 'wb remove --restore'). --follow sets per-entry follow on every target of
+# those modules, not only the displaced ones.
+_wb_files_use_at_install() {
+    local follow="$1" yes="$2" m dest line rc failed=0 follow_arg=""
+    shift 2
+    local -a mods=() lines=()
+    _wb_engine_require_files
+    [[ "${follow}" == "true" ]] && follow_arg="follow"
+
+    for m in "$@"; do
+        [[ -d "$(workbench_module_current_dir "${m}")" ]] || continue
+        while IFS= read -r dest; do
+            [[ -z "${dest}" ]] && continue
+            workbench_files_ledger_delete "${m}" "${dest}"
+            [[ "$(workbench_files_policy_get "${m}" "${dest}")" == "skip" ]] && workbench_files_policy_set "${m}" "${dest}" default
+        done < <(workbench_files_ledger_rows "${m}" | awk -F'|' '$3 == "restored" { print $1 }')
+        while IFS= read -r line; do
+            [[ -z "${line}" ]] && continue
+            mods+=("${m}"); lines+=("${line}")
+        done < <(_wb_files_use_candidates "${m}")
+    done
+
+    if [[ "${#lines[@]}" -gt 0 ]]; then
+        echo
+        echo "--use-files: you already have your own config for these — about to use the module's version instead:"
+        local i=0
+        while [[ "${i}" -lt "${#lines[@]}" ]]; do
+            printf '  [%s]\n' "${mods[${i}]}"
+            _wb_files_preview_use "${mods[${i}]}" "${lines[${i}]}"
+            i=$((i + 1))
+        done
+        [[ "${follow}" == "true" ]] && echo "  ...and every file of $* keeps following its module after you edit it (edits are backed up each time)."
+        echo
+        echo "Backups go under $(_wb_files_backup_root)/ — 'wb files restore' puts yours back."
+        echo
+        _wb_files_confirm "${yes}" "--use-files"; rc=$?
+        [[ "${rc}" -eq 1 ]] && return 1
+        [[ "${rc}" -eq 2 ]] && return 0
+        i=0
+        while [[ "${i}" -lt "${#lines[@]}" ]]; do
+            workbench_files_use "${mods[${i}]}" "${lines[${i}]}" ${follow_arg:+"${follow_arg}"} || failed=1
+            i=$((i + 1))
+        done
+    elif [[ "${follow}" != "true" ]]; then
+        log_info "--use-files: no existing configs of yours in the way — nothing to switch."
+    fi
+
+    if [[ "${follow}" == "true" ]]; then
+        for m in "$@"; do
+            [[ -d "$(workbench_module_current_dir "${m}")" ]] || continue
+            while IFS= read -r line; do
+                [[ -z "${line}" ]] && continue
+                _wb_files_target_fields "${line}"
+                [[ "${WB_T_KIND}" == "overrides" ]] && continue
+                workbench_files_policy_set "${m}" "${WB_T_DEST}" follow
+            done < <(workbench_files_targets "${m}")
+            workbench_files_write_pending "${m}"
+        done
+        log_info "--use-files --follow: every file of $* now follows its module"
+    fi
+    return "${failed}"
+}
+
+# Total lines across every module's files.pending — for 'wb status'.
+_wb_files_pending_total() {
+    local file total=0
+    for file in "$(workbench_modules_dir)"/*/files.pending; do
+        [[ -s "${file}" ]] || continue
+        total=$((total + $(wc -l < "${file}")))
+    done
+    printf '%s\n' "${total}"
+}
+
+_wb_cmd_files() {
+    local sub="${1:-}"
+    [[ $# -gt 0 ]] && shift
+    case "${sub}" in
+        status)  _wb_cmd_files_status "$@" ;;
+        diff)    _wb_cmd_files_diff "$@" ;;
+        use)     _wb_cmd_files_use "$@" ;;
+        resolve) _wb_cmd_files_resolve "$@" ;;
+        policy)  _wb_cmd_files_policy "$@" ;;
+        restore) _wb_cmd_files_restore "$@" ;;
+        *)
+            log_error "wb files: usage: wb files status|diff|use|resolve|policy|restore ... — see 'wb help files'"
             return 2
             ;;
     esac
@@ -1366,6 +2452,9 @@ on branch: tracking).
 Read-only — never fetches or changes anything. To act on drift shown here,
 use 'wb update' (sync now) or 'wb track'/'wb dev' (change what a module
 tracks).
+
+When any deployed file is waiting on your decision, a last line says how
+many — 'wb files status' lists them.
 EOF
 }
 
@@ -1378,6 +2467,11 @@ given) or every registered, sync-enabled module (if omitted) — right now,
 regardless of the cadence timer. This is code-level only: it fetches,
 atomically swaps in the new snapshot, and runs the module's post-deploy
 hook.
+
+Your files are never overwritten: a file you edited stays yours, and a
+linked file with local changes is held at its current version. Run from a
+terminal, 'wb update' then asks about anything waiting on you (the same
+prompt as 'wb files resolve'); the scheduled timer never asks.
 
 Updating 'core' specifically also detects whether core's resolved commit
 actually changed and, if so, automatically re-runs the same host-level
@@ -1400,7 +2494,7 @@ EOF
 
 _wb_help_install() {
     cat <<'EOF'
-Usage: wb install [--bundle <name>] [--skip-ansible]
+Usage: wb install [--bundle <name> [--use-files [--follow] [--yes]]] [--skip-ansible]
 
 First-run convergence for this host: checks/installs shell prerequisites,
 bootstraps the core module itself, symlinks 'wb' onto PATH, writes the
@@ -1414,6 +2508,18 @@ runs the Ansible convergence pass for whatever else it still covers
   --bundle <name>   Also register every module in the named bundle (the
                       known-modules catalog) before converging — equivalent
                       to one 'wb add' call per bundle member.
+  --use-files       With --bundle: where you already have your own config
+                      for something a bundle module ships, use the
+                      module's version instead — yours (and any other file
+                      the same tool would also read) goes to backups, and
+                      'wb files restore' puts it back. One preview and one
+                      confirmation for the whole bundle.
+  --follow          With --use-files: every file of those modules keeps
+                      following its module even after you edit it (your
+                      edits are backed up each time).
+  --yes             Skip the --use-files confirmation. Without a terminal
+                      and without --yes, --use-files refuses before
+                      registering anything.
   --skip-ansible    Skip the Ansible convergence step even if
                       ansible-playbook is available. Does not affect the
                       scheduled-sync timer, which never depended on Ansible.
@@ -1448,7 +2554,7 @@ EOF
 
 _wb_help_add() {
     cat <<'EOF'
-Usage: wb add <name> [url] [--private] [--allow-hooks]
+Usage: wb add <name> [url] [--private] [--allow-hooks] [--use-files [--follow] [--yes]]
 
 Registers a new module and immediately syncs it once. <url> is optional
 if <name> resolves against the known-modules catalog. New modules default
@@ -1458,6 +2564,17 @@ to TRACK_MODE=latest.
                     key on first sync if one doesn't already exist).
   --allow-hooks   Permit this module's manifest-declared post_deploy hook
                     to actually run (hooks are opt-in per module).
+  --use-files     Where you already have your own config for something
+                    this module ships, use the module's version instead:
+                    yours goes to backups ('wb files restore' puts it
+                    back). Works on an already-registered module too.
+  --follow        With --use-files: every file of this module keeps
+                    following it even after you edit it (edits are
+                    backed up each time).
+  --yes           Skip the --use-files confirmation.
+
+Without --use-files, a config you already have is left alone — see
+'wb help files'.
 
 To change what an already-added module tracks, use 'wb track', not 'wb
 add' again.
@@ -1466,11 +2583,17 @@ EOF
 
 _wb_help_remove() {
     cat <<'EOF'
-Usage: wb remove <name>
+Usage: wb remove <name> [--restore [--yes]]
 
 Deregisters a module so the loader and sync engine stop touching it.
 Idempotent and non-destructive — content already deployed to disk is left
 exactly as it is; nothing is deleted.
+
+  --restore   First put back everything the module replaced or moved
+                aside (from backups) and remove the files it created —
+                'wb files restore <name> all', with the same preview and
+                confirmation. Declining leaves the module registered.
+  --yes       Skip the --restore confirmation.
 EOF
 }
 
@@ -1649,7 +2772,7 @@ EOF
 
 _wb_help_module() {
     cat <<'EOF'
-Usage: wb module info <name>  |  wb module docs <name>  |  wb module reset <name> <target>|all
+Usage: wb module info <name>  |  wb module docs <name>  |  wb module reset <name> <target>|all [--yes]
 
 Module-published information — distinct from 'wb status' (sync/tracking
 state core already knows regardless of what a module publishes) and from
@@ -1664,20 +2787,72 @@ module).
                  straight from its synced snapshot — nothing else is
                  checked. Neither present prints a pointer to the
                  module's repository instead.
-  reset <name> <target>|all
-                 Force-redeploys a copy-mode deploy[] file from <name>'s
-                 current snapshot, discarding any local edit — "get me
-                 back to the workbench default". <target> is the file's
-                 basename (e.g. tmux.conf), or 'all' for every copy-mode
-                 file the module deploys. Always confirms first, even for
-                 a single named target — this destroys local edits. Only
-                 covers mode: copy deploy files; mode: link destinations
-                 are already kept in sync on every update, so there's
-                 nothing to reset.
+  reset <name> <target>|all [--follow] [--yes]
+                 The same as 'wb files use' — "get me back to the
+                 workbench default". Your current version is backed up
+                 first; without a terminal it needs --yes. See
+                 'wb help files'.
 
 Both info and docs require <name> to already be registered ('wb add
 <name>' first) and synced at least once ('wb update <name>' if 'wb add'
 hasn't run yet) — reset requires the same.
+EOF
+}
+
+_wb_help_files() {
+    cat <<'EOF'
+Usage: wb files status [<module>]
+       wb files diff <module> <file>
+       wb files use <module> <file>|all [--follow] [--yes]
+       wb files resolve <module> <file>|all [keep|manage|use] [--follow] [--yes]
+       wb files policy [<module> <file> skip|seed|managed|follow|default] [--default managed|follow] [--yes]
+       wb files restore <module> <file>|all [--yes]
+
+Every file a module deploys outside its own snapshot — a tmux.conf, a
+vimrc, a whole nvim config — is core's to manage and yours to own
+(docs/decisions-log.md D81). Workbench never removes or replaces a file
+it didn't put there, never re-creates one you deleted, and never throws
+away a change you made: an edited copy stops updating, and a linked file
+with local changes is held at its current version until you choose.
+
+  status    Read-only. What's waiting on you, then every file: its mode,
+              policy (* = set for that file), state, and what the next
+              update will do.
+  diff      Read-only. Your copy against the module's version; for a
+              held link, what changed locally and how it differs from
+              the module now.
+  use       Take the module's version. What's there now — and any other
+              file the same tool would also read (the module's yield_to
+              paths) — is moved to backups, so 'restore' can put it
+              back. Afterwards it stays current until you edit it;
+              --follow keeps it following even then (edits backed up).
+              'all' leaves out the module's local-overrides file.
+  resolve   Decide about something waiting (or a linked file, ahead of
+              any change):
+                keep    — mine from now on, no more updates
+                manage  — keep my changes, keep updating everything else
+                use     — take the module's version (mine is backed up)
+              With no choice, asks interactively (terminal only).
+  policy    No arguments: the host default and every per-file policy.
+              <module> <file> <policy>: skip (never touch it), seed
+              (create once, never update; copies only), managed (update
+              while unedited), follow (always update, backing up your
+              edits), default (back to the module/host default) —
+              applied now, not at the next release.
+              --default managed|follow: the host-wide default for every
+              managed copy and linked file. It never moves a directory
+              of yours.
+  restore   Put things back as they were before the module: originals
+              and moved-aside files return from backups, and what
+              workbench created is removed. Anything you put in place of
+              workbench's file is left alone. 'all' leaves out the
+              module's local-overrides file.
+
+<file> is the file's dest (~/.config/tmux/tmux.conf), its basename
+(tmux.conf), or its path in the module's repo (files/tmux.conf).
+
+Anything that writes shows a preview, names the backup folder, and asks
+first. Without a terminal it refuses unless given --yes.
 EOF
 }
 
@@ -1751,6 +2926,7 @@ _wb_cmd_help() {
         functions)  _wb_help_functions ;;
         tools)      _wb_help_tools ;;
         module)     _wb_help_module ;;
+        files)      _wb_help_files ;;
         install)    _wb_help_install ;;
         apply)      _wb_help_apply ;;
         add)        _wb_help_add ;;
@@ -1799,6 +2975,7 @@ case "${_wb_cmd}" in
     functions)  _wb_cmd_functions "$@" ;;
     tools)      _wb_cmd_tools "$@" ;;
     module)     _wb_cmd_module "$@" ;;
+    files)      _wb_cmd_files "$@" ;;
     version)    _wb_cmd_version "$@" ;;
     completion) _wb_cmd_completion "$@" ;;
     __complete) _wb_cmd_complete "$@" ;;

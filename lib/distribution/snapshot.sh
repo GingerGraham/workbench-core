@@ -99,12 +99,21 @@ workbench_snapshot_prune() {
         [[ -n "${d}" ]] && all+=("${d}")
     done < <(find "${snapshots_dir}" -mindepth 1 -maxdepth 1 -type d -exec ls -1dt {} + 2>/dev/null)
 
+    # Snapshots a held file is pinned to (docs/decisions-log.md D81) are
+    # never pruned — they hold changes the user hasn't decided about yet.
+    local pinned=""
+    command -v workbench_files_pinned_snapshots &>/dev/null && pinned="$(workbench_files_pinned_snapshots "${module}")"
+
     local i count=0
     for ((i = 0; i < ${#all[@]}; i++)); do
         count=$((count + 1))
         [[ "${count}" -le "${keep}" ]] && continue
         [[ -n "${current_target}" && "${all[$i]}" == "${current_target}" ]] && continue
+        if [[ -n "${pinned}" ]] && printf '%s\n' "${pinned}" | grep -qxF "$(basename "${all[$i]}")"; then
+            continue
+        fi
         rm -rf "${all[$i]}"
+        rm -f "${module_dir}/sums/$(basename "${all[$i]}")"
         log_info "workbench_snapshot_prune: removed old snapshot ${all[$i]}"
     done
 }

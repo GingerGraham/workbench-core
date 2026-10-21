@@ -187,12 +187,41 @@ loader detects that (via `PROMPT_COMMAND`/`precmd_functions` already being
 non-empty when it first runs) and skips its own bare fallback prompt rather
 than silently overwriting it.
 
+## Keeping your own config files
+
+Modules ship opinionated defaults — a tmux.conf, a vimrc, a whole nvim config. Workbench never removes or replaces a file it didn't put there, and never throws away a change you made:
+
+- If you already have one, it's left alone. That includes the other places a tool looks — an existing `~/.vim/vimrc` stops workbench creating `~/.vimrc`.
+- If you edit one workbench created, it's yours from then on.
+- If you delete one, workbench won't put it back.
+- If something changes a file workbench links into place (`:Lazy update` rewriting `lazy-lock.json`, say), the next update holds that file where it is and asks you, rather than discarding the change.
+
+When something needs your decision, a new shell says so in one line. `wb files status` shows every file, what's waiting, and what the next update will do; `wb files resolve` asks you:
+
+    keep    — mine from now on, no more updates
+    manage  — keep my changes, keep updating everything else
+    use     — take the module's version (mine is backed up)
+
+## Using a module's versions instead of your own
+
+To switch to a module's version of a file you already have:
+
+    wb files use <module> <file>              # one file
+    wb files use <module> all                 # every file the module ships
+
+Your file is moved into the backups folder, along with any other config file the same tool would also read (so `~/.tmux.conf` doesn't keep loading alongside workbench's), and the module's version goes in place. Afterwards it stays current until you edit it. Add `--follow` to keep it tracking the module even after edits — your edits are backed up each time.
+
+To do this for every module at install:
+
+    wb install --bundle workstation --use-files --follow
+
+Want a module but not one of its files?
+
+    wb files policy <module> <file> skip
+
 ## Uninstalling a module cleanly
 
-`wb remove <name>` deregisters without touching anything it deployed —
-if you also want the deployed files gone, remove them by hand (they're
-listed in the module's manifest `deploy:` entries, or check
-`~/.local/share/workbench/modules/<name>/`).
+`wb remove <name>` deregisters and leaves its files where they are. `wb remove <name> --restore` first puts back everything it replaced or moved aside, from backups, and removes the files it created. `wb files restore <module> <file>` does the same for one file.
 
 ## Troubleshooting
 

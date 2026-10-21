@@ -574,6 +574,14 @@ wb() {
                 info|docs) _wb_should_reload=false ;;
             esac
             ;;
+        # 'wb files status'/'wb files diff' are read-only (D81). use,
+        # resolve, policy and restore write files — restoring an
+        # overrides_src file changes what the shell sources — so they reload.
+        files)
+            case "${2:-}" in
+                status|diff) _wb_should_reload=false ;;
+            esac
+            ;;
     esac
 
     if [[ "${_wb_should_reload}" == "true" ]]; then
@@ -613,6 +621,23 @@ if [[ $- == *i* ]]; then
         log_warn "  ${_wb_bak}"
     done < <(find "${_wb_migration_dir}" -maxdepth 3 -name 'rc-stub-*' -type f 2>/dev/null)
     unset _wb_migration_dir _wb_migration_found _wb_bak
+fi
+
+# ── Files waiting on a decision (docs/decisions-log.md D81) ──────────────────
+# One line, interactive shells only, while any module has a files.pending:
+# a linked file held because it has local changes, or an edited copy whose
+# default has since changed. Reads only the files' existence and line
+# counts — no lifecycle code is loaded here.
+if [[ $- == *i* ]] && command -v workbench_modules_dir &>/dev/null; then
+    _wb_pending_count=0
+    for _wb_pending_file in "$(workbench_modules_dir)"/*/files.pending; do
+        [[ -s "${_wb_pending_file}" ]] || continue
+        _wb_pending_count=$((_wb_pending_count + $(wc -l < "${_wb_pending_file}")))
+    done
+    if [[ "${_wb_pending_count}" -gt 0 ]]; then
+        log_warn "workbench: ${_wb_pending_count} file(s) need your decision — run 'wb files status'"
+    fi
+    unset _wb_pending_count _wb_pending_file
 fi
 
 # ── Interactive startup ───────────────────────────────────────────────────────

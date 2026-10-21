@@ -12,9 +12,13 @@
 # shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/add.sh" "0.2.2" || true
 
-# workbench_cmd_add <name> [url] [--private] [--allow-hooks]
+# workbench_cmd_add <name> [url] [--private] [--allow-hooks] [--use-files [--follow] [--yes]]
+# --use-files (docs/decisions-log.md D81): after the sync, use the module's
+# version wherever the user already has their own config — one preview, one
+# confirmation (bin/wb's _wb_files_use_at_install). On an already-registered
+# module, only that step runs.
 workbench_cmd_add() {
-    local name="" url="" private="false" allow_hooks="false"
+    local name="" url="" private="false" allow_hooks="false" use_files="false" follow="false" yes="false"
     local args=("$@")
     local i=0
     while [[ "${i}" -lt "${#args[@]}" ]]; do
@@ -22,6 +26,9 @@ workbench_cmd_add() {
         case "${a}" in
             --private)     private="true" ;;
             --allow-hooks) allow_hooks="true" ;;
+            --use-files)   use_files="true" ;;
+            --follow)      follow="true" ;;
+            --yes|-y)      yes="true" ;;
             --*)
                 log_error "wb add: unknown flag '${a}'"
                 return 2
@@ -41,7 +48,11 @@ workbench_cmd_add() {
     done
 
     if [[ -z "${name}" ]]; then
-        log_error "wb add: usage: wb add <name> [url] [--private] [--allow-hooks]"
+        log_error "wb add: usage: wb add <name> [url] [--private] [--allow-hooks] [--use-files [--follow] [--yes]]"
+        return 2
+    fi
+    if [[ "${follow}" == "true" && "${use_files}" != "true" ]]; then
+        log_error "wb add: --follow goes with --use-files"
         return 2
     fi
 
@@ -50,7 +61,18 @@ workbench_cmd_add() {
         return 2
     fi
 
+    # Refuse before registering anything: the --use-files confirmation
+    # can't be asked without a terminal.
+    if [[ "${use_files}" == "true" && "${yes}" != "true" && ! -t 0 ]]; then
+        log_error "wb add: --use-files needs a terminal to confirm — re-run with --yes. Nothing was changed."
+        return 1
+    fi
+
     if workbench_is_registered "${name}"; then
+        if [[ "${use_files}" == "true" ]]; then
+            _wb_files_use_at_install "${follow}" "${yes}" "${name}"
+            return $?
+        fi
         log_info "wb add: '${name}' is already registered — no-op"
         return 0
     fi
@@ -90,5 +112,10 @@ workbench_cmd_add() {
         log_info "wb add: '${name}' registered and synced successfully"
     else
         log_warn "wb add: '${name}' registered, but the initial sync failed — it will retry on the next cycle (see 'wb update ${name}')"
+        [[ "${use_files}" == "true" ]] && log_warn "wb add: --use-files skipped — run 'wb add ${name} --use-files' once it has synced"
+        return 0
+    fi
+    if [[ "${use_files}" == "true" ]]; then
+        _wb_files_use_at_install "${follow}" "${yes}" "${name}"
     fi
 }

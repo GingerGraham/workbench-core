@@ -28,6 +28,7 @@ constraints — carried forward deliberately rather than invented fresh:
 4. **One generalised engine, not parallel special cases.** `dotfiles` currently runs two independent sync engines (self-sync for the repo itself, `sync-external` for add-ons) with different cadences and code paths. `workbench-core` collapses this: core is "module zero," syncing itself through the same engine every other module uses. The same principle governs profiles/bundles (§10) — a bundle is sugar over the engine, never a special-cased branch inside it.
 5. **Unknown things fail loud, not silent.** Matches the existing manifest validator's posture (`dest` denylist violations fail the run and name the offending path) — a module `workbench-core` can't understand should refuse to load, not degrade quietly.
 6. **No persistent, incrementally-mutated state for ordinary use.** The default, production path for consuming any tracked content — core, an ecosystem module, or an independent tool — never leaves a live, `git pull`-updated working copy on a user's machine. Content is fetched as an immutable, atomic snapshot and swapped in whole. A persisted, incrementally-updated `git` working tree exists **only** as a deliberate, opt-in developer activity (§9.1) — never as an artifact of ordinary tracking, regardless of whether the underlying repo is public or private.
+7. **Core owns the lifecycle of every file a module causes to exist outside its own snapshot, and never discards a change it didn't make.** A module declares what it provides — `deploy[]`, `overrides_src`, and (later) `layers[]` — and core alone decides whether to write, link, back up, refresh, hold, leave, or restore each file. It records what it wrote in a per-module ledger, and records checksums for every snapshot, so it can always tell its own unedited default from the user's content — including content a tool wrote through a link. The user's file always wins unless they have said otherwise: a change core finds is kept and surfaced for a decision, never overwritten, except under an explicit `follow` or an explicit command, and both back it up first. A module never writes a user path itself, from a hook or otherwise. See docs/decisions-log.md D81.
 
 ---
 
@@ -416,7 +417,8 @@ working copy — with one deliberate, opt-in exception (dev tracking, below).
   `current` flipped to it via an atomic symlink swap. Old snapshots are
   pruned beyond a small retention window — the same pattern `dotfiles`'
   existing self-sync release mode already uses, generalised to every
-  module.
+  module — except a snapshot a held file is pinned to, which stays until
+  the user resolves it (D81).
 
 ### 9.1a Bootstrap: the initial fetch (bootstrap-fix brief)
 

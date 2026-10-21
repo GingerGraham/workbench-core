@@ -41,7 +41,13 @@ ${XDG_DATA_HOME:-~/.local/share}/workbench/modules/<name>/
 │   └── <ref-slug>-<shortsha>/    immutable once written
 ├── current -> snapshots/<ref-slug>-<shortsha>
 ├── register.list
-└── installers.list
+├── installers.list
+├── files.list         engine-owned ledger (D81)
+├── files.policy       host-owned per-file policy (D81)
+├── files.forms        linked entries the user chose to have managed as copies (D81)
+├── files.displaced    user files moved aside by 'wb files use' (D81)
+├── files.pending      targets waiting on a decision (D81; absent when none)
+└── sums/<snapshot>    checksums recorded when each snapshot was fetched (D81)
 ```
 
 `<name>` = the module's registration name (its catalog/`wb add` name).
@@ -155,6 +161,93 @@ entries but whose `installers.list` is missing or empty — checked
 independently of the `register.list` check above (docs/decisions-log.md
 D71).
 
+### `files.list`
+
+Engine-owned ledger (docs/decisions-log.md D81). Pipe-delimited, one row per target, read as data with `awk` — never sourced. The `#` header line is ignored.
+
+```
+# dest|kind|state|sha|original|ack|pin
+~/.config/tmux/tmux.conf|deploy|active|<sha256>|-|-|-
+~/.vimrc|deploy|user|-|-|-|-
+~/.config/nvim|deploy|held|link:.|-|-|v1.0.0-c2f7760
+```
+
+| Field | Values |
+|---|---|
+| `dest` | `~/`-form dest from the manifest (directory children as `<dest>/<path>`), or the absolute engine-computed path for `overrides_src`. The key. |
+| `kind` | `deploy` \| `overrides` |
+| `state` | `active` — core wrote or linked it. `user` — the user chose to own it (`wb files resolve … keep`, or `skip` on a linked entry); never written again. `removed` — core wrote it, the user deleted it; never recreated. `restored` — `wb files restore` ran. `held` — linked, with changes made through the link; pinned until resolved. `converted` — a linked directory now delivered as managed copies (its children have their own rows). |
+| `sha` | Copy: sha256 of what core last wrote. Linked: `link:<src>`. |
+| `original` | Backup of the pre-workbench content core displaced at `dest`, or `-`. Under the backup root. |
+| `ack` | Copy: the upstream sha256 the user chose to keep their edit over (`wb files resolve … manage`); no notice until the default moves again. Otherwise `-`. |
+| `pin` | `held`: the snapshot basename the entry is pinned to. Otherwise `-`. |
+
+Content core found at a dest that isn't its own has no row — it's re-evaluated on every deploy, so a later `follow` applies to it. Rewritten atomically (temp file + rename) one row at a time. Safe to delete: the next deploy re-derives each row, treating a byte-identical copy of a retained default (or a link into the module's own state) as core's and anything else as the user's. What's lost is `original`, `ack` and `pin` — the backups themselves stay, and a held entry's snapshot becomes prunable, so don't delete it while anything is held.
+
+### `files.policy`
+
+Host-owned. One `<dest>|<policy>` row per target the user has overridden with `wb files policy`; `<policy>` is `skip`, `seed`, `managed` or `follow` (`seed` is copy-only). No row: the entry's lifecycle and the host default decide. Never written by sync.
+
+### `files.forms`
+
+`<dest>|copy` for each linked entry the user chose to have managed as copies (`wb files resolve … manage`). `workbench_files_targets` then lists that entry's files as copy-mode targets. Removed by `wb files use` and `wb files restore`.
+
+### `files.displaced`
+
+`<owner-dest>|<path>|<backup>` for each user file `wb files use` moved aside on behalf of `<owner-dest>` (a `yield_to` competitor). `wb files restore` of the owner copies each back and drops its row.
+
+### `files.pending`
+
+`<dest>|held` or `<dest>|moved` (an edited copy whose default has changed since). Rewritten after every deploy and every `wb files` change; deleted when empty. Read by the loader's shell-start notice and `wb status`, by existence and line count only.
+
+### `sums/<snapshot>`
+
+`<sha256>  <path>` for every regular file in the snapshot, written once, when the snapshot is fetched (or, for a host upgrading to D81, the first time an update finds none). Removed when the snapshot is pruned.
+
+### Effective policy
+
+`workbench_files_effective_policy`: a `files.policy` row wins; else `lifecycle: seed` → `seed`, `generated` → `follow`, `managed` and linked entries → the host default.
+
+### Copy-mode decision matrix
+
+"follow (file)" means a `files.policy` row or `lifecycle: generated`; "follow (host)" means the host default.
+
+| condition | skip | seed | managed | follow (host) | follow (file) |
+|---|---|---|---|---|---|
+| `new` — nothing there, no record | – | create | create | create | create |
+| `yielded` — a `yield_to` path exists | – | leave (yours) | leave (yours) | leave (yours) | create, warn |
+| `adoptable` — byte-identical to a retained default, or core's link | – | adopt as-is | refresh | refresh | refresh |
+| `foreign` — exists, not ours | – | leave (yours) | leave (yours) | replace, keep original | replace, keep original |
+| `clean` — what core wrote | – | – | refresh if default moved | refresh if default moved | refresh if default moved |
+| `edited` — changed since core wrote it | – | – | leave; pending if default moved | back up, replace | back up, replace |
+| `gone` — deleted since core wrote it | – | leave (removed) | leave (removed) | leave (removed) | leave (removed) |
+
+`held`, `user`, `removed` and `restored` rows are never written by sync. "Replace" moves a user's symlink aside as a symlink; a directory is never written into. The host default never creates a second config beside one at a `yield_to` path, because tmux would load both. Implemented once, purely, as `_wb_files_decide` (`lib/files/lifecycle.sh`).
+
+### Linked decision matrix
+
+| at `dest` | skip | managed | follow (per entry) | follow (host default) |
+|---|---|---|---|---|
+| nothing, no record | – | link | link | link |
+| nothing, a `yield_to` path exists | – | leave (yours) | link, warn | leave (yours) |
+| core's link | becomes your own copy | relink | relink | relink |
+| core's unedited copy (entry was copy mode) | – | link | link | link |
+| a file, or a symlink elsewhere | – | leave (yours) | move aside, link | move aside, link |
+| a real directory | – | leave (yours)* | move aside, link | leave (yours)* |
+| recorded, now gone | – | leave (removed) | leave (removed) | leave (removed) |
+
+\* `link_tree` only: a directory with no record where at least half the module's files are present and byte-identical to a retained default is an earlier copy of this module (the pre-D81 engine copied `link_tree` entries). It's adopted as managed copies instead: matching files are refreshed and tracked, differing files stay yours.
+
+At update time (`workbench_files_before_swap`, before every snapshot swap): an `active` link whose snapshot has changed since it was fetched is **held** — repointed at that exact snapshot, which pruning then keeps. With a per-entry `follow`, the changes are backed up and the update proceeds; if the backup fails, it's held instead. If any entry can't be secured, the engine doesn't swap at all. A snapshot that is pinned, or has changed since it was fetched, is never swapped back in.
+
+## Host file policy
+
+```
+${XDG_DATA_HOME:-~/.local/share}/workbench/files.conf
+```
+
+`DEFAULT_POLICY=managed|follow` (absent: `managed`). Applies to `lifecycle: managed` copy entries and linked entries only, and never moves a real directory. Set with `wb files policy --default`.
+
 ## User-local overrides
 
 ```
@@ -215,13 +308,13 @@ ${XDG_DATA_HOME:-~/.local/share}/workbench/backups/
 ```
 
 Written by `workbench_backup_existing_file` (`lib/sync/engine.sh`)
-immediately before `workbench_deploy_copy_file` or
-`workbench_deploy_link_file` overwrites or removes a real (non-symlink)
-pre-existing file or directory under `force: true` — this covers both
-`wb module reset` and any manifest `deploy[]` entry that sets
-`force: true` directly (see `docs/decisions-log.md` D53). Never written for
-a symlink destination — that's the engine's own pointer, never user
-content.
+immediately before core replaces or removes a real (non-symlink)
+pre-existing file or directory (see `docs/decisions-log.md` D53) —
+`wb files use`/`wb module reset`, a `follow` policy, and any
+`lifecycle: generated` (`force: true`) entry. Every backup path, copied
+or moved, comes from the one naming helper, `_wb_backup_path_new`.
+
+Also written by `lib/files/lifecycle.sh` (D81): copies before it replaces content, and moves when it puts the user's own config aside (`wb files use`, `follow`). A moved symlink is kept as a symlink. Changes backed up from a held or followed link are one directory per entry (`<module>-<name>.<HHMMSS>/`), with their relative paths kept. The first backup of content core didn't write is recorded as that entry's `original` in `files.list`, and moved-aside competitors in `files.displaced` — don't delete those if you might want `wb files restore`.
 
 `<HH00>` is the hour, zero-padded to two digits, with a literal `00`
 appended (`09:14` → `0900`), not the minute — kept coarse deliberately,
@@ -233,9 +326,9 @@ same file land in the same second.
 
 Copy-mode backup is skipped when the incoming content is byte-identical
 to what's already at `dest` — an unchanged `force: true` re-deploy
-produces nothing here. Link-mode backup (a real file/directory about to
-be `rm -rf`'d and replaced with a symlink) is unconditional — a type
-change is worth preserving even when the content matched.
+produces nothing here. Anything replaced by a link is moved here whole,
+unconditionally — a type change is worth preserving even when the
+content matched.
 
 No retention policy and no scheduled cleanup — deliberate, not deferred;
 revisit only if volume ever actually becomes a problem.

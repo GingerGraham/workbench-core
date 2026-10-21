@@ -185,48 +185,65 @@ _wb_expand_dest() {
     printf '%s\n' "${d/#\~/${HOME}}"
 }
 
+# _wb_backup_path_new <path> [<module>]
+# Prints a fresh, unused path under the backup root for a backup of <path>,
+# creating its parent directory:
+#   ${XDG_DATA_HOME}/workbench/backups/<YYYY-MM-DD>/<HH00>/<module>-<basename>.<HHMMSS>[.<n>]
+# The one naming scheme for every backup — workbench_backup_existing_file
+# copies to it; lib/files/lifecycle.sh (D81) moves things to it when the
+# user asks core to put their own config aside.
+_wb_backup_path_new() {
+    local dest="$1" module="${2:-}"
+    local backup_root="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/backups"
+    local backup_dir backup_base backup_path n=2
+    backup_dir="${backup_root}/$(date +%Y-%m-%d)/$(date +%H00)"
+    backup_base="${module:+${module}-}$(basename "${dest}").$(date +%H%M%S)"
+    backup_path="${backup_dir}/${backup_base}"
+
+    # Same-second collision inside one hour bucket — unlikely at the volume
+    # this exists for, but a counter suffix is nearly free and beats silently
+    # clobbering an earlier backup.
+    while [[ -e "${backup_path}" || -L "${backup_path}" ]]; do
+        backup_path="${backup_dir}/${backup_base}.${n}"
+        n=$((n + 1))
+    done
+    mkdir -p "${backup_dir}" || return 1
+    printf '%s\n' "${backup_path}"
+}
+
 # workbench_backup_existing_file <dest> [<module>]
-# Copies whatever currently exists at <dest> into the engine-computed
-# backup root before a force overwrite replaces or removes it
-# (docs/decisions-log.md D53) — the single choke point both
-# workbench_deploy_copy_file's and workbench_deploy_link_file's force
-# branches call through, so nothing that overwrites real content via
-# either path can do so unbacked-up.
+# Copies whatever currently exists at <dest> into the backup root before
+# core replaces or removes it (docs/decisions-log.md D53, D81). A real file
+# or a real directory is handled identically — cp -a copies either.
 #
-# No-ops (returns 0) when there's nothing worth preserving: dest doesn't
-# exist, or dest is a symlink — a symlink is the engine's own pointer,
-# never user content, exactly the same distinction
-# workbench_deploy_copy_file's own D51 fix already draws just below this.
-# A real file OR a real directory (workbench_deploy_link_file's rm -rf
-# case) is handled identically — cp -a copies either.
+# No-ops (returns 0) when dest doesn't exist or is a symlink. A symlink at a
+# dest core is about to replace is either core's own link (nothing to
+# keep) or one the user made — and lib/files/lifecycle.sh never replaces
+# one of those with this function: it moves it aside whole instead
+# (_wb_backup_path_new + mv), so the link itself is what's kept.
 #
 # A failed backup aborts the caller's overwrite (non-zero return) rather
 # than proceeding unprotected: a backup that silently didn't happen is a
 # worse outcome than refusing the whole operation and saying so.
+#
+# Sets WB_LAST_BACKUP_PATH (empty when nothing was backed up) — a global,
+# not stdout, because every caller runs this in the current shell and must
+# keep seeing only the log line. lib/files/lifecycle.sh records it as an
+# entry's pre-workbench "original".
 workbench_backup_existing_file() {
-    local dest="$1" module="${2:-}"
+    local dest="$1" module="${2:-}" backup_path
+    # shellcheck disable=SC2034  # read by lib/files/lifecycle.sh
+    WB_LAST_BACKUP_PATH=""
     [[ -e "${dest}" ]] || return 0
     [[ -L "${dest}" ]] && return 0
 
-    local backup_root="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/backups"
-    local backup_dir
-    backup_dir="${backup_root}/$(date +%Y-%m-%d)/$(date +%H00)"
-    local backup_base
-    backup_base="${module:+${module}-}$(basename "${dest}").$(date +%H%M%S)"
-    local backup_path="${backup_dir}/${backup_base}"
-
-    # Same-second collision inside one hour bucket (two overwrites of the
-    # same file within a second) — unlikely at the volume this exists
-    # for, but a counter suffix is nearly free and beats silently
-    # clobbering an earlier backup.
-    local n=2
-    while [[ -e "${backup_path}" ]]; do
-        backup_path="${backup_dir}/${backup_base}.${n}"
-        n=$((n + 1))
-    done
-
-    mkdir -p "${backup_dir}"
+    backup_path="$(_wb_backup_path_new "${dest}" "${module}")" || {
+        log_error "  failed to create a backup location for ${dest} — leaving it in place, not proceeding"
+        return 1
+    }
     if cp -a "${dest}" "${backup_path}"; then
+        # shellcheck disable=SC2034  # read by lib/files/lifecycle.sh
+        WB_LAST_BACKUP_PATH="${backup_path}"
         log_info "  backed up existing ${dest} -> ${backup_path}"
     else
         log_error "  failed to back up ${dest} before overwrite — leaving it in place, not proceeding"
@@ -234,194 +251,36 @@ workbench_backup_existing_file() {
     fi
 }
 
-workbench_deploy_copy_file() {
-    local src="$1" dest="$2" force="$3" module="${4:-}"
-    mkdir -p "$(dirname "${dest}")"
-    [[ -e "${dest}" && "${force}" != "true" ]] && return 0
-    # A symlink counts as existing for the check above, so this only runs
-    # when force=true — but `cp -f` on a destination that's a symlink
-    # follows it and overwrites whatever it points at, not the symlink
-    # itself. For a stale `mode: link` destination migrating to `mode:
-    # copy` (docs/decisions-log.md D51), that target is the module's own
-    # immutable snapshot file — silently corrupting it, not the user's
-    # file, while leaving the destination still a symlink afterwards.
-    # Remove the symlink first so cp always writes a real, detached file.
-    [[ -L "${dest}" ]] && rm -f "${dest}"
-    # Back up a real pre-existing file before a force overwrite actually
-    # changes its content (docs/decisions-log.md D53) — skipped when the
-    # incoming content is byte-identical, so a re-deploy of an unchanged
-    # force: true entry (e.g. workbench-git's generated direnv context
-    # file, redeployed whenever that module's commit changes) never
-    # produces a backup with nothing new in it.
-    if [[ -e "${dest}" ]] && ! cmp -s "${src}" "${dest}"; then
-        workbench_backup_existing_file "${dest}" "${module}" || return 1
-    fi
-    if cp -f "${src}" "${dest}"; then
-        log_info "  deployed (copy): ${dest}"
-    else
-        log_error "  failed to deploy (copy): ${dest}"
-        return 1
-    fi
-}
-
-workbench_deploy_link_file() {
-    local src="$1" dest="$2" force="$3" module="${4:-}"
-    mkdir -p "$(dirname "${dest}")"
-    if [[ -L "${dest}" ]]; then
-        [[ "$(readlink "${dest}")" == "${src}" ]] && return 0
-        rm -f "${dest}"; ln -s "${src}" "${dest}"
-        log_info "  relinked: ${dest} -> ${src}"
-    elif [[ -e "${dest}" ]]; then
-        [[ "${force}" != "true" ]] && { log_warn "  ${dest} exists and is not a symlink — skipping"; return 0; }
-        # rm -rf below can destroy a real file OR an entire real
-        # directory — back it up first (docs/decisions-log.md D53).
-        # Unconditional, no content comparison: replacing a real path
-        # with a symlink is a type change worth preserving even when the
-        # content happened to match, unlike the copy-mode case above.
-        workbench_backup_existing_file "${dest}" "${module}" || return 1
-        rm -rf "${dest}"; ln -s "${src}" "${dest}"
-        log_info "  deployed (link): ${dest} -> ${src}"
-    else
-        ln -s "${src}" "${dest}"
-        log_info "  deployed (link): ${dest} -> ${src}"
-    fi
-}
-
+# workbench_deploy_module <name>
+# Deploys every target workbench_files_targets derives from the module's
+# current manifest — the one derivation, shared with 'wb files' (D81).
+# Whether and how each target is written, linked, left alone or held is
+# decided in lib/files/lifecycle.sh; this loop only adds D75's physical
+# (symlink-resolved) safety check immediately before each write.
+# overrides_src (kind 'overrides') skips that check: its destination is
+# engine-computed under ~/.config/workbench/local/, a denylisted root by
+# design, and never module-declared (D48).
 workbench_deploy_module() {
-    local name="$1"
-    local current_dir src dest dest_macos mode force platforms manifest
+    _wb_engine_require_files
+    local name="$1" current_dir
+    local src dest kind lifecycle yield mode source
     current_dir="$(workbench_module_current_dir "${name}")"
     [[ -d "${current_dir}" ]] || { log_warn "workbench_deploy_module: ${name}: no current snapshot yet"; return 1; }
-    manifest="$(workbench_resolve_manifest_path "${current_dir}")"
 
-    while IFS='|' read -r src dest dest_macos mode force platforms; do
-        [[ -z "${src}" ]] && continue
-        if [[ -n "${platforms}" ]]; then
-            case "${WORKBENCH_OS:-}" in
-                Mac)   printf '%s\n' "${platforms}" | tr ',' '\n' | grep -qx macos || continue ;;
-                Linux) printf '%s\n' "${platforms}" | tr ',' '\n' | grep -qx linux || continue ;;
-            esac
-        fi
-        local chosen_dest="${dest}"
-        [[ "${WORKBENCH_OS:-}" == "Mac" && -n "${dest_macos}" ]] && chosen_dest="${dest_macos}"
-
-        # D75: lexical checks first, then a symlink-aware check per target.
-        if ! _wb_path_is_safe_relative "${src}" || ! _wb_dest_is_safe "${chosen_dest}" "${name}"; then
-            log_error "workbench_deploy_module: ${name}: refusing unsafe deploy entry (src: ${src}, dest: ${chosen_dest})"
+    while IFS='|' read -r _ src dest kind lifecycle yield mode source; do
+        [[ -z "${dest}" ]] && continue
+        if [[ "${kind}" != "overrides" ]] && ! _wb_dest_physical_is_safe "$(_wb_expand_dest "${dest%/}")" "${name}"; then
+            log_error "workbench_deploy_module: ${name}: refusing ${dest} — resolves through a symlink to a denied location"
             continue
         fi
+        case "${mode}" in
+            copy)           workbench_files_apply "${name}" "${dest}" "${source}" "${src}" "${kind}" "${lifecycle}" "${yield}" ;;
+            link|link_tree) workbench_files_apply_link "${name}" "${dest}" "${source}" "${src}" "${kind}" "${yield}" ;;
+        esac
+    done < <(workbench_files_targets "${name}" --log)
 
-        local real_dest
-        real_dest="$(_wb_expand_dest "${chosen_dest}")"
-        local abs_src="${current_dir}/${src%/}"
-
-        # A symlink in the snapshot can point anywhere, including outside
-        # $HOME. Never deploy one — as a single-file src, or as the source a
-        # link-mode entry would point at.
-        if [[ -L "${abs_src}" ]]; then
-            log_error "workbench_deploy_module: ${name}: refusing deploy src '${src}' — it is a symlink"
-            continue
-        fi
-
-        if [[ -d "${abs_src}" ]]; then
-            local file rel target
-            while IFS= read -r -d '' file; do
-                rel="${file#"${abs_src}"/}"
-                target="${real_dest%/}/${rel}"
-                if ! _wb_dest_physical_is_safe "${target}" "${name}"; then
-                    log_error "workbench_deploy_module: ${name}: refusing ${target} — resolves through a symlink to a denied location"
-                    continue
-                fi
-                if [[ "${mode}" == "link" ]]; then
-                    workbench_deploy_link_file "${file}" "${target}" "${force}" "${name}"
-                else
-                    workbench_deploy_copy_file "${file}" "${target}" "${force}" "${name}"
-                fi
-            done < <(find "${abs_src}" -name .git -prune -o -type f -print0)
-        elif [[ -e "${abs_src}" ]]; then
-            if ! _wb_dest_physical_is_safe "${real_dest}" "${name}"; then
-                log_error "workbench_deploy_module: ${name}: refusing ${real_dest} — resolves through a symlink to a denied location"
-                continue
-            fi
-            if [[ "${mode}" == "link" ]]; then
-                workbench_deploy_link_file "${abs_src}" "${real_dest}" "${force}" "${name}"
-            else
-                workbench_deploy_copy_file "${abs_src}" "${real_dest}" "${force}" "${name}"
-            fi
-        else
-            log_warn "workbench_deploy_module: ${name}: deploy src not found: ${abs_src}"
-        fi
-    done < <(workbench_manifest_deploy_entries "${manifest}")
-
-    # ── overrides_src (docs/decisions-log.md D48) ───────────────────────────
-    # Engine-computed destination, always — never a manifest-declared
-    # dest, same reasoning as register.shell[]'s engine-computed path
-    # (docs/decisions-log.md D16). force is hardcoded "false", never read from the
-    # manifest: this file is deployed once and is the user's from that
-    # point on, permanently — there is deliberately no force: true
-    # escape hatch for it, unlike an ordinary deploy[] entry.
-    local overrides_src
-    overrides_src="$(workbench_manifest_scalar overrides_src "${manifest}")"
-    if [[ -n "${overrides_src}" ]]; then
-        local abs_overrides_src="${current_dir}/${overrides_src}"
-        local overrides_dest="${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/local/overrides/${name}.sh"
-        if [[ -f "${abs_overrides_src}" ]]; then
-            workbench_deploy_copy_file "${abs_overrides_src}" "${overrides_dest}" "false" "${name}"
-        else
-            log_warn "workbench_deploy_module: ${name}: overrides_src not found: ${abs_overrides_src}"
-        fi
-    fi
-}
-
-# workbench_module_reset_targets <name>
-# Lists every deploy[] entry eligible for `wb module reset`
-# (docs/decisions-log.md D51) — one line per entry, `basename(real_dest)|src|real_dest`.
-# Copy-mode only (mode: copy, or mode omitted — copy is the deploy[]
-# default): a `mode: link` destination is already kept in sync on every
-# update, so there is nothing to "reset" for it. Single-file entries only
-# — a directory src is skipped; resetting an entire directory tree by one
-# name is ambiguous in a way a single file isn't, and no module currently
-# needs it (documented limitation, not an oversight).
-#
-# Deliberately re-derives real_dest (platform filter, macOS dest_macos
-# override, ~-expansion) rather than calling a shared helper with
-# workbench_deploy_module's own loop — that loop is the tested, hot sync
-# path; duplicating this much smaller amount of logic here was judged
-# lower-risk than refactoring it to share. Keep the two in sync by hand if
-# either changes.
-workbench_module_reset_targets() {
-    local name="$1"
-    local current_dir manifest
-    current_dir="$(workbench_module_current_dir "${name}")"
-    [[ -d "${current_dir}" ]] || return 1
-    manifest="$(workbench_resolve_manifest_path "${current_dir}")"
-
-    local src dest dest_macos mode force platforms
-    while IFS='|' read -r src dest dest_macos mode force platforms; do
-        [[ -z "${src}" ]] && continue
-        [[ "${mode}" == "link" ]] && continue
-        # D75: same lexical checks as workbench_deploy_module — reset only
-        # lists targets, so an unsafe entry is skipped silently here.
-        _wb_path_is_safe_relative "${src}" || continue
-        local chosen_dest="${dest}"
-        [[ "${WORKBENCH_OS:-}" == "Mac" && -n "${dest_macos}" ]] && chosen_dest="${dest_macos}"
-        _wb_dest_is_safe "${chosen_dest}" "${name}" || continue
-        local abs_src="${current_dir}/${src%/}"
-        [[ -d "${abs_src}" ]] && continue
-
-        if [[ -n "${platforms}" ]]; then
-            case "${WORKBENCH_OS:-}" in
-                Mac)   printf '%s\n' "${platforms}" | tr ',' '\n' | grep -qx macos || continue ;;
-                Linux) printf '%s\n' "${platforms}" | tr ',' '\n' | grep -qx linux || continue ;;
-            esac
-        fi
-
-        local real_dest="${dest}"
-        [[ "${WORKBENCH_OS:-}" == "Mac" && -n "${dest_macos}" ]] && real_dest="${dest_macos}"
-        real_dest="$(_wb_expand_dest "${real_dest}")"
-
-        printf '%s|%s|%s\n' "$(basename "${real_dest}")" "${src}" "${real_dest}"
-    done < <(workbench_manifest_deploy_entries "${manifest}")
+    workbench_files_write_pending "${name}"
+    return 0
 }
 
 # ── register.list / deploy.list rendering ─────────────────────────────────────
@@ -658,6 +517,27 @@ workbench_run_post_deploy_hook() {
 }
 
 # ── Per-module sync ────────────────────────────────────────────────────────────
+# _wb_engine_require_files
+# Lazy-loads lib/files/lifecycle.sh (D81) and its one dependency,
+# core/installers-common.sh (_wb_sha256), at first deploy — same
+# _wb_require-or-private-fallback shape as workbench_sync_module below, so
+# this file still works sourced standalone with no bin/wb in the picture.
+_wb_engine_require_files() {
+    if command -v _wb_require &>/dev/null; then
+        _wb_require core/installers-common.sh files/lifecycle.sh
+        return 0
+    fi
+    local _wb_ef_dep
+    for _wb_ef_dep in core/installers-common.sh files/lifecycle.sh; do
+        if command -v _workbench_script_version_registered &>/dev/null \
+            && _workbench_script_version_registered "lib/${_wb_ef_dep}"; then
+            continue
+        fi
+        # shellcheck disable=SC1090
+        source "${_wb_engine_lib_dir}/../${_wb_ef_dep}"
+    done
+}
+
 # workbench_sync_module <name> [reason]
 # Returns 0 on a successful cycle (whether or not anything actually
 # changed), 1 on a resolution/fetch failure (logged, never fatal to the
@@ -687,6 +567,8 @@ workbench_sync_module() {
             source "${_wb_engine_lib_dir}/../distribution/${_wb_sm_dep}"
         done
     fi
+
+    _wb_engine_require_files
 
     local name="$1" reason="${2:-scheduled}"
     local mode resolved current_sha module_dir
@@ -760,7 +642,13 @@ workbench_sync_module() {
     local shortsha="${new_sha:0:7}"
     local new_snapshot
     new_snapshot="$(workbench_snapshot_path "${name}" "${ref_label}" "${shortsha}")"
-    if [[ -d "${new_snapshot}" ]]; then
+    if [[ -d "${new_snapshot}" ]] && ! workbench_files_snapshot_reusable "${name}" "${new_snapshot}"; then
+        # D81: a snapshot a held file is pinned to, or one changed through a
+        # link since it was fetched, carries the user's changes — never make
+        # it current again as if it were the module's content.
+        log_error "${name}: snapshot ${shortsha} on disk holds changes made through linked files — resolve them first ('wb files status'), then update again"
+        return 1
+    elif [[ -d "${new_snapshot}" ]]; then
         log_info "${name}: snapshot ${shortsha} already present on disk — re-using, not re-fetching"
     else
         local url private ok=1
@@ -814,6 +702,17 @@ workbench_sync_module() {
             log_error "${name}: $(basename -- "${new_manifest}") failed path-safety validation — refusing to sync (previous snapshot, if any, stays current)"
             return 1
         fi
+    fi
+
+    # D81: record the new snapshot's checksums, then make sure no change
+    # made through a linked file is discarded by the swap — such entries
+    # are held at the snapshot they're on, which prune then keeps.
+    # Checked explicitly, not left to set -e: workbench_sync_run_one's
+    # 'if ! ( set -e; ... )' context disables errexit, and the interactive
+    # callers don't set it at all.
+    if ! workbench_files_record_sums "${name}" "${new_snapshot}" || ! workbench_files_before_swap "${name}"; then
+        log_error "${name}: couldn't secure changes made through linked files — not updating this module this time (previous snapshot stays current)"
+        return 1
     fi
 
     workbench_snapshot_swap "${name}" "${new_snapshot}"

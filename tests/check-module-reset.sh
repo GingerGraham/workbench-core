@@ -25,43 +25,11 @@ source "${WB}" >/tmp/wb-module-reset-source.log 2>&1
 # (which requires it itself), so require it explicitly here.
 _wb_require modules/add.sh
 
-# ── 0. workbench_deploy_copy_file symlink-safety fix, in isolation ────────
-SNAP="${WORK}/snap-test"
-mkdir -p "${SNAP}"
-echo "ORIGINAL SNAPSHOT CONTENT" > "${SNAP}/tmux.conf"
-mkdir -p "${WORK}/home-test"
-ln -s "${SNAP}/tmux.conf" "${WORK}/home-test/tmux.conf"
-echo "NEW SOURCE CONTENT" > "${WORK}/new-src.conf"
-workbench_deploy_copy_file "${WORK}/new-src.conf" "${WORK}/home-test/tmux.conf" "true"
-if [[ "$(cat "${SNAP}/tmux.conf")" == "ORIGINAL SNAPSHOT CONTENT" ]]; then
-    ok "workbench_deploy_copy_file no longer corrupts a symlink's target on force copy"
-else
-    fail "workbench_deploy_copy_file still corrupted the symlink target: $(cat "${SNAP}/tmux.conf")"
-fi
-if [[ ! -L "${WORK}/home-test/tmux.conf" ]] && [[ "$(cat "${WORK}/home-test/tmux.conf")" == "NEW SOURCE CONTENT" ]]; then
-    ok "workbench_deploy_copy_file leaves a real, detached file after force-copying over a stale symlink"
-else
-    fail "dest is still a symlink or has wrong content after force copy"
-fi
-
-# ── 0b. workbench_deploy_link_file backs up a real file before its force
-#    branch rm -rf's it (docs/decisions-log.md D53). No live manifest sets
-#    mode: link + force: true today, so this exercises the engine
-#    function directly, same as check 0 above. ─────────────────────────
-mkdir -p "${WORK}/link-src-dir"
-echo "LINK MODE SNAPSHOT CONTENT" > "${WORK}/link-src-dir/thing.conf"
-mkdir -p "${WORK}/home-link-test"
-echo "REAL PRE-EXISTING FILE, NOT A SYMLINK" > "${WORK}/home-link-test/thing.conf"
-workbench_deploy_link_file "${WORK}/link-src-dir/thing.conf" "${WORK}/home-link-test/thing.conf" "true" "link-test-mod" >/tmp/wb-link-backup.log 2>&1
-LINK_BACKUP="$(find "${XDG_DATA_HOME}/workbench/backups" -name 'link-test-mod-thing.conf.*' 2>/dev/null | head -1)"
-if [[ -L "${WORK}/home-link-test/thing.conf" ]] && [[ -n "${LINK_BACKUP}" ]] \
-    && [[ "$(cat "${LINK_BACKUP}")" == "REAL PRE-EXISTING FILE, NOT A SYMLINK" ]]; then
-    ok "workbench_deploy_link_file backs up a real pre-existing file before replacing it with a symlink"
-else
-    fail "workbench_deploy_link_file did not back up the pre-existing file correctly"
-    cat /tmp/wb-link-backup.log
-fi
-rm -rf "${XDG_DATA_HOME}/workbench/backups"
+# Sections 0/0b (workbench_deploy_copy_file / workbench_deploy_link_file in
+# isolation) were removed with those functions (docs/decisions-log.md D81).
+# The same properties — a stale symlink is replaced, never written through;
+# real content is backed up first — are covered by
+# tests/check-file-lifecycle.sh.
 
 # ── Fixture module: copy-mode tmux.conf/vimrc, one link-mode file. ─────────
 SRC="${WORK}/src-mod"
@@ -137,7 +105,7 @@ else
 fi
 
 # ── 3. Confirm the reset — file restored to the workbench default. ─────────
-echo "y" | _wb_cmd_module_reset reset-mod tmux.conf >/tmp/wb-mr-confirm.log 2>&1
+_wb_cmd_module_reset reset-mod tmux.conf --yes </dev/null >/tmp/wb-mr-confirm.log 2>&1
 if [[ "$(cat "${TMUX_DEST}")" == "WORKBENCH DEFAULT TMUX CONF" ]]; then
     ok "confirming the reset restores the workbench default content"
 else
@@ -154,7 +122,7 @@ BACKUP_ROOT="${XDG_DATA_HOME}/workbench/backups"
 # than racing against an unrelated earlier backup with the same basename.
 rm -rf "${BACKUP_ROOT}"
 echo "USER RUINED THIS FILE YET AGAIN" > "${TMUX_DEST}"
-echo "y" | _wb_cmd_module_reset reset-mod tmux.conf >/tmp/wb-mr-backup.log 2>&1
+_wb_cmd_module_reset reset-mod tmux.conf --yes </dev/null >/tmp/wb-mr-backup.log 2>&1
 BACKUP_FILE="$(find "${BACKUP_ROOT}" -name 'reset-mod-tmux.conf.*' 2>/dev/null | head -1)"
 if [[ -n "${BACKUP_FILE}" ]] && [[ "$(cat "${BACKUP_FILE}")" == "USER RUINED THIS FILE YET AGAIN" ]]; then
     ok "resetting a modified file backs up the pre-existing content under workbench/backups/"
@@ -172,7 +140,7 @@ fi
 # ── 3c. Resetting a file that already matches the workbench default
 #    produces no backup — nothing actually changed. ───────────────────────
 rm -rf "${BACKUP_ROOT}"
-echo "y" | _wb_cmd_module_reset reset-mod tmux.conf >/tmp/wb-mr-nobackup.log 2>&1
+_wb_cmd_module_reset reset-mod tmux.conf --yes </dev/null >/tmp/wb-mr-nobackup.log 2>&1
 if [[ ! -d "${BACKUP_ROOT}" ]]; then
     ok "resetting an already-current file produces no backup"
 else
@@ -183,7 +151,7 @@ fi
 # ── 4. 'all' resets every copy-mode file, confirmation covers all of them. ──
 echo "USER RUINED THIS FILE TOO" > "${TMUX_DEST}"
 echo "USER RUINED VIMRC" > "${VIMRC_DEST}"
-echo "y" | _wb_cmd_module_reset reset-mod all >/tmp/wb-mr-all.log 2>&1
+_wb_cmd_module_reset reset-mod all --yes </dev/null >/tmp/wb-mr-all.log 2>&1
 if [[ "$(cat "${TMUX_DEST}")" == "WORKBENCH DEFAULT TMUX CONF" && "$(cat "${VIMRC_DEST}")" == "WORKBENCH DEFAULT VIMRC" ]]; then
     ok "'wb module reset <module> all' resets every copy-mode deploy file"
 else
@@ -192,7 +160,7 @@ else
 fi
 
 # ── 5. An unknown target name errors and lists what's available, untouched. ─
-echo "y" | _wb_cmd_module_reset reset-mod nope.conf >/tmp/wb-mr-unknown.log 2>&1; rc=$?
+_wb_cmd_module_reset reset-mod nope.conf --yes </dev/null >/tmp/wb-mr-unknown.log 2>&1; rc=$?
 if [[ "${rc}" -ne 0 ]] && grep -q "tmux.conf" /tmp/wb-mr-unknown.log && grep -q "vimrc" /tmp/wb-mr-unknown.log; then
     ok "an unrecognised target name errors and lists the available names"
 else
@@ -200,13 +168,17 @@ else
     cat /tmp/wb-mr-unknown.log
 fi
 
-# ── 6. A mode: link destination's basename is not offered as a reset
-#    target — link-mode files stay out of scope for this command. ─────────
-echo "y" | _wb_cmd_module_reset reset-mod synced.conf >/tmp/wb-mr-linkmode.log 2>&1; rc=$?
-if [[ "${rc}" -ne 0 ]] && ! grep -qx "    synced.conf" /tmp/wb-mr-linkmode.log; then
-    ok "a mode: link deploy file is correctly excluded from reset targets"
+# ── 6. A mode: link destination is a reset target too (D81): a real file
+#    the user put there is backed up and the link comes back. ────────────
+SYNCED_DEST="${HOME}/.config/synced.conf"
+rm -f "${SYNCED_DEST}"
+echo "USER FILE IN PLACE OF THE LINK" > "${SYNCED_DEST}"
+_wb_cmd_module_reset reset-mod synced.conf --yes </dev/null >/tmp/wb-mr-linkmode.log 2>&1; rc=$?
+if [[ "${rc}" -eq 0 && -L "${SYNCED_DEST}" && "$(cat "${SYNCED_DEST}")" == "LINK MODE FILE" ]] \
+    && grep -rqx "USER FILE IN PLACE OF THE LINK" "${XDG_DATA_HOME}/workbench/backups"; then
+    ok "a mode: link deploy file resets to the link, with the user's file backed up"
 else
-    fail "mode: link file was unexpectedly offered/accepted as a reset target"
+    fail "mode: link reset did not relink and back up as expected (exit ${rc})"
     cat /tmp/wb-mr-linkmode.log
 fi
 
@@ -248,7 +220,7 @@ OTHER_DEST="${HOME}/.config/tmux/other/tmux.conf"
 
 # ── 7. A basename collision across two deploy[] entries is ambiguous and
 #    names the full-src-path escape hatch instead of picking one. ─────────
-echo "y" | _wb_cmd_module_reset reset-mod2 tmux.conf >/tmp/wb-mr-collision.log 2>&1; rc=$?
+_wb_cmd_module_reset reset-mod2 tmux.conf --yes </dev/null >/tmp/wb-mr-collision.log 2>&1; rc=$?
 if [[ "${rc}" -ne 0 ]] && grep -q "matches more than one" /tmp/wb-mr-collision.log \
     && grep -q "files/tmux.conf" /tmp/wb-mr-collision.log && grep -q "files/other/tmux.conf" /tmp/wb-mr-collision.log; then
     ok "a basename collision is reported as ambiguous and lists both full src paths"
@@ -264,7 +236,7 @@ fi
 #    can never satisfy). ────────────────────────────────────────────────
 echo "USER RUINED PRIMARY" > "${PRIMARY_DEST}"
 echo "USER RUINED OTHER" > "${OTHER_DEST}"
-echo "y" | _wb_cmd_module_reset reset-mod2 files/tmux.conf >/tmp/wb-mr-srcpath1.log 2>&1
+_wb_cmd_module_reset reset-mod2 files/tmux.conf --yes </dev/null >/tmp/wb-mr-srcpath1.log 2>&1
 if [[ "$(cat "${PRIMARY_DEST}")" == "WORKBENCH DEFAULT TMUX CONF (primary)" && "$(cat "${OTHER_DEST}")" == "USER RUINED OTHER" ]]; then
     ok "naming the full src path resolves a basename collision and resets only that one file"
 else
@@ -272,7 +244,7 @@ else
     cat /tmp/wb-mr-srcpath1.log
 fi
 
-echo "y" | _wb_cmd_module_reset reset-mod2 files/other/tmux.conf >/tmp/wb-mr-srcpath2.log 2>&1
+_wb_cmd_module_reset reset-mod2 files/other/tmux.conf --yes </dev/null >/tmp/wb-mr-srcpath2.log 2>&1
 if [[ "$(cat "${OTHER_DEST}")" == "WORKBENCH DEFAULT TMUX CONF (other)" ]]; then
     ok "the second colliding entry's full src path resolves independently"
 else
@@ -281,14 +253,15 @@ else
 fi
 
 # ── 9. A partial failure across a multi-file reset is reported, not
-#    swallowed as success — one entry's snapshot src is removed so its
-#    cp genuinely fails (root in this sandbox defeats a permissions-based
-#    failure, so this is a real, privilege-independent one instead). ─────
-CURRENT_DIR2="$(workbench_module_current_dir reset-mod2)"
-rm -f "${CURRENT_DIR2}/files/tmux.conf"
+#    swallowed as success. The backup root is made unwritable (a regular
+#    file where the directory should be — root in this sandbox defeats a
+#    permissions-based failure), so the ruined file, which needs a backup,
+#    fails; the deleted one, which doesn't, still comes back. ─────────────
 echo "USER RUINED PRIMARY AGAIN" > "${PRIMARY_DEST}"
-echo "USER RUINED OTHER AGAIN" > "${OTHER_DEST}"
-echo "y" | _wb_cmd_module_reset reset-mod2 all >/tmp/wb-mr-partial.log 2>&1; rc=$?
+rm -f "${OTHER_DEST}"
+mv "${XDG_DATA_HOME}/workbench/backups" "${WORK}/backups-aside"
+: > "${XDG_DATA_HOME}/workbench/backups"
+_wb_cmd_module_reset reset-mod2 all --yes </dev/null >/tmp/wb-mr-partial.log 2>&1; rc=$?
 if [[ "${rc}" -ne 0 ]] && [[ "$(cat "${OTHER_DEST}")" == "WORKBENCH DEFAULT TMUX CONF (other)" ]] \
     && [[ "$(cat "${PRIMARY_DEST}")" == "USER RUINED PRIMARY AGAIN" ]]; then
     ok "a partial failure across a multi-file reset is reported with a non-zero exit, not silently swallowed"
@@ -296,7 +269,8 @@ else
     fail "partial failure was not reported correctly (exit ${rc})"
     cat /tmp/wb-mr-partial.log
 fi
-
+rm -f "${XDG_DATA_HOME}/workbench/backups"
+mv "${WORK}/backups-aside" "${XDG_DATA_HOME}/workbench/backups"
 
 # ── 10. R6: reset refuses a symlinked snapshot src — it must not copy a
 #    user-readable file (here ~/secret.txt) to the module's destination. ───
@@ -305,7 +279,7 @@ CURRENT_DIR1="$(workbench_module_current_dir reset-mod)"
 rm -f "${CURRENT_DIR1}/files/vimrc"
 ln -s "${HOME}/secret.txt" "${CURRENT_DIR1}/files/vimrc"
 echo "USER RUINED VIMRC 2" > "${VIMRC_DEST}"
-echo "y" | _wb_cmd_module_reset reset-mod .vimrc >/tmp/wb-mr-symsrc.log 2>&1; rc=$?
+_wb_cmd_module_reset reset-mod .vimrc --yes </dev/null >/tmp/wb-mr-symsrc.log 2>&1; rc=$?
 if [[ "${rc}" -ne 0 ]] && grep -q "is a symlink" /tmp/wb-mr-symsrc.log \
     && ! grep -q "TOP SECRET" "${VIMRC_DEST}"; then
     ok "reset refuses a symlinked src and does not copy the secret to the destination"
@@ -319,7 +293,7 @@ fi
 mkdir -p "${HOME}/.ssh"
 rm -rf "${HOME}/.config/tmux/other"
 ln -s "${HOME}/.ssh" "${HOME}/.config/tmux/other"
-echo "y" | _wb_cmd_module_reset reset-mod2 files/other/tmux.conf >/tmp/wb-mr-symdest.log 2>&1; rc=$?
+_wb_cmd_module_reset reset-mod2 files/other/tmux.conf --yes </dev/null >/tmp/wb-mr-symdest.log 2>&1; rc=$?
 if [[ "${rc}" -ne 0 ]] && grep -q "resolves through a symlink" /tmp/wb-mr-symdest.log \
     && [[ -z "$(ls -A "${HOME}/.ssh")" ]]; then
     ok "reset refuses a destination whose parent symlinks into ~/.ssh; nothing written there"
