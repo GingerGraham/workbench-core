@@ -101,6 +101,13 @@ _read_prompt() {
     eval "${_rp_var}=\${_rp_value}"
 }
 
+# True when a person can be asked: /dev/tty opens. Works under
+# `curl … | bash`, where stdin is the pipe. False under cron, systemd,
+# CI and cloud-init (docs/decisions-log.md D84).
+_wb_have_tty() {
+    { : </dev/tty; } 2>/dev/null
+}
+
 _read_prompt_silent() {
     local _rp_prompt="$1"
     local _rp_var="$2"

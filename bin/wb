@@ -141,7 +141,7 @@ SETUP & HOST-LEVEL CONVERGENCE
                                per-module layer underneath it.
 
 MANAGING MODULES
-  add <name> [url] [--private] [--allow-hooks] [--use-files [--follow]] [--skip-layer <id>]
+  add <name> [url] [--private] [--allow-hooks] [--keep-files|--use-files] [--skip-layer <id>]
                                Register + immediately sync a new module.
   remove <name> [--restore]    Deregister (content on disk is left alone,
                                unless --restore puts back what it replaced).
@@ -359,10 +359,11 @@ EOF
 }
 
 _wb_cmd_install() {
-    local bundle="" skip_ansible="false" use_files="false" follow="false" yes="false"
+    local bundle="" skip_ansible="false" use_files="false" keep_files="false" follow="false" yes="false"
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --use-files) use_files="true" ;;
+            --keep-files) keep_files="true" ;;
             --follow)    follow="true" ;;
             --yes|-y)    yes="true" ;;
             --bundle)
@@ -381,13 +382,17 @@ _wb_cmd_install() {
         log_error "wb install: --use-files goes with --bundle <name> (for a single module: wb add <name> --use-files)"
         return 2
     fi
+    if [[ "${keep_files}" == "true" && "${use_files}" == "true" ]]; then
+        log_error "wb install: --keep-files and --use-files contradict each other — pick one"
+        return 2
+    fi
     if [[ "${follow}" == "true" && "${use_files}" != "true" ]]; then
         log_error "wb install: --follow goes with --use-files"
         return 2
     fi
     # Refuse before registering anything: the --use-files confirmation
     # can't be asked without a terminal (D81).
-    if [[ "${use_files}" == "true" && "${yes}" != "true" && ! -t 0 ]]; then
+    if [[ "${use_files}" == "true" && "${yes}" != "true" ]] && ! _wb_have_tty; then
         log_error "wb install: --use-files needs a terminal to confirm — re-run with --yes. Nothing was changed."
         return 1
     fi
@@ -420,17 +425,33 @@ _wb_cmd_install() {
 
     if [[ -n "${bundle}" ]]; then
         _wb_require modules/catalog.sh modules/add.sh
-        local member
-        local -a members=()
+        local member install_mode="ask" install_rc=0
+        local -a members=() staged=()
         while IFS= read -r member; do
             [[ -z "${member}" ]] && continue
             members+=("${member}")
-            workbench_cmd_add "${member}"
+            if workbench_is_registered "${member}"; then
+                log_info "wb install: '${member}' is already registered"
+                continue
+            fi
+            workbench_cmd_add "${member}" --stage-only </dev/null && staged+=("${member}")
         done < <(workbench_catalog_bundle_modules "${bundle}")
-        # After the loop, not inside it: the confirmation reads stdin,
-        # which inside the loop is the bundle list.
-        if [[ "${use_files}" == "true" && "${#members[@]}" -gt 0 ]]; then
-            _wb_files_use_at_install "${follow}" "${yes}" "${members[@]}" \
+        # One plan and one question across the whole bundle, after the
+        # loop (D84). Modules registered before keep D81's --use-files.
+        [[ "${keep_files}" == "true" ]] && install_mode="keep"
+        [[ "${use_files}" == "true" ]] && install_mode="use"
+        if [[ "${#staged[@]}" -gt 0 ]]; then
+            _wb_install_modules "${install_mode}" "${follow}" "${yes}" add "${staged[@]}" || install_rc=$?
+            [[ "${install_rc}" -ne 0 && "${install_rc}" -ne 3 ]] && \
+                log_warn "wb install: not every file was deployed — see above; 'wb files status' shows where things stand"
+        fi
+        local -a earlier=()
+        for member in ${members[@]+"${members[@]}"}; do
+            case " ${staged[*]:-} " in *" ${member} "*) continue ;; esac
+            earlier+=("${member}")
+        done
+        if [[ "${use_files}" == "true" && "${#earlier[@]}" -gt 0 ]]; then
+            _wb_files_use_at_install "${follow}" "${yes}" "${earlier[@]}" \
                 || log_warn "wb install: --use-files didn't complete for every file — see above; 'wb files status' shows where things stand"
         fi
     fi
@@ -570,8 +591,30 @@ _wb_cmd_update() {
     log_debug "wb update: workbench-core release $(_workbench_release_version), bin/wb v0.1.0"
     local core_sha_before
     core_sha_before="$(workbench_module_conf_get core RESOLVED_SHA "")"
+    # D84: a module fetched but never deployed (the user quit at the
+    # install question) is asked about again here, from a terminal. With
+    # no terminal it deploys with the default answer, keep.
+    local m rc=0
+    local -a staged=() quit=()
+    while IFS= read -r m; do
+        [[ -z "${m}" ]] && continue
+        [[ -n "${name}" && "${m}" != "${name}" ]] && continue
+        staged+=("${m}")
+    done < <(_wb_install_staged_modules)
+    if [[ "${#staged[@]}" -gt 0 ]]; then
+        _wb_install_modules ask false false manual "${staged[@]}" || rc=$?
+        [[ "${rc}" -eq 3 ]] && quit=("${staged[@]}")
+    fi
     if [[ -n "${name}" ]]; then
-        workbench_sync_module "${name}" "manual"
+        [[ "${#quit[@]}" -gt 0 ]] || workbench_sync_module "${name}" "manual"
+    elif [[ "${#quit[@]}" -gt 0 ]]; then
+        # As workbench_sync_all, minus what the user just said not to touch.
+        while IFS= read -r m; do
+            [[ -z "${m}" ]] && continue
+            case " ${quit[*]} " in *" ${m} "*) continue ;; esac
+            workbench_sync_run_one "${m}" "manual"
+        done < <(workbench_list_loadable_modules)
+        workbench_cadence_mark_ran
     else
         workbench_sync_all "manual"
     fi
@@ -1299,13 +1342,13 @@ _wb_files_display_path() {
 _wb_files_confirm() {
     local yes="$1" label="$2" answer
     [[ "${yes}" == "true" ]] && return 0
-    if [[ ! -t 0 ]]; then
+    if ! _wb_have_tty; then
         log_error "${label}: not running in a terminal — re-run with --yes to confirm. Nothing was changed."
         return 1
     fi
-    printf 'Proceed? [y/N]: '
-    if ! read -r answer; then
-        echo
+    printf 'Proceed? [y/N]: ' >/dev/tty
+    if ! IFS= read -r answer </dev/tty; then
+        echo >/dev/tty
         log_info "${label}: aborted — nothing was changed."
         return 2
     fi
@@ -1473,6 +1516,7 @@ _wb_files_preview_use() {
             else
                 printf '      back up yours (restore puts it back)\n'
             fi
+            workbench_layers_carry_summary "${line}"
         fi
         return 0
     fi
@@ -1939,7 +1983,7 @@ _wb_cmd_files_resolve() {
         log_error "wb files resolve: --follow only goes with 'use'"
         return 2
     fi
-    if [[ -z "${choice}" && ! -t 0 ]]; then
+    if [[ -z "${choice}" ]] && ! _wb_have_tty; then
         log_error "wb files resolve: not running in a terminal — name the choice: wb files resolve ${module} ${file} keep|manage|use [--yes]"
         return 2
     fi
@@ -1983,7 +2027,7 @@ _wb_cmd_files_resolve() {
     local i=0
     if [[ -z "${choice}" ]]; then
         while [[ "${i}" -lt "${#todo[@]}" ]]; do
-            _wb_files_resolve_interactive "${module}" "${todo[${i}]}" "${waits[${i}]}" || failed=1
+            _wb_files_resolve_interactive "${module}" "${todo[${i}]}" "${waits[${i}]}" </dev/tty || failed=1
             i=$((i + 1))
         done
         return "${failed}"
@@ -2019,7 +2063,7 @@ _wb_cmd_files_resolve() {
 # across every registered module. Never on non-TTY or the scheduled path.
 _wb_files_prompt_pending() {
     local m dest line wait
-    [[ -t 0 ]] || return 0
+    _wb_have_tty || return 0
     command -v workbench_files_pending &>/dev/null || return 0
     while IFS= read -r m; do
         [[ -z "${m}" ]] && continue
@@ -2430,6 +2474,312 @@ _wb_cmd_files_restore() {
     return "${rc}"
 }
 
+# ── Install-time choice about existing config (docs/decisions-log.md D84) ──
+# 'wb add', 'wb install --bundle', bootstrap, and an interactive 'wb update'
+# of a module that was fetched but never deployed: one plan across every
+# module (workbench_files_install_plan), one question when the user already
+# has config any of them would touch, then deploy. Nothing outside
+# workbench's own directories is written before the answer. Questions go
+# through /dev/tty, so they work under `curl … | bash`; with no terminal
+# the answer is always keep — workbench never replaces a file unasked.
+
+# The target lines one plan row stands for: each layer of a layered file,
+# or the one deploy entry.
+_wb_install_row_lines() {
+    local module="$1" id="$2" kind="$3" layer_id
+    if [[ "${kind}" == "layer" ]]; then
+        while IFS= read -r layer_id; do
+            [[ -n "${layer_id}" ]] && workbench_layers_line "${module}" "${layer_id}"
+        done < <(printf '%s\n' "${id}" | tr ',' '\n')
+    else
+        _wb_files_line_for_dest "${module}" "${id}"
+    fi
+}
+
+# _wb_install_row_diff <module> <id> <kind> <display-path>
+# Yours against the module's file, labelled yours/workbench.
+_wb_install_row_diff() {
+    local module="$1" id="$2" kind="$3" display="$4" line source
+    line="$(_wb_install_row_lines "${module}" "${id}" "${kind}" | head -n 1)"
+    source="${line##*|}"
+    printf '\n== %s %s ==\n' "${module}" "${display}"
+    if [[ -d "${source}" ]]; then
+        diff -ru "$(_wb_expand_dest "${display%/}")" "${source}"
+    else
+        diff -u -L "yours: ${display}" -L "workbench: ${module}" "$(_wb_expand_dest "${display%/}")" "${source}"
+    fi
+    return 0
+}
+
+# _wb_install_preview_use <answers-file> — 'use' preview of every row
+# answered use (D81's preview lines, plus what's carried over).
+_wb_install_preview_use() {
+    local module id kind choice line last=""
+    while IFS='|' read -r module id kind choice; do
+        [[ "${choice}" == "use" ]] || continue
+        [[ "${module}" != "${last}" ]] && printf '  [%s]\n' "${module}"
+        last="${module}"
+        while IFS= read -r line; do
+            [[ -n "${line}" ]] && _wb_files_preview_use "${module}" "${line}"
+        done < <(_wb_install_row_lines "${module}" "${id}" "${kind}")
+    done < "$1"
+}
+
+# _wb_install_answer_all <plan-file> <answers-file> <keep|use>
+_wb_install_answer_all() {
+    awk -F'|' -v c="$3" '$5 == "existing" || $5 == "linked" { print $1 "|" $2 "|" $4 "|" c }' "$1" > "$2"
+}
+
+# _wb_install_confirm_use <answers-file> <yes> — preview, then [y/N].
+# 0 go, 1 refused (no terminal), 2 declined.
+_wb_install_confirm_use() {
+    local answers="$1" yes="$2" out=/dev/stdout
+    grep -q '|use$' "${answers}" || return 0
+    _wb_have_tty && [[ "${yes}" != "true" ]] && out=/dev/tty
+    {
+        echo
+        echo "Use workbench's version — your files are backed up first ('wb files restore' puts them back):"
+        _wb_install_preview_use "${answers}"
+        echo
+        echo "Backups go under $(_wb_files_backup_root)/."
+    } > "${out}"
+    _wb_files_confirm "${yes}" "use workbench's"
+}
+
+# _wb_install_ask <plan-file> <answers-file>
+# The question, on /dev/tty. 0 answered (answers written), 3 quit.
+_wb_install_ask() {
+    local plan="$1" answers="$2" answer default layered files has_git has_ssh
+    local module id display kind cond lines choice rc
+    default="$(workbench_files_conf_get INSTALL_DEFAULT)"
+    [[ "${default}" == "use" ]] || default="keep"
+    layered="$(awk -F'|' '($5 == "existing" || $5 == "linked") && $4 == "layer"' "${plan}" | wc -l | tr -d ' ')"
+    files="$(awk -F'|' '($5 == "existing" || $5 == "linked") && $4 == "file" { printf "%s%s", (n++ ? ", " : ""), $3 }' "${plan}")"
+    has_git=false; has_ssh=false
+    grep -qE '\|~/\.gitconfig\|layer\|(existing|linked)\|' "${plan}" && has_git=true
+    grep -qE '\|~/\.ssh/config\|layer\|(existing|linked)\|' "${plan}" && has_ssh=true
+
+    while true; do
+        {
+            echo
+            echo "These modules would touch config you already have:"
+            echo
+            awk -F'|' '$5 == "existing" || $5 == "linked" {
+                n = ($6 == "-") ? "" : $6 (($6 == 1) ? " line" : " lines")
+                if ($5 == "linked") n = "symlink"
+                printf "  %-8s %-30s %-10s %s\n", $1, $3, n, $4
+            }' "${plan}"
+            echo
+            echo "  keep mine        Your files stay as they are."
+            if [[ "${layered}" -gt 0 ]]; then
+                echo "                   Workbench adds its defaults underneath the ${layered} layered"
+                echo "                   file(s) — anything you've set wins."
+            fi
+            [[ -n "${files}" ]] && echo "                   ${files}: left alone, and workbench's isn't used."
+            echo "  use workbench's  Your files are backed up and replaced with workbench's."
+            if [[ "${has_git}" == "true" && "${has_ssh}" == "true" ]]; then
+                echo "                   Your git identity and your ssh hosts are kept."
+            elif [[ "${has_git}" == "true" ]]; then
+                echo "                   Your git identity is kept."
+            elif [[ "${has_ssh}" == "true" ]]; then
+                echo "                   Your ssh hosts are kept."
+            fi
+            echo
+            if [[ "${default}" == "use" ]]; then
+                echo "  [k] keep mine   [u] use workbench's (default)   [c] choose per file"
+            else
+                echo "  [k] keep mine (default)   [u] use workbench's   [c] choose per file"
+            fi
+            echo "  [d] show differences      [q] quit — change nothing"
+            printf '> '
+        } > /dev/tty
+        IFS= read -r answer </dev/tty || answer="q"
+        [[ -z "${answer}" ]] && answer="${default:0:1}"
+        case "${answer}" in
+            k|K|keep)
+                _wb_install_answer_all "${plan}" "${answers}" keep
+                workbench_files_conf_set INSTALL_DEFAULT keep
+                return 0
+                ;;
+            u|U|use)
+                _wb_install_answer_all "${plan}" "${answers}" use
+                rc=0; _wb_install_confirm_use "${answers}" false || rc=$?
+                [[ "${rc}" -eq 0 ]] || continue
+                workbench_files_conf_set INSTALL_DEFAULT use
+                return 0
+                ;;
+            c|C)
+                : > "${answers}"
+                while IFS='|' read -r module id display kind cond lines; do
+                    [[ "${cond}" == "existing" || "${cond}" == "linked" ]] || continue
+                    while true; do
+                        printf '\n  %s %s (%s): [k] keep  [u] use  [s] skip — leave this file completely alone  [d] diff\n  > ' \
+                            "${module}" "${display}" "${kind}" > /dev/tty
+                        IFS= read -r choice </dev/tty || choice="k"
+                        case "${choice}" in
+                            ""|k|K) choice="keep" ;;
+                            u|U)    choice="use" ;;
+                            s|S)    choice="skip" ;;
+                            d|D)    _wb_install_row_diff "${module}" "${id}" "${kind}" "${display}" | _wb_maybe_page > /dev/tty; continue ;;
+                            *)      echo "  Please answer k, u, s or d." > /dev/tty; continue ;;
+                        esac
+                        break
+                    done
+                    printf '%s|%s|%s|%s\n' "${module}" "${id}" "${kind}" "${choice}" >> "${answers}"
+                done < "${plan}"
+                rc=0; _wb_install_confirm_use "${answers}" false || rc=$?
+                [[ "${rc}" -eq 0 ]] || continue
+                return 0
+                ;;
+            d|D)
+                awk -F'|' '$5 == "existing" || $5 == "linked"' "${plan}" | while IFS='|' read -r module id display kind cond lines; do
+                    _wb_install_row_diff "${module}" "${id}" "${kind}" "${display}"
+                done | _wb_maybe_page > /dev/tty
+                ;;
+            q|Q|quit)
+                return 3
+                ;;
+            *)
+                echo "  Please answer k, u, c, d or q." > /dev/tty
+                ;;
+        esac
+    done
+}
+
+# _wb_install_summary <plan-file> <answers-file> <module>...
+_wb_install_summary() {
+    local plan="$1" answers="$2" m module id display kind cond lines choice what original line
+    shift 2
+    echo
+    for m in "$@"; do
+        what=""
+        while IFS='|' read -r module id display kind cond lines; do
+            [[ "${module}" == "${m}" ]] || continue
+            choice="$(awk -F'|' -v m="${module}" -v i="${id}" '$1 == m && $2 == i { print $4; exit }' "${answers}")"
+            case "${cond}:${choice:-keep}" in
+                new:*)
+                    if [[ "${kind}" == "layer" ]]; then what="${what}; created ${display} (workbench block)"; else what="${what}; created ${display}"; fi ;;
+                ours:*)  ;;
+                *:use)
+                    line="$(_wb_install_row_lines "${module}" "${id}" "${kind}" | head -n 1)"
+                    _wb_files_target_fields "${line}"
+                    original="$(workbench_files_ledger_field "${module}" "${WB_T_DEST}" 5)"
+                    if [[ -n "${original}" && "${original}" != "-" && "${original}" != "+created" ]]; then
+                        what="${what}; replaced ${display} (yours: ${original})"
+                    else
+                        what="${what}; replaced ${display}"
+                    fi ;;
+                *:skip)  what="${what}; skipped ${display}" ;;
+                *:keep)
+                    if [[ "${kind}" == "layer" ]]; then what="${what}; layered ${display} (yours wins)"; else what="${what}; left yours: ${display}"; fi ;;
+            esac
+        done < "${plan}"
+        [[ -n "${what}" ]] && printf '  %s: %s\n' "${m}" "${what#; }"
+    done
+    echo "  Change any of this later: 'wb files status', 'wb files use|restore <module> <file>'."
+}
+
+# _wb_install_modules <ask|keep|use> <follow> <yes> <reason> <module>...
+# The modules are registered and staged (workbench_sync_module … stage).
+# Returns 0 when deployed, 3 when the user quit (nothing deployed; the
+# modules stay registered and the next interactive 'wb update' asks again).
+_wb_install_modules() {
+    local mode="$1" follow="$2" yes="$3" reason="$4" m rc=0 failed=0 work
+    local module id kind choice line follow_arg=""
+    shift 4
+    local -a mods=()
+    for m in "$@"; do
+        [[ -d "$(workbench_module_current_dir "${m}")" ]] && mods+=("${m}")
+    done
+    [[ "${#mods[@]}" -eq 0 ]] && return 0
+    _wb_engine_require_files
+    [[ "${follow}" == "true" ]] && follow_arg="follow"
+    work="$(mktemp -d "${TMPDIR:-/tmp}/wb-install.XXXXXX")" || return 1
+    workbench_files_install_plan "${mods[@]}" > "${work}/plan"
+    : > "${work}/answers"
+
+    if grep -qE '\|(existing|linked)\|[^|]*$' "${work}/plan"; then
+        case "${mode}" in
+            keep)
+                _wb_install_answer_all "${work}/plan" "${work}/answers" keep ;;
+            use)
+                _wb_install_answer_all "${work}/plan" "${work}/answers" use
+                _wb_install_confirm_use "${work}/answers" "${yes}" || rc=$?
+                if [[ "${rc}" -eq 1 ]]; then
+                    rm -rf "${work}"; return 1
+                elif [[ "${rc}" -eq 2 ]]; then
+                    rc=0; _wb_install_ask "${work}/plan" "${work}/answers" || rc=$?
+                fi ;;
+            *)
+                if _wb_have_tty; then
+                    _wb_install_ask "${work}/plan" "${work}/answers" || rc=$?
+                else
+                    log_info "No terminal to ask in — keeping every file you already have; workbench layers its defaults underneath. ('wb files use' switches one later.)"
+                    _wb_install_answer_all "${work}/plan" "${work}/answers" keep
+                fi ;;
+        esac
+    fi
+    if [[ "${rc}" -eq 3 ]]; then
+        log_info "Quit — nothing outside workbench's own folders was changed. Registered but not deployed: ${mods[*]} — 'wb update' asks again."
+        rm -rf "${work}"
+        return 3
+    fi
+
+    # Answers become policy before anything is written: skip is a policy
+    # row (a layer's keyed by its id); use runs after the deploy.
+    while IFS='|' read -r module id kind choice; do
+        [[ "${choice}" == "skip" ]] || continue
+        if [[ "${kind}" == "layer" ]]; then
+            while IFS= read -r line; do
+                [[ -n "${line}" ]] && workbench_files_policy_set "${module}" "${line}" skip
+            done < <(printf '%s\n' "${id}" | tr ',' '\n')
+        else
+            workbench_files_policy_set "${module}" "${id}" skip
+        fi
+    done < "${work}/answers"
+
+    for m in "${mods[@]}"; do
+        workbench_sync_module "${m}" "${reason}" || { log_warn "${m}: deploy didn't complete — see above"; failed=1; }
+    done
+
+    while IFS='|' read -r module id kind choice; do
+        [[ "${choice}" == "use" ]] || continue
+        _wb_files_clear_restored "${module}"
+        while IFS= read -r line; do
+            [[ -z "${line}" ]] && continue
+            workbench_files_use "${module}" "${line}" ${follow_arg:+"${follow_arg}"} || failed=1
+        done < <(_wb_install_row_lines "${module}" "${id}" "${kind}")
+    done < "${work}/answers"
+
+    if [[ "${follow}" == "true" ]]; then
+        for m in "${mods[@]}"; do
+            while IFS= read -r line; do
+                [[ -z "${line}" ]] && continue
+                _wb_files_target_fields "${line}"
+                [[ "${WB_T_KIND}" == "overrides" || "${WB_T_MODE}" == "layer" ]] && continue
+                workbench_files_policy_set "${m}" "${WB_T_DEST}" follow
+            done < <(workbench_files_targets "${m}")
+            workbench_files_write_pending "${m}"
+        done
+    fi
+
+    _wb_install_summary "${work}/plan" "${work}/answers" "${mods[@]}"
+    rm -rf "${work}"
+    return "${failed}"
+}
+
+# Modules fetched but never deployed — a quit at the install question, or
+# a deploy that never ran.
+_wb_install_staged_modules() {
+    local m
+    while IFS= read -r m; do
+        [[ -z "${m}" ]] && continue
+        if [[ -d "$(workbench_module_current_dir "${m}")" && -z "$(workbench_module_conf_get "${m}" RESOLVED_SHA "")" ]]; then
+            printf '%s\n' "${m}"
+        fi
+    done < <(workbench_list_loadable_modules)
+}
+
 # ── --use-files at install time (wb add / wb install --bundle) ──────────────
 
 # Every target of <module> where the user already has a config of their own
@@ -2457,6 +2807,23 @@ _wb_files_use_candidates() {
     done < <(workbench_files_targets "${module}")
 }
 
+# _wb_files_clear_restored <module>
+# Explicitly opting in again undoes an earlier 'wb remove --restore': the
+# module's 'restored' rows and the skip policies restore left are cleared.
+_wb_files_clear_restored() {
+    local m="$1" dest line
+    while IFS= read -r dest; do
+        [[ -z "${dest}" ]] && continue
+        workbench_files_ledger_delete "${m}" "${dest}"
+        [[ "$(workbench_files_policy_get "${m}" "${dest}")" == "skip" ]] && workbench_files_policy_set "${m}" "${dest}" default
+        # A layer's policy is keyed by its layer id (D82).
+        line="$(_wb_files_line_for_dest "${m}" "${dest}")"
+        if [[ "${dest}" == *'#'* && -n "${line}" && "$(workbench_files_policy_get "${m}" "${line%%|*}")" == "skip" ]]; then
+            workbench_files_policy_set "${m}" "${line%%|*}" default
+        fi
+    done < <(workbench_files_ledger_rows "${m}" | awk -F'|' '$3 == "restored" { print $1 }')
+}
+
 # _wb_files_use_at_install <follow> <yes> <module>...
 # One combined preview and one confirmation for every named module, then
 # workbench_files_use per target. Explicit opt-in, so it first clears each
@@ -2464,7 +2831,7 @@ _wb_files_use_candidates() {
 # 'wb remove --restore'). --follow sets per-entry follow on every target of
 # those modules, not only the displaced ones.
 _wb_files_use_at_install() {
-    local follow="$1" yes="$2" m dest line rc failed=0 follow_arg=""
+    local follow="$1" yes="$2" m line rc failed=0 follow_arg=""
     shift 2
     local -a mods=() lines=()
     _wb_engine_require_files
@@ -2472,16 +2839,7 @@ _wb_files_use_at_install() {
 
     for m in "$@"; do
         [[ -d "$(workbench_module_current_dir "${m}")" ]] || continue
-        while IFS= read -r dest; do
-            [[ -z "${dest}" ]] && continue
-            workbench_files_ledger_delete "${m}" "${dest}"
-            [[ "$(workbench_files_policy_get "${m}" "${dest}")" == "skip" ]] && workbench_files_policy_set "${m}" "${dest}" default
-            # A layer's policy is keyed by its layer id (D82).
-            line="$(_wb_files_line_for_dest "${m}" "${dest}")"
-            if [[ "${dest}" == *'#'* && -n "${line}" && "$(workbench_files_policy_get "${m}" "${line%%|*}")" == "skip" ]]; then
-                workbench_files_policy_set "${m}" "${line%%|*}" default
-            fi
-        done < <(workbench_files_ledger_rows "${m}" | awk -F'|' '$3 == "restored" { print $1 }')
+        _wb_files_clear_restored "${m}"
         while IFS= read -r line; do
             [[ -z "${line}" ]] && continue
             mods+=("${m}"); lines+=("${line}")
@@ -2647,7 +3005,7 @@ EOF
 
 _wb_help_install() {
     cat <<'EOF'
-Usage: wb install [--bundle <name> [--use-files [--follow] [--yes]]] [--skip-ansible]
+Usage: wb install [--bundle <name> [--keep-files | --use-files [--follow] [--yes]]] [--skip-ansible]
 
 First-run convergence for this host: checks/installs shell prerequisites,
 bootstraps the core module itself, symlinks 'wb' onto PATH, writes the
@@ -2659,20 +3017,25 @@ runs the Ansible convergence pass for whatever else it still covers
 (host_vars templating etc.).
 
   --bundle <name>   Also register every module in the named bundle (the
-                      known-modules catalog) before converging — equivalent
-                      to one 'wb add' call per bundle member.
-  --use-files       With --bundle: where you already have your own config
-                      for something a bundle module ships, use the
-                      module's version instead — yours (and any other file
-                      the same tool would also read) goes to backups, and
-                      'wb files restore' puts it back. One preview and one
-                      confirmation for the whole bundle.
+                      known-modules catalog) before converging. If any of
+                      them would touch config you already have, you're
+                      asked once, for the whole bundle, before anything is
+                      written — see 'wb help add'.
+  --keep-files      With --bundle: answer "keep mine" without asking.
+  --use-files       With --bundle: answer "use workbench's" — yours (and
+                      any other file the same tool would also read) goes
+                      to backups, and 'wb files restore' puts it back.
+                      Your git identity and ssh hosts are kept. One preview
+                      and one confirmation for the whole bundle.
   --follow          With --use-files: every file of those modules keeps
                       following its module even after you edit it (your
                       edits are backed up each time).
   --yes             Skip the --use-files confirmation. Without a terminal
                       and without --yes, --use-files refuses before
-                      registering anything.
+                      registering anything. '--use-files --yes' is the
+                      scripted "give me everything" install.
+
+Through bootstrap: curl … | bash -s -- --bundle workstation --use-files --yes
   --skip-ansible    Skip the Ansible convergence step even if
                       ansible-playbook is available. Does not affect the
                       scheduled-sync timer, which never depended on Ansible.
@@ -2707,20 +3070,39 @@ EOF
 
 _wb_help_add() {
     cat <<'EOF'
-Usage: wb add <name> [url] [--private] [--allow-hooks] [--use-files [--follow] [--yes]] [--skip-layer <id>]...
+Usage: wb add <name> [url] [--private] [--allow-hooks] [--keep-files | --use-files [--follow] [--yes]] [--skip-layer <id>]...
 
-Registers a new module and immediately syncs it once. <url> is optional
-if <name> resolves against the known-modules catalog. New modules default
-to TRACK_MODE=latest.
+Registers a new module and syncs it once. <url> is optional if <name>
+resolves against the known-modules catalog. New modules default to
+TRACK_MODE=latest.
+
+Before anything is written, if the module would touch config you already
+have — your ~/.gitconfig, a tmux.conf — it lists those files and asks:
+
+  [k] keep mine (default)  yours stay; layered files (git, ssh, tmux, vim)
+                           get workbench's defaults underneath, whole
+                           files are left alone
+  [u] use workbench's      yours are backed up and replaced; your git
+                           identity and ssh hosts are kept
+  [c] choose per file      keep, use, or skip (leave it completely alone)
+  [d] show differences     yours vs workbench's, then ask again
+  [q] quit                 nothing changes; the module stays registered
+                           and 'wb update' asks again
+
+On a fresh machine there's nothing to ask. Without a terminal (cron,
+cloud-init, CI) the answer is always keep. Enter repeats your last
+whole-host answer (k or u).
 
   --private       The module's repo is private (provisions an SSH deploy
                     key on first sync if one doesn't already exist).
   --allow-hooks   Permit this module's manifest-declared post_deploy hook
                     to actually run (hooks are opt-in per module).
-  --use-files     Where you already have your own config for something
-                    this module ships, use the module's version instead:
-                    yours goes to backups ('wb files restore' puts it
-                    back). Works on an already-registered module too.
+  --keep-files    Answer keep without asking.
+  --use-files     Answer use: where you already have your own config for
+                    something this module ships, use the module's version
+                    instead — yours goes to backups ('wb files restore'
+                    puts it back). Works on an already-registered module
+                    too.
   --follow        With --use-files: every file of this module keeps
                     following it even after you edit it (edits are
                     backed up each time).
@@ -2731,9 +3113,9 @@ to TRACK_MODE=latest.
                     <tool>:over). Repeatable. Same as 'wb files policy
                     <name> <id> skip', set before anything is written.
 
-Without --use-files, a config you already have is left alone — modules
-that layer into it add one marked block your own settings override (see
-'wb help files').
+Keeping a config you already have leaves it alone — modules that layer
+into it add one marked block your own settings override (see 'wb help
+files').
 
 To change what an already-added module tracks, use 'wb track', not 'wb
 add' again.

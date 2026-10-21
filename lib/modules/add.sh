@@ -12,16 +12,21 @@
 # shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/add.sh" "0.4.0" || true
 
-# workbench_cmd_add <name> [url] [--private] [--allow-hooks] [--use-files [--follow] [--yes]] [--skip-layer <id>]...
-# --use-files (docs/decisions-log.md D81): after the sync, use the module's
-# version wherever the user already has their own config — one preview, one
-# confirmation (bin/wb's _wb_files_use_at_install). On an already-registered
-# module, only that step runs.
+# workbench_cmd_add <name> [url] [--private] [--allow-hooks] [--keep-files | --use-files [--follow] [--yes]] [--skip-layer <id>]...
+# The first sync is staged (docs/decisions-log.md D84): fetched, nothing
+# deployed, then bin/wb's _wb_install_modules shows which of the user's
+# files the module would touch and asks keep / use / choose / diff / quit
+# (through /dev/tty; no terminal means keep) before deploying.
+# --keep-files answers keep, --use-files use (D81: preview and confirmation
+# unless --yes). On an already-registered module, --use-files switches
+# its files now (bin/wb's _wb_files_use_at_install).
+# --stage-only (internal, for 'wb install --bundle'): register and stage,
+# leaving the question and the deploy to the caller.
 # --skip-layer <id> (repeatable, docs/decisions-log.md D82): a 'skip' policy
 # row for that layer, written before the first deploy.
 workbench_cmd_add() {
     local name="" url="" private="false" allow_hooks="false" use_files="false" follow="false" yes="false"
-    local skip_layers="" layer_id
+    local keep_files="false" stage_only="false" skip_layers="" layer_id mode rc
     local args=("$@")
     local i=0
     while [[ "${i}" -lt "${#args[@]}" ]]; do
@@ -30,6 +35,8 @@ workbench_cmd_add() {
             --private)     private="true" ;;
             --allow-hooks) allow_hooks="true" ;;
             --use-files)   use_files="true" ;;
+            --keep-files)  keep_files="true" ;;
+            --stage-only)  stage_only="true" ;;
             --follow)      follow="true" ;;
             --yes|-y)      yes="true" ;;
             --skip-layer)
@@ -62,7 +69,11 @@ workbench_cmd_add() {
     done
 
     if [[ -z "${name}" ]]; then
-        log_error "wb add: usage: wb add <name> [url] [--private] [--allow-hooks] [--use-files [--follow] [--yes]] [--skip-layer <id>]..."
+        log_error "wb add: usage: wb add <name> [url] [--private] [--allow-hooks] [--keep-files | --use-files [--follow] [--yes]] [--skip-layer <id>]..."
+        return 2
+    fi
+    if [[ "${keep_files}" == "true" && "${use_files}" == "true" ]]; then
+        log_error "wb add: --keep-files and --use-files contradict each other — pick one"
         return 2
     fi
     if [[ "${follow}" == "true" && "${use_files}" != "true" ]]; then
@@ -77,7 +88,7 @@ workbench_cmd_add() {
 
     # Refuse before registering anything: the --use-files confirmation
     # can't be asked without a terminal.
-    if [[ "${use_files}" == "true" && "${yes}" != "true" && ! -t 0 ]]; then
+    if [[ "${use_files}" == "true" && "${yes}" != "true" ]] && ! _wb_have_tty; then
         log_error "wb add: --use-files needs a terminal to confirm — re-run with --yes. Nothing was changed."
         return 1
     fi
@@ -133,15 +144,22 @@ workbench_cmd_add() {
         workbench_ssh_bootstrap_module "${name}"
     fi
 
-    log_info "wb add: registered '${name}' (${url}), syncing now..."
-    if workbench_sync_module "${name}" "add"; then
-        log_info "wb add: '${name}' registered and synced successfully"
-    else
+    log_info "wb add: registered '${name}' (${url}), fetching..."
+    if ! workbench_sync_module "${name}" "stage"; then
         log_warn "wb add: '${name}' registered, but the initial sync failed — it will retry on the next cycle (see 'wb update ${name}')"
         [[ "${use_files}" == "true" ]] && log_warn "wb add: --use-files skipped — run 'wb add ${name} --use-files' once it has synced"
         return 0
     fi
-    if [[ "${use_files}" == "true" ]]; then
-        _wb_files_use_at_install "${follow}" "${yes}" "${name}"
-    fi
+    [[ "${stage_only}" == "true" ]] && return 0
+
+    mode="ask"
+    [[ "${keep_files}" == "true" ]] && mode="keep"
+    [[ "${use_files}" == "true" ]] && mode="use"
+    rc=0
+    _wb_install_modules "${mode}" "${follow}" "${yes}" add "${name}" || rc=$?
+    case "${rc}" in
+        0) log_info "wb add: '${name}' registered and synced successfully" ;;
+        3) return 0 ;;
+        *) log_warn "wb add: '${name}' registered; not everything was deployed — see above ('wb files status')"; return "${rc}" ;;
+    esac
 }
