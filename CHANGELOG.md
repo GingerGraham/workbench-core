@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.18.0] - 2026-10-21
+
 ### Added
 
 - **Config layers** (D82). A module can now contribute to a config file

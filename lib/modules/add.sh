@@ -10,7 +10,7 @@
 # second implementation of "fetch and register a module."
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/add.sh" "0.3.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/add.sh" "0.4.0" || true
 
 # workbench_cmd_add <name> [url] [--private] [--allow-hooks] [--use-files [--follow] [--yes]] [--skip-layer <id>]...
 # --use-files (docs/decisions-log.md D81): after the sync, use the module's
