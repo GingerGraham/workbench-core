@@ -48,17 +48,23 @@ Install it yourself with your distro's package manager, then re-run
 
 ## A function I expected isn't showing up in `wb functions` or a module's getter
 
-Check the hint line printed under the listing first — `N more hidden
-(missing: ...)` or `N more hidden` on its own. A function can declare an
-optional `_<name>-available` predicate (`docs/module-authoring.md`
-"Declaring function availability") that hides it from every listing
-whenever a dependency it needs isn't actually present — the function
-itself is unaffected, it just isn't listed. Run `wb functions --all`, or
+Look for the "available once tooling is installed" block printed under
+the list. A function can declare an optional `_<name>-available`
+predicate (`docs/module-authoring.md` "Declaring function availability")
+for a dependency it needs; when that dependency isn't present, the
+function is left out of the main list and shown in that block instead,
+grouped by what it needs. The function itself is unaffected — it is still
+defined and callable, it just isn't listed as usable.
+
+If the block names a tool and shows `install: wb tools install <tool>`,
+run that, then re-run the getter (no new shell needed). A group headed
+"module gave no reason" means the module's predicate reports unavailable
+but doesn't say what it needs; "availability check timed out" means the
+predicate was killed for running longer than
+`WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS`. Run `wb functions --all`, or
 `WORKBENCH_FUNCTIONS_SHOW_ALL=true` in front of any
-`get-<domain>-functions` getter, to see every function regardless of
-gating. If the hint line names a missing command, installing it (and
-opening a new shell, or re-running the getter) is usually all that's
-needed.
+`get-<domain>-functions` getter, to list every function in the main list
+regardless of gating.
 
 ## A `wb update` isn't picking up a new release
 

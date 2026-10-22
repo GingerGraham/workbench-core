@@ -145,12 +145,20 @@ else
     ok "get-functions forwards its arguments through to 'wb functions' unchanged"
 fi
 
-# ── 8. lib/loader.sh's own interactive-startup call passes both flags —
-#    a cheap regression guard against silently reverting the wiring. ───────
-if grep -q 'get-functions --no-pager --no-aliases' "${REPO_ROOT}/lib/loader.sh"; then
-    ok "lib/loader.sh's interactive startup banner calls get-functions --no-pager --no-aliases"
+# ── 8. lib/loader.sh's own interactive-startup call passes all three flags
+#    (--compact added by docs/decisions-log.md D86) — a cheap regression
+#    guard against silently reverting the wiring. ──────────────────────────
+if grep -q 'get-functions --no-pager --no-aliases --compact' "${REPO_ROOT}/lib/loader.sh"; then
+    ok "lib/loader.sh's interactive startup banner calls get-functions --no-pager --no-aliases --compact"
 else
-    fail "lib/loader.sh no longer calls get-functions with --no-pager --no-aliases"
+    fail "lib/loader.sh no longer calls get-functions with --no-pager --no-aliases --compact"
+fi
+
+# ── 9. --compact is documented where --no-aliases is. ──────────────────────
+if bash "${WB}" help functions 2>&1 | grep -q -- '--compact'; then
+    ok "'wb help functions' documents --compact"
+else
+    fail "'wb help functions' does not mention --compact"
 fi
 
 echo

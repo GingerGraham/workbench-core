@@ -477,6 +477,65 @@ _wb_filter_available_names() {
     done
 }
 
+# _wb_availability_key <name>
+# Sets _wb_availability_key_result to <name> with every non [A-Za-z0-9_]
+# character turned into "_" — the suffix of the side-channel variables
+# below (bash variable names can't contain "-"). Parameter expansion, not
+# `$(printf | tr)`: a listing looks up two variables per hidden name, and
+# three forks per lookup made a long block measurably slower. LC_ALL=C
+# keeps the bracket range plain ASCII whatever the user's locale (same
+# technique as workbench_valid_module_name in lib/sync/state.sh). Sets a
+# variable instead of printing, so callers pay for no subshell.
+_wb_availability_key() {
+    local LC_ALL=C
+    _wb_availability_key_result="${1//[^A-Za-z0-9_]/_}"
+}
+
+# _wb_availability_needs [--install <tool>] <needs-text> <name> [<name> ...]
+# Records, for each <name>, what it needs (shown in listings) and, with
+# --install, the `wb tools` friendly name that would provide it. Defines no
+# predicate — pair it with a hand-written _<name>-available, or reach it via
+# _wb_alias_availability --needs / _wb_declare_availability, which call it.
+# Works for any predicate however it was written (docs/decisions-log.md
+# D86), so a listing can say what is missing even when the predicate is a
+# version check or an OR of several tools.
+#
+# Stored in "_wb_availability_reason_<key>" / "_wb_availability_install_<key>"
+# (<key> = <name> with every non [A-Za-z0-9_] character turned into "_",
+# since bash variable names can't contain "-"). A side-channel variable set
+# at declaration time, not a re-parse of the predicate's `declare -f` output:
+# bash 3.2 reprints a parsed function body differently from bash 4+ (see
+# _wb_function_missing_reason below).
+#
+# The values are read through "\${_needs}" inside eval, never interpolated
+# into the eval string, so quotes or $( ) in a needs text stay inert. Tabs
+# and newlines are stripped from both values: _wb_print_unavailable_block
+# uses tab as its row separator.
+_wb_availability_needs() {
+    local _install=""
+    if [[ "${1:-}" == "--install" ]]; then
+        if [[ $# -lt 2 ]]; then
+            log_error "_wb_availability_needs: --install needs a tool name"
+            return 2
+        fi
+        _install="$2"
+        shift 2
+    fi
+    local _needs="${1:-}"
+    [[ $# -gt 0 ]] && shift
+    _needs="${_needs//$'\t'/ }"
+    _needs="${_needs//$'\n'/ }"
+    _install="${_install//$'\t'/ }"
+    _install="${_install//$'\n'/ }"
+    local _fn _key
+    for _fn in "$@"; do
+        _wb_availability_key "${_fn}"
+        _key="${_wb_availability_key_result}"
+        eval "_wb_availability_reason_${_key}=\"\${_needs}\""
+        eval "_wb_availability_install_${_key}=\"\${_install}\""
+    done
+}
+
 # _wb_declare_availability <command> <function-name> [<function-name> ...]
 # Bulk-declares a "_<name>-available" predicate for each <function-name>,
 # each checking the same one <command> via `command -v`. Turns "these N
@@ -488,26 +547,19 @@ _wb_filter_available_names() {
 # availability" for the full contract, including when to use
 # _wb_alias_availability or a hand-written predicate instead.
 #
-# Also records <command> in a side-channel "_wb_availability_reason_<key>"
-# variable (<key> = <function-name> with every non [A-Za-z0-9_] character
-# turned into "_", since bash variable names can't contain "-") for
-# _wb_function_missing_reason to read back directly. This used to be
-# recovered by re-parsing the predicate's own `declare -f` output instead
-# — dropped after a real macOS CI run (workbench-core#75) showed bash 3.2
-# reprints a parsed function body differently from bash 4+ in ways this
-# file has no reliable way to enumerate ahead of time; an explicit
-# variable set at declaration time isn't subject to any of that.
+# Also records <command> as both the needs text and the `wb tools` name via
+# _wb_availability_needs, so a listing shows what is missing and — if an
+# installer of that name is registered — how to get it.
 _wb_declare_availability() {
     local _cmd="$1"; shift
-    local _fn _key
+    local _fn
     for _fn in "$@"; do
         eval "_${_fn}-available() { command -v \"${_cmd}\" &>/dev/null; }"
-        _key="$(printf '%s' "${_fn}" | tr -c 'A-Za-z0-9_' '_')"
-        eval "_wb_availability_reason_${_key}=\"\${_cmd}\""
     done
+    _wb_availability_needs --install "${_cmd}" "${_cmd}" "$@"
 }
 
-# _wb_alias_availability <check-function> <function-name> [<function-name> ...]
+# _wb_alias_availability [--needs <text>] [--install <tool>] <check-function> <function-name> [<function-name> ...]
 # Bulk-declares a "_<name>-available" predicate for each <function-name>,
 # each a thin wrapper around an existing boolean-returning
 # <check-function> — for when several names share a check more complex
@@ -516,27 +568,69 @@ _wb_declare_availability() {
 # once as a quiet twin of an existing loud "_xxx_require_yyy" preflight
 # helper (see the workbench-git and workbench-security examples in
 # docs/module-authoring.md).
+#
+# The leading flags are optional. --needs records what the check requires,
+# for listings (_wb_availability_needs); --install adds the `wb tools` name
+# that would provide it, and only makes sense with --needs. Without --needs
+# the names still list correctly, under "module gave no reason". An unknown
+# --flag is an error (status 2) and declares nothing.
 _wb_alias_availability() {
+    local _needs="" _install="" _have_needs="false"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --needs)
+                if [[ $# -lt 2 ]]; then
+                    log_error "_wb_alias_availability: --needs needs a text argument"
+                    return 2
+                fi
+                _needs="$2"
+                _have_needs="true"
+                shift 2
+                ;;
+            --install)
+                if [[ $# -lt 2 ]]; then
+                    log_error "_wb_alias_availability: --install needs a tool name"
+                    return 2
+                fi
+                _install="$2"
+                shift 2
+                ;;
+            --*)
+                log_error "_wb_alias_availability: unknown option '$1'"
+                return 2
+                ;;
+            *) break ;;
+        esac
+    done
+    if [[ -n "${_install}" && "${_have_needs}" == "false" ]]; then
+        log_error "_wb_alias_availability: --install needs --needs (nothing to show the install hint next to)"
+        return 2
+    fi
+
     local _check="$1"; shift
     local _fn
     for _fn in "$@"; do
         eval "_${_fn}-available() { ${_check}; }"
     done
+    if [[ "${_have_needs}" == "true" ]]; then
+        if [[ -n "${_install}" ]]; then
+            _wb_availability_needs --install "${_install}" "${_needs}" "$@"
+        else
+            _wb_availability_needs "${_needs}" "$@"
+        fi
+    fi
 }
 
 # _wb_function_missing_reason <name>
-# If <name>'s predicate was generated by _wb_declare_availability, prints
-# the command it checked; otherwise prints nothing. Reads the
-# "_wb_availability_reason_<key>" side-channel variable
-# _wb_declare_availability sets at declaration time (same <key>
-# derivation as there) rather than inferring it from the predicate
-# function's own source — a predicate from _wb_alias_availability or a
-# hand-written one never sets that variable, so this correctly has
-# nothing to report for either, without needing to parse or guess at
-# their bodies at all. This is a read-back of what we recorded, not an
-# inference about what an arbitrary predicate does — printing a reason we
-# can't actually confirm would be a guess, so it says nothing instead
-# (same principle as installed-<name>'s "unresponsive").
+# Prints the needs text recorded for <name> by _wb_availability_needs
+# (directly, or via _wb_declare_availability / _wb_alias_availability
+# --needs); prints nothing if none was recorded. Reads the
+# "_wb_availability_reason_<key>" side-channel variable set at declaration
+# time (same <key> derivation as there) rather than inferring it from the
+# predicate function's own source. This is a read-back of what we recorded,
+# not an inference about what an arbitrary predicate does — printing a
+# reason we can't actually confirm would be a guess, so it says nothing
+# instead (same principle as installed-<name>'s "unresponsive").
 #
 # Deliberately not `declare -f`-based (an earlier version was): bash 3.2
 # (macOS's default /bin/bash) reprints a parsed function body differently
@@ -546,54 +640,198 @@ _wb_alias_availability() {
 # set once at declaration time has no such version-dependent formatting
 # to account for.
 _wb_function_missing_reason() {
-    local _name="$1" _key
-    _key="$(printf '%s' "${_name}" | tr -c 'A-Za-z0-9_' '_')"
-    eval "printf '%s' \"\${_wb_availability_reason_${_key}:-}\""
+    _wb_availability_key "$1"
+    eval "printf '%s' \"\${_wb_availability_reason_${_wb_availability_key_result}:-}\""
 }
 
-# _wb_print_hidden_hint <all-names> <shown-names>
-# Both newline-separated. If anything was hidden by availability gating,
-# prints one summary line: a count, plus the specific missing commands
-# for any hidden name _wb_function_missing_reason can confirm, and just
-# the count (with the WORKBENCH_FUNCTIONS_SHOW_ALL pointer) for the rest.
-# Prints nothing when nothing was hidden — including when
-# WORKBENCH_FUNCTIONS_SHOW_ALL=true is set, since _wb_function_available
-# already makes filtering a no-op in that case, so <shown-names> equals
-# <all-names> and there's nothing to diff.
-_wb_print_hidden_hint() {
-    local _all="$1" _shown="$2"
-    local _n _is_shown _s _hidden_count=0 _reasons="" _reason
+# _wb_function_install_tool <name>
+# Sibling of _wb_function_missing_reason: prints the `wb tools` friendly
+# name recorded for <name> (--install, or _wb_declare_availability's
+# <command>), or nothing. A recorded name is a claim by the module, not
+# proof an installer exists — _wb_installer_known is the check for that.
+_wb_function_install_tool() {
+    _wb_availability_key "$1"
+    eval "printf '%s' \"\${_wb_availability_install_${_wb_availability_key_result}:-}\""
+}
+
+# _wb_installer_known <tool>
+# Returns 0 only if `wb tools` has a registered installer whose friendly
+# name is <tool> — the condition for printing "install: wb tools install
+# <tool>" in a listing, so we never suggest a command that would answer
+# "no discovered installer".
+#
+# Reads each module's rendered installers.list (lines of
+# "abs_path|function|friendly", see workbench_render_installers_list in
+# lib/sync/engine.sh) with a plain grep. No network, no sourcing of
+# installer files, no `wb` subprocess, and no dependency on lib/core/
+# tools.sh: this file also runs inside an interactive shell where only
+# lib/sync/state.sh is guaranteed to be loaded (lib/loader.sh), so the
+# modules directory is resolved the way workbench_modules_dir does when
+# that helper is absent.
+#
+# Mirrors workbench_tools_collect's rules where they are cheap to check: the
+# owning module must be registered and sync-enabled (when state.sh's helpers
+# are loaded), and the reserved wb-tools words are never installers. It does
+# not re-implement collision resolution — two modules declaring the same
+# friendly name still means "an installer exists".
+_wb_installer_known() {
+    local _tool="${1:-}" _root _list _module
+    [[ -n "${_tool}" ]] || return 1
+    case "${_tool}" in
+        all|list|install|upgrade|status) return 1 ;;
+        *[!A-Za-z0-9_-]*) return 1 ;;
+    esac
+    if command -v workbench_modules_dir &>/dev/null; then
+        _root="$(workbench_modules_dir)"
+    else
+        _root="${WORKBENCH_MODULES_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/modules}"
+    fi
+    for _list in "${_root}"/*/installers.list; do
+        [[ -f "${_list}" ]] || continue
+        grep -q "^[^|]*|[^|]*|${_tool}\$" "${_list}" 2>/dev/null || continue
+        _module="$(basename "$(dirname "${_list}")")"
+        if command -v workbench_is_registered &>/dev/null; then
+            workbench_is_registered "${_module}" || continue
+        fi
+        if command -v workbench_is_sync_enabled &>/dev/null; then
+            workbench_is_sync_enabled "${_module}" || continue
+        fi
+        return 0
+    done
+    return 1
+}
+
+# _wb_print_unavailable_group <needs> <install-tool> <names>
+# One group of _wb_print_unavailable_block: a header line, then the names
+# in columns beneath it, indented four spaces. <install-tool> is the
+# placeholder "-" when the module named none. Appends the install command
+# only when _wb_installer_known confirms it (cached per tool for the rest
+# of the enclosing block, so each distinct tool is looked up once).
+_wb_print_unavailable_group() {
+    local _needs="$1" _install="$2" _names="$3"
+    local _header="  ${_needs}"
+    if [[ "${_install}" != "-" ]]; then
+        case "${_wb_known_tools}" in
+            *$'\n'"${_install}"$'\n'*) _header="${_header} — install: wb tools install ${_install}" ;;
+            *)
+                case "${_wb_unknown_tools}" in
+                    *$'\n'"${_install}"$'\n'*) ;;
+                    *)
+                        if _wb_installer_known "${_install}"; then
+                            _wb_known_tools="${_wb_known_tools}${_install}"$'\n'
+                            _header="${_header} — install: wb tools install ${_install}"
+                        else
+                            _wb_unknown_tools="${_wb_unknown_tools}${_install}"$'\n'
+                        fi
+                        ;;
+                esac
+                ;;
+        esac
+    fi
+    echo "${_header}"
+    # Indent is four spaces, so give column four fewer — it reads COLUMNS
+    # (set for the whole run by _wb_cmd_functions, D73) and would otherwise
+    # wrap four past the edge.
+    if [[ "${COLUMNS:-}" =~ ^[0-9]+$ ]] && [[ "${COLUMNS}" -gt 8 ]]; then
+        printf '%s' "${_names}" | COLUMNS=$((COLUMNS - 4)) column | sed 's/^/    /'
+    else
+        printf '%s' "${_names}" | column | sed 's/^/    /'
+    fi
+}
+
+# _wb_print_unavailable_block <label> <all-names> <shown-names> [<noun>]
+# Both name lists newline-separated. Prints nothing if nothing is hidden.
+# Otherwise prints a blank line, then
+#   [INFO] <label> — available once tooling is installed:
+# then one group per distinct needs text (sorted), names in columns beneath
+# (docs/decisions-log.md D86). Replaces _wb_print_hidden_hint. <noun> is
+# only used by the compact form and defaults to "functions".
+#
+# Hidden = in <all-names> and not in <shown-names>, the same test the old
+# hint used. Each hidden name lands in exactly one group:
+#   - its predicate hit WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS ->
+#     "availability check timed out (> Ns)" (read from the file-backed
+#     timeout log, not the in-shell variable — a predicate runs inside a
+#     command substitution, D65);
+#   - else the needs text recorded by _wb_availability_needs;
+#   - else "module gave no reason (predicate reports unavailable)". Shown,
+#     never dropped.
+#
+# Compact form: when _wb_functions_compact is "true" (set only by
+# `wb functions --compact`, never by a module getter) the whole block is one
+# line, with a per-tool count — the install name if there is one, otherwise
+# the needs text.
+#
+# Rows are "needs<TAB>install<TAB>name"; an empty install is written "-",
+# since `read` with a whitespace IFS would collapse the empty field and
+# shift the columns. No caching of availability here or in the callers: the
+# listing is recomputed on every call, so "install the tool, run the
+# getter again" works in the same shell.
+_wb_print_unavailable_block() {
+    local _label="$1" _all="$2" _shown="$3" _noun="${4:-functions}"
+    local _shown_nl _timed_out_nl="" _n _needs _install _rows="" _hidden_count=0 _tab _timeout_needs
+    _tab=$'\t'
+    _shown_nl=$'\n'"${_shown}"$'\n'
+    if [[ -s "${_wb_availability_timeout_log}" ]]; then
+        _timed_out_nl=$'\n'"$(sort -u "${_wb_availability_timeout_log}" 2>/dev/null)"$'\n'
+    fi
+    _timeout_needs="availability check timed out (> ${WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS}s)"
+
     while IFS= read -r _n; do
         [[ -z "${_n}" ]] && continue
-        _is_shown="false"
-        while IFS= read -r _s; do
-            [[ "${_s}" == "${_n}" ]] && { _is_shown="true"; break; }
-        done <<< "${_shown}"
-        [[ "${_is_shown}" == "true" ]] && continue
+        [[ "${_shown_nl}" == *$'\n'"${_n}"$'\n'* ]] && continue
         _hidden_count=$((_hidden_count + 1))
-        _reason="$(_wb_function_missing_reason "${_n}")"
-        # Membership check against a space-stripped copy of _reasons, not
-        # _reasons itself: _reasons is joined with ", " (comma-space) for
-        # display, but wrapping it in bare commas here for a substring
-        # test only produces a reliable ",<reason>," boundary for the
-        # first entry — every later entry is preceded by ", " (comma-
-        # space), not "," alone, so the bare-comma wrap never matches and
-        # a repeat gets appended again (confirmed: aws, aws, gh, gh
-        # produced "aws, gh, gh", not "aws, gh"). Stripping spaces before
-        # the check keeps the comma-only boundary correct at every
-        # position while leaving the human-readable _reasons untouched.
-        if [[ -n "${_reason}" ]] && [[ ",${_reasons// /}," != *",${_reason},"* ]]; then
-            _reasons="${_reasons:+${_reasons}, }${_reason}"
+        if [[ "${_timed_out_nl}" == *$'\n'"${_n}"$'\n'* ]]; then
+            _needs="${_timeout_needs}"
+            _install="-"
+        else
+            # Read the variables directly rather than through the two
+            # read-back functions: those print, so each call is a subshell.
+            _wb_availability_key "${_n}"
+            eval "_needs=\"\${_wb_availability_reason_${_wb_availability_key_result}:-}\""
+            eval "_install=\"\${_wb_availability_install_${_wb_availability_key_result}:-}\""
+            [[ -n "${_needs}" ]] || _needs="module gave no reason (predicate reports unavailable)"
+            [[ -n "${_install}" ]] || _install="-"
         fi
+        _rows="${_rows}${_needs}${_tab}${_install}${_tab}${_n}"$'\n'
     done <<< "${_all}"
 
     [[ "${_hidden_count}" -eq 0 ]] && return 0
 
-    if [[ -n "${_reasons}" ]]; then
-        echo "  ${_hidden_count} more hidden (missing: ${_reasons}) — set WORKBENCH_FUNCTIONS_SHOW_ALL=true to see them"
-    else
-        echo "  ${_hidden_count} more hidden — set WORKBENCH_FUNCTIONS_SHOW_ALL=true to see them"
+    if [[ "${_wb_functions_compact:-false}" == "true" ]]; then
+        local _count _key _summary=""
+        while read -r _count _key; do
+            _summary="${_summary:+${_summary}, }${_key} (${_count})"
+        done < <(
+            printf '%s' "${_rows}" \
+                | while IFS="${_tab}" read -r _needs _install _n; do
+                    if [[ "${_install}" != "-" ]]; then
+                        printf '%s\n' "${_install}"
+                    else
+                        printf '%s\n' "${_needs}"
+                    fi
+                done \
+                | LC_ALL=C sort | uniq -c | sed -E 's/^ +//' | LC_ALL=C sort -t ' ' -k1,1nr -k2
+        )
+        echo "  ${_hidden_count} ${_noun} need tooling you don't have: ${_summary} — run 'wb functions' for details"
+        return 0
     fi
+
+    echo
+    echo "[INFO] ${_label} — available once tooling is installed:"
+    local _wb_known_tools=$'\n' _wb_unknown_tools=$'\n'
+    local _cur_needs="" _cur_install="" _cur_names="" _started="false"
+    while IFS="${_tab}" read -r _needs _install _n; do
+        if [[ "${_started}" == "true" ]] && { [[ "${_needs}" != "${_cur_needs}" ]] || [[ "${_install}" != "${_cur_install}" ]]; }; then
+            _wb_print_unavailable_group "${_cur_needs}" "${_cur_install}" "${_cur_names}"
+            _cur_names=""
+        fi
+        _started="true"
+        _cur_needs="${_needs}"
+        _cur_install="${_install}"
+        _cur_names="${_cur_names}${_n}"$'\n'
+    done < <(printf '%s' "${_rows}" | LC_ALL=C sort -t "${_tab}" -k1,1 -k2,2 -k3,3)
+    _wb_print_unavailable_group "${_cur_needs}" "${_cur_install}" "${_cur_names}"
 }
 
 # ── Getter pattern ────────────────────────────────────────────────────────
@@ -629,13 +867,17 @@ _get_functions_in() {
         _names="$(printf '%s\n' "${_names}" | grep -E "${_pattern}")"
     fi
     local _names_all="${_names}"
+    # A getter runs in the interactive shell, whose timeout log is never
+    # reset by `wb functions`; clear it so a name that timed out on an
+    # earlier call isn't reported as timed out now.
+    _wb_availability_timeout_reset
     _names="$(printf '%s\n' "${_names}" | _wb_filter_available_names)"
     if [[ -z "${_names}" ]]; then
         echo "  (none)"
     else
         printf '%s\n' "${_names}" | column
     fi
-    _wb_print_hidden_hint "${_names_all}" "${_names}"
+    _wb_print_unavailable_block "${_label}" "${_names_all}" "${_names}" functions
     echo
 }
 
@@ -654,19 +896,20 @@ _get_aliases_in() {
         _names="$(printf '%s\n' "${_names}" | grep -E "${_pattern}")"
     fi
     local _names_all="${_names}"
+    _wb_availability_timeout_reset
     _names="$(printf '%s\n' "${_names}" | _wb_filter_available_names)"
     if [[ -z "${_names}" ]]; then
         echo "  (none)"
     else
         printf '%s\n' "${_names}" | column
     fi
-    _wb_print_hidden_hint "${_names_all}" "${_names}"
+    _wb_print_unavailable_block "${_label}" "${_names_all}" "${_names}" aliases
     echo
 }
 
 # _wb_print_live_names <label> <newline-separated names>
 # Same output shape as _get_functions_in/_get_aliases_in (availability
-# gating, column formatting, hidden-count hint) but for a caller that
+# gating, column formatting, unavailable-names block) but for a caller that
 # already has its candidate name list from live shell state rather than
 # a set of files to grep — used by _wb_cmd_functions' own top-level
 # listing (bin/wb) to avoid re-reading every eager file a second time
@@ -679,14 +922,20 @@ _wb_print_live_names() {
     local _label="$1" _names="$2"
     echo
     echo "[INFO] ${_label}:"
-    local _names_all="${_names}"
+    local _names_all="${_names}" _noun="functions"
+    # The signature is fixed (every caller depends on it), so the only way
+    # to know which kind of name this is — for the compact one-liner — is
+    # the label.
+    case "${_label}" in
+        *[Aa]lias*) _noun="aliases" ;;
+    esac
     _names="$(printf '%s\n' "${_names}" | _wb_filter_available_names)"
     if [[ -z "${_names}" ]]; then
         echo "  (none)"
     else
         printf '%s\n' "${_names}" | column
     fi
-    _wb_print_hidden_hint "${_names_all}" "${_names}"
+    _wb_print_unavailable_block "${_label}" "${_names_all}" "${_names}" "${_noun}"
     echo
 }
 
@@ -703,8 +952,8 @@ _wb_print_live_names() {
 # "$@" is forwarded verbatim so `get-functions` run by hand stays exactly
 # equivalent to `wb functions` (same flags, same output) — lib/loader.sh's
 # own automatic WORKBENCH_SHOW_FUNCTIONS startup call is the one caller
-# that passes --no-pager --no-aliases explicitly (docs/decisions-log.md
-# D73); this function itself has no opinion on which flags are used.
+# that passes --no-pager --no-aliases --compact explicitly
+# (docs/decisions-log.md D73, D86); this function itself has no opinion on which flags are used.
 get-functions() {
     local core_current="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/modules/core/current"
     if [[ -x "${core_current}/bin/wb" ]]; then

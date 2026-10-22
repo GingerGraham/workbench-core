@@ -54,8 +54,12 @@ once core's own `core`-tier registration is sourced:
   `get-<domain>-functions` getter (declared via a module's
   `register.getters[]`) is built from. `_get_functions_in`/
   `_get_aliases_in` also filter on the `_<name>-available` predicate
-  convention below and print a hidden-count hint line — additive,
-  script-transparent to a getter that never declares any predicates.
+  convention below and print, under the available list, a block of the
+  names left out grouped by what they need (with an install command only
+  where `wb tools` has such an installer) — additive, script-transparent
+  to a getter that never declares any predicates. The block replaced an
+  earlier one-line hidden-count hint; this is presentation only, in the
+  same class as D72/D73 (docs/decisions-log.md D86).
 - `_wb_declare_availability <command> <name> [<name> ...]` /
   `_wb_alias_availability <check-function> <name> [<name> ...]` —
   bulk-declare a `_<name>-available` predicate for one or more
@@ -70,6 +74,21 @@ once core's own `core`-tier registration is sourced:
   `WORKBENCH_FUNCTIONS_SHOW_ALL=true` bypasses gating regardless of any
   predicate. See `docs/module-authoring.md`, "Declaring function
   availability", for the full contract.
+- `_wb_availability_needs [--install <tool>] <needs-text> <name> [<name> ...]`
+  — records, for each `<name>`, what it needs (shown in listings under
+  "available once tooling is installed") and, with `--install`, the
+  `wb tools` friendly name that would provide it. Defines no predicate:
+  pair it with a hand-written `_<name>-available`. Tabs and newlines in
+  `<needs-text>` are replaced with spaces. A name with a predicate but no
+  recorded needs text is listed under "module gave no reason". **New in
+  `CORE_API_VERSION` 1.7.**
+- `_wb_alias_availability [--needs <text>] [--install <tool>] <check-function> <name> [<name> ...]`
+  — the existing function with two optional leading flags: `--needs`
+  records the needs text through `_wb_availability_needs`, `--install`
+  adds the `wb tools` name (and requires `--needs`). The flagless form is
+  unchanged. An unknown `--flag` is an error (status 2) and declares
+  nothing. `_wb_declare_availability` now also records its `<command>` as
+  both needs text and install name. **New in `CORE_API_VERSION` 1.7.**
 - `_wb_run_with_timeout <seconds> <command> [args...]` — portable
   (bash-3.2-safe) watchdog: backgrounds `<command>`, races it against a
   sleep/kill watchdog, and returns its real exit status if it finished in
@@ -106,7 +125,9 @@ once core's own `core`-tier registration is sourced:
   D83). **New in `CORE_API_VERSION` 1.6.**
 
 Modules that declare `layers:` or call either 1.6 function declare
-`core_api: ">=1.6 <2.0"`.
+`core_api: ">=1.6 <2.0"`. Modules that call `_wb_availability_needs` or
+pass `--needs`/`--install` to `_wb_alias_availability` declare
+`core_api: ">=1.7 <2.0"`.
 
 ## Install-helper functions (`lib/core/installers-common.sh`)
 

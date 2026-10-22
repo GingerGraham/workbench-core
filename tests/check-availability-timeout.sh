@@ -101,13 +101,20 @@ else
     fail "'wb functions' took ${ELAPSED}s — the timeout does not appear to have killed the hung predicate"
 fi
 
-# ── 2. The timed-out name is hidden, same as any predicate reporting
-#    unavailable. ───────────────────────────────────────────────────────────
-if echo "${FUNCTIONS_OUT}" | grep -v '^\[WARN\]' | grep -q "slow-thing"; then
-    fail "'wb functions' listed slow-thing — its predicate hung past the timeout and should have been hidden"
+# ── 2. The timed-out name is left out of the usable list, same as any
+#    predicate reporting unavailable, and shown under the timeout group
+#    (docs/decisions-log.md D86 — previously it was absent from the output
+#    entirely, outside the warning line). ────────────────────────────────────
+USABLE_LIST="$(awk 'index($0, "[INFO] Loaded functions:") == 1 { on = 1; next } on && /^$/ { exit } on { print }' <<< "${FUNCTIONS_OUT}")"
+TIMEOUT_GROUP="$(grep -A1 '^  availability check timed out (> 1s)' <<< "${FUNCTIONS_OUT}")"
+if grep -q "slow-thing" <<< "${USABLE_LIST}"; then
+    fail "'wb functions' listed slow-thing as usable — its predicate hung past the timeout"
     echo "${FUNCTIONS_OUT}"
+elif grep -q "slow-thing" <<< "${TIMEOUT_GROUP}"; then
+    ok "'wb functions' keeps a name whose predicate hung past the timeout out of the usable list, under the timeout group"
 else
-    ok "'wb functions' hides a name whose predicate hung past the timeout (outside the warning line itself)"
+    fail "slow-thing is not under the 'availability check timed out' group"
+    echo "${FUNCTIONS_OUT}"
 fi
 
 if echo "${FUNCTIONS_OUT}" | grep -q "fast-thing"; then
