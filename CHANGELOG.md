@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.20.0] - 2026-10-22
+
 ### Added
 
 - **Listings show what you could have, and how to get it** (D86). A
