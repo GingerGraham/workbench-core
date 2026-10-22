@@ -92,8 +92,15 @@ else
     echo "${functions_out}"
 fi
 
-if echo "${functions_out}" | grep -q "gizmo-gated-off"; then
-    fail "wb functions listed gizmo-gated-off — its predicate reports unavailable, it must be hidden"
+# Gated names are no longer absent from the output (D86): they are left out
+# of the usable list and shown in the "available once tooling is
+# installed" block. The intent — a gated name is never presented as
+# usable — is what this asserts.
+usable_list="$(awk 'index($0, "[INFO] Loaded functions:") == 1 { on = 1; next } on && /^$/ { exit } on { print }' <<< "${functions_out}")"
+if grep -q "gizmo-gated-off" <<< "${usable_list}"; then
+    fail "wb functions listed gizmo-gated-off as usable — its predicate reports unavailable"
+elif ! grep -q "gizmo-gated-off" <<< "${functions_out}"; then
+    fail "wb functions dropped gizmo-gated-off entirely — it should be in the 'available once tooling is installed' block"
 else
     ok "availability gating still works for a file that also has an unset-variable reference"
 fi

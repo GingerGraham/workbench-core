@@ -379,11 +379,15 @@ Three ways to declare one, in order of preference:
 _wb_declare_availability gh gpg-github-keys gpg-push-github
 ```
 
+Listings show `gh` as what these names need, and add `install: wb tools
+install gh` when `wb tools` has an installer named `gh`.
+
 **Several names share an existing, more complex check** —
-`_wb_alias_availability <check-function> <name> [<name> ...]`. If you
-already have a loud `_xxx_require_yyy`-style preflight helper, extract a
-quiet, boolean-returning twin it can call internally, and wire that twin
-instead of duplicating the check:
+`_wb_alias_availability [--needs <text>] [--install <tool>]
+<check-function> <name> [<name> ...]`. If you already have a loud
+`_xxx_require_yyy`-style preflight helper, extract a quiet,
+boolean-returning twin it can call internally, and wire that twin instead
+of duplicating the check:
 
 ```sh
 # shell/disk-encryption.sh
@@ -396,6 +400,21 @@ _tpm_tools_present() {
 _wb_alias_availability _tpm_tools_present enroll-luks-tpm2 rotate-luks-key
 ```
 
+`--needs` is what listings print for these names. `--install` is the
+`wb tools` friendly name that provides it (`install-<tool>` in a module's
+`register.installers[]`); it needs `--needs` beside it. Both are optional:
+without them the names are still hidden correctly, but listed under
+"module gave no reason" (see Discoverability below).
+
+A check that is a variant test rather than a plain `command -v` is where
+`--needs` earns its place, because the listing cannot work out for itself
+what the check was looking for:
+
+```sh
+_wb_alias_availability --needs "yq v4 (mikefarah/yq)" --install yq \
+    _git_yq_present git-add-project git-list-projects
+```
+
 **Anything else** — an OR of several tools, or a genuinely one-off
 check — hand-write `_<name>-available` directly:
 
@@ -404,6 +423,17 @@ check — hand-write `_<name>-available` directly:
 _open-workspace-available() {
     command -v code &>/dev/null || command -v code-insiders &>/dev/null
 }
+```
+
+For a hand-written predicate, pair it with `_wb_availability_needs
+[--install <tool>] <needs-text> <name> [<name> ...]` to say what it needs.
+It defines no predicate itself, so it works beside any of the three forms:
+
+```sh
+_open-workspace-available() {
+    command -v code &>/dev/null || command -v code-insiders &>/dev/null
+}
+_wb_availability_needs "VS Code (code or code-insiders)" open-workspace
 ```
 
 If your function already has its own loud preflight for the same
@@ -432,15 +462,53 @@ _gpg-show-available()        { _wb_cache_bool gpg-card-live -- gpg --card-status
 
 ### Discoverability
 
-Gating hides genuinely-unusable commands from day-to-day listings, but
-nothing is ever permanently lost. Whenever a listing hides at least one
-name, it prints a one-line summary underneath — a count, plus the
-specific missing command(s) where that can be recovered mechanically
-from a `_wb_declare_availability`-generated predicate, or just the count
-otherwise. `wb functions --all`, or `WORKBENCH_FUNCTIONS_SHOW_ALL=true`
-in front of any getter, shows everything regardless of gating. You don't
-need to do anything for your module to get this — it's automatic once
-you're using the predicate convention above.
+Gating changes what a listing presents as usable, never what is defined:
+a gated function is still sourced and still callable, and still runs its
+own preflight if you call it anyway. Nothing is silently hidden — a
+listing answers three questions: what works now, what would work after
+installing something, and which aliases you have, split the same way.
+
+Whenever a listing leaves a name out of its main list, it prints a block
+directly underneath, before the aliases:
+
+```
+[INFO] Git functions:
+get-git-functions  git-cleanup  git-projects-base  git-setup-identity  gwt  gwt-cd
+
+[INFO] Git functions — available once tooling is installed:
+  yq v4 (mikefarah/yq) — install: wb tools install yq
+    git-add-project  git-add-project-cli  git-list-projects  git-remove-project
+```
+
+- Names are grouped by their needs text: one header per distinct text,
+  names in columns beneath it. The text comes from
+  `_wb_availability_needs`, `_wb_alias_availability --needs`, or the
+  command given to `_wb_declare_availability`.
+- `— install: wb tools install <tool>` is added only when `wb tools`
+  really has an installer by that friendly name. A name that no installer
+  provides is never given an install command.
+- A predicate with no declared reason is still shown, under "module gave
+  no reason (predicate reports unavailable)". Declare one with
+  `_wb_availability_needs` to replace that with something useful.
+- A predicate killed by `WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS` is shown
+  under "availability check timed out (> Ns)", and `wb functions` still
+  prints its warning.
+- If every name is available there is no block. If none are, the list
+  reads `(none)` and the block follows.
+- Availability is recomputed on every listing call, so installing the tool
+  and running the getter again in the same shell shows the function as
+  available. (A predicate that wraps `_wb_cache_bool` is the exception: its
+  result lasts for the life of the shell.)
+
+`wb functions --compact` — used by the `WORKBENCH_SHOW_FUNCTIONS` startup
+banner — replaces each block with one line, e.g. `7 functions need tooling
+you don't have: yq (7), gh (2) — run 'wb functions' for details`. Your
+module's own getter is never compact. `wb functions --all`, or
+`WORKBENCH_FUNCTIONS_SHOW_ALL=true` in front of any getter, lists
+everything in the main list with no block. You don't need to do anything
+for your module to get any of this — it is automatic once you're using the
+predicate convention above; `--needs`/`_wb_availability_needs` only make it
+more useful.
 
 ## Publishing module info & docs (optional but recommended)
 

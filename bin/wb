@@ -343,8 +343,9 @@ _wb_scaffold_local_overrides() {
 # WORKBENCH_PLAIN_SHELL=true
 
 # Print loaded functions and getters at the start of each new interactive
-# shell — a quick, unpaged summary (no aliases, never opens a pager; run
-# `wb functions` by hand for the full listing, aliases included).
+# shell — a quick, unpaged summary (no aliases, never opens a pager, and
+# functions that need tooling you don't have collapse to one line; run
+# `wb functions` by hand for the full listing, aliases and details included).
 # WORKBENCH_SHOW_FUNCTIONS=true
 
 # Verbose loader/sync debug logging (release version, script versions,
@@ -792,15 +793,15 @@ _wb_cmd_status() {
 }
 
 # ── functions ──────────────────────────────────────────────────────────────
-# _wb_cmd_functions [--all] [--no-pager] [--no-aliases]
+# _wb_cmd_functions [--all] [--no-pager] [--no-aliases] [--compact]
 # Thin wrapper around _wb_cmd_functions_impl (the actual listing logic,
 # unchanged below): scans all of $@ for --all/--no-pager — order-
 # independent, unlike a bare "${1:-}" == "--all" check — then pipes the
 # impl's output through _wb_maybe_page unless --no-pager was given.
-# --no-aliases isn't parsed here at all: it's forwarded to
-# _wb_cmd_functions_impl unchanged via "$@" and handled entirely there
-# (docs/decisions-log.md D73), since it only affects what the impl prints,
-# not whether/how this wrapper pages it.
+# --no-aliases and --compact aren't parsed here at all: they're forwarded
+# to _wb_cmd_functions_impl unchanged via "$@" and handled entirely there
+# (docs/decisions-log.md D73, D86), since they only affect what the impl
+# prints, not whether/how this wrapper pages it.
 # _wb_availability_timeout_reset moved here (was previously the first
 # thing inside the old single function) so it always runs once, in this
 # process, before _wb_cmd_functions_impl forks into the pipeline below —
@@ -874,14 +875,27 @@ _wb_cmd_functions() {
 # WORKBENCH_SHOW_FUNCTIONS startup banner (lib/loader.sh) to keep that
 # banner to functions + getters only; a manual `wb functions` still shows
 # every section by default.
+#
+# --compact (docs/decisions-log.md D86) replaces each "available once
+# tooling is installed" block with a one-line count, so that same banner
+# stays short even on a host missing several tools. It applies to this
+# top-level listing only: a module's own getter never sets it.
 _wb_cmd_functions_impl() {
     local name reglist filepath tier base manifest
     local -a eager_files=()
     local any_getters="false"
     local -a _getter_lines=()
     local _wb_fn_arg _wb_fn_no_aliases="false"
+    # Read by _wb_print_unavailable_block (lib/core/functions.sh) through
+    # bash's dynamic scoping: a local here is visible to every function this
+    # one calls, and gone when it returns.
+    # shellcheck disable=SC2034
+    local _wb_functions_compact="false"
     for _wb_fn_arg in "$@"; do
-        [[ "${_wb_fn_arg}" == "--no-aliases" ]] && _wb_fn_no_aliases="true"
+        case "${_wb_fn_arg}" in
+            --no-aliases) _wb_fn_no_aliases="true" ;;
+            --compact) _wb_functions_compact="true" ;;
+        esac
     done
 
     while IFS= read -r name; do
@@ -3340,18 +3354,23 @@ EOF
 
 _wb_help_functions() {
     cat <<'EOF'
-Usage: wb functions [--all] [--no-pager] [--no-aliases]
+Usage: wb functions [--all] [--no-pager] [--no-aliases] [--compact]
 
 Lists every registered shell function/getter/installer, grouped by the
 module that declared it (via that module's manifest register: block).
 Read-only.
 
 A function whose declared "_<name>-available" predicate reports it can't
-actually be used on this host (a required CLI is missing, say) is hidden
-from this listing — see docs/module-authoring.md "Declaring function
-availability". --all (or WORKBENCH_FUNCTIONS_SHOW_ALL=true, which also
-works in front of any module's own get-<domain>-functions getter) shows
-every function regardless of availability.
+actually be used on this host (a required CLI is missing, say) is left out
+of the main list and shown in a separate "available once tooling is
+installed" block underneath, grouped by what it needs — with the
+`wb tools install <tool>` command when an installer for that tool is
+registered. Those functions are still defined and callable; this only
+changes what is listed as usable. See docs/module-authoring.md "Declaring
+function availability". --all (or WORKBENCH_FUNCTIONS_SHOW_ALL=true, which
+also works in front of any module's own get-<domain>-functions getter)
+lists every function in the main list regardless of availability, with no
+separate block.
 
 On a real terminal, output is piped through a pager: WORKBENCH_PAGER if
 set (empty/"cat"/"none" disables this outright), else PAGER, else a bare
@@ -3362,6 +3381,9 @@ WORKBENCH_PAGER/PAGER. --no-aliases omits the "Loaded aliases" section,
 listing only loaded functions and getters — this is what the automatic
 WORKBENCH_SHOW_FUNCTIONS startup banner uses (unpaged, no aliases) so it
 stays a quick summary rather than a full listing every new shell.
+--compact replaces each "available once tooling is installed" block with
+one line (a count per missing tool); the startup banner uses it too, and
+module getters never do.
 
 Confused with 'wb tools'? This lists the raw register.installers[] src
 paths a manifest declares; 'wb tools' lists (and can invoke) the actual

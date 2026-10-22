@@ -4,6 +4,41 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Listings show what you could have, and how to get it** (D86). A
+  getter or `wb functions` used to end with "N more hidden", naming a
+  missing command only in some cases. It now prints a block under the
+  available list, grouped by what the names need, with
+  `install: wb tools install <tool>` when an installer for that tool is
+  registered:
+
+  ```
+  [INFO] Git functions — available once tooling is installed:
+    yq v4 (mikefarah/yq) — install: wb tools install yq
+      git-add-project  git-list-projects  ...
+  ```
+
+  Names whose module gave no reason are listed too, under "module gave no
+  reason", and so are predicates that hit the availability timeout.
+  Nothing about what gets defined or callable changed. The aliases list
+  gets the same split.
+- **`wb functions --compact`** folds each of those blocks into one line
+  (`7 functions need tooling you don't have: yq (7), gh (2) — run 'wb
+  functions' for details`). The `WORKBENCH_SHOW_FUNCTIONS` startup banner
+  uses it; module getters never do.
+- **Core API 1.7:** `_wb_availability_needs [--install <tool>] <text>
+  <name>...` records what a name needs for any kind of predicate, and
+  `_wb_alias_availability` takes optional `--needs`/`--install` flags
+  (the flagless form is unchanged). `_wb_declare_availability` records its
+  command as the need and the installer name automatically.
+
+### Changed
+
+- A getter now clears the availability-timeout log at the start of each
+  call, as `wb functions` already did, so a predicate that timed out once
+  in a shell is not reported as timed out on later calls.
+
 ## [2.19.1] - 2026-10-21
 
 ### Fixed
