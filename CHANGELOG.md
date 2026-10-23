@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.20.1] - 2026-10-23
+
 ### Fixed
 
 - **No more "time stamp … in the future" lines from tar during `wb
