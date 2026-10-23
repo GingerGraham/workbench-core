@@ -213,7 +213,9 @@ main() {
 
         # REF_PATH is always the resolved commit sha — content-addressed, matches RESOLVED_SHA (L1).
         curl -fsSL "https://codeload.github.com/${OWNER}/${REPO}/tar.gz/${REF_PATH}" -o "${_tmp_tar}"
-        tar -xzf "${_tmp_tar}" -C "${_tmp_extract}"
+        # -m: entries carry the commit time; GNU tar warns per file when
+        # that is ahead of this clock. Files get the fetch time instead.
+        tar -xmzf "${_tmp_tar}" -C "${_tmp_extract}"
         rm -f "${_tmp_tar}"
 
         _extracted="$(find "${_tmp_extract}" -mindepth 1 -maxdepth 1 -type d | head -1)"

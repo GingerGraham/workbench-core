@@ -45,7 +45,11 @@ workbench_fetch_tarball_public() {
         return 1
     fi
 
-    if ! tar -xzf "${tmp_tar}" -C "${tmp_extract}"; then
+    # -m: GitHub stamps every entry with the commit time, and GNU tar warns
+    # per file when that is ahead of this clock. Extracted files get the
+    # fetch time instead, so workbench_snapshot_prune's newest-first order
+    # is the order snapshots were fetched in.
+    if ! tar -xmzf "${tmp_tar}" -C "${tmp_extract}"; then
         log_warn "workbench_fetch_tarball_public: tarball extraction failed for ${owner}/${repo}@${ref_value}"
         rm -f "${tmp_tar}"
         rm -rf "${tmp_extract}"

@@ -4,6 +4,16 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **No more "time stamp … in the future" lines from tar during `wb
+  update` or bootstrap.** GitHub's tarballs stamp every file with the
+  commit time, and GNU tar printed a warning per file whenever the host's
+  clock was behind it — for a freshly cut release, a few seconds of clock
+  difference was enough. Tarballs now extract with `tar -m`: files get the
+  fetch time, so snapshot pruning keeps the most recently fetched
+  snapshots (as `git`-fetched snapshots already did).
+
 ## [2.20.0] - 2026-10-22
 
 ### Added

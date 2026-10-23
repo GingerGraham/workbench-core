@@ -72,7 +72,7 @@ workbench_snapshot_swap() {
 
 # workbench_snapshot_prune <module> [keep_count]
 # Removes snapshot directories beyond the retention window, oldest first by
-# mtime, never touching whatever `current` points at (even if it would
+# mtime — when each was fetched (tar -m, fetch-tarball.sh) — never touching whatever `current` points at (even if it would
 # otherwise fall outside the retention count — a manually-pinned old
 # snapshot some other mechanism still references is never the thing this
 # function deletes out from under it).
