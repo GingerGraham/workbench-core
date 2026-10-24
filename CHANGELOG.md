@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.20.2] - 2026-10-24
+
 ### Fixed
 
 - `wb tools install` / `wb tools upgrade` now load core's installer helpers
