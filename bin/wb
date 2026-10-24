@@ -1057,6 +1057,12 @@ _wb_cmd_tools_list() {
 _wb_tools_invoke() {
     local verb="$1" name="$2" abs_path="$3" func="$4" friendly="$5"
 
+    # Core API installer helpers (_wb_gh_asset_digest, _wb_fetch_verified,
+    # _download_file_robust, ...) are promised to every install-* function
+    # (docs/decisions-log.md D34). bin/wb does not load them at startup, so
+    # require them here, before the module's file is sourced and called.
+    _wb_require core/installers-common.sh
+
     if ! command -v "${func}" &>/dev/null; then
         if [[ ! -f "${abs_path}" ]]; then
             log_error "wb tools ${verb}: ${friendly} (${name}): installer file not found: ${abs_path}"

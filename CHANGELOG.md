@@ -4,6 +4,16 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `wb tools install` / `wb tools upgrade` now load core's installer helpers
+  (`lib/core/installers-common.sh`) before running a module's `install-*`
+  function. Previously they ran in a process that never loaded them, so any
+  installer using `_wb_gh_asset_digest`, `_wb_fetch_verified`,
+  `_download_file_robust` and friends failed with `command not found` —
+  seen as `install-yq` reporting "GitHub publishes no SHA-256" on
+  Pop!_OS. See `docs/decisions-log.md` D87.
+
 ## [2.20.1] - 2026-10-23
 
 ### Fixed
