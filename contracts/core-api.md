@@ -200,6 +200,14 @@ Registered in core's own `.dotfiles-sync.yml` at `tier: core`, the same
 tier `functions.sh`/`version.sh` use — every module's `lazy`-tier installer
 file is guaranteed these are already sourced by the time it runs.
 
+These helpers are available to `install-*` functions however they are
+invoked: from an interactive shell, during a sync, and through
+`wb tools install` / `wb tools upgrade`. The last runs in a fresh `wb`
+process that never goes through the loader, so `bin/wb` requires
+`lib/core/installers-common.sh` itself before it runs a module's installer
+(docs/decisions-log.md D87). `bin/wb` still does not load the file at
+startup (D65).
+
 ## Loader tiers
 
 `register.shell[].tier` is one of `env` / `core` / `tools` / `platform` /

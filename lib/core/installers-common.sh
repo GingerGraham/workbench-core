@@ -6,7 +6,9 @@
 # on these being sourced already — this file is registered in core's own
 # `.dotfiles-sync.yml` at `tier: core`, the same tier `functions.sh`/
 # `version.sh` already use, so it loads before any module's own `lazy`-tier
-# installer file could possibly run.
+# installer file could possibly run. `bin/wb` also requires this file before
+# running any `wb tools` installer (docs/decisions-log.md D87), since that path
+# starts a fresh process that never goes through the loader.
 #
 # Only `_`-prefixed helpers live here (contracts/core-api.md's naming
 # convention, docs/decisions-log.md D24) — none of these are meant to show up

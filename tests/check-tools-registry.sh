@@ -368,6 +368,62 @@ else
     ok "'install-all' is excluded from the discovered registry"
 fi
 
+# ── 11. wb tools install gives installers the Core API helpers, in a fresh
+#     process (the in-process path can't catch this). ──────────────────────
+# Every check above runs _wb_cmd_tools in THIS process, and the
+# workbench_cmd_add calls at the top already ran a sync here, which loads
+# lib/core/installers-common.sh via _wb_engine_require_files. The helpers
+# are therefore defined before any install runs, so an in-process test
+# passes even when 'wb tools install' loads nothing itself. Only a fresh
+# 'wb' subprocess reproduces what a user's shell does (docs/decisions-log.md
+# D87).
+SRC_D="${WORK}/src-delta"
+BARE_D="${WORK}/delta.git"
+mkdir -p "${SRC_D}"
+git init -q --bare "${BARE_D}"
+git clone -q "${BARE_D}" "${SRC_D}" 2>/dev/null
+(
+    cd "${SRC_D}" || exit 1
+    git config user.email t@t.com
+    git config user.name Test
+    mkdir -p install
+    # Quoted heredoc: the installer calls a real Core API helper. The marker
+    # path comes from the environment because this runs in a separate process.
+    cat > install/helpers.sh <<'EOF'
+install-helpers() {
+    local json='{"assets":[{"name":"t","digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","browser_download_url":"https://example.invalid/t"}]}'
+    _wb_gh_asset_digest "${json}" "https://example.invalid/t" > "${WB_TEST_HELPERS_MARKER}"
+}
+EOF
+    cat > .dotfiles-sync.yml <<'EOF'
+version: 1
+branch: main
+core_api: ">=1.0 <2.0"
+register:
+  installers:
+    - src: install/helpers.sh
+EOF
+    git add -A && git commit -q -m v1
+    git branch -M main
+    git push -q origin main
+    git tag v1.0.0 && git push -q origin v1.0.0
+)
+workbench_cmd_add delta-tools "${BARE_D}" --private >/tmp/wb-tools-registry-add-delta.log 2>&1
+
+export WB_TEST_HELPERS_MARKER="${WORK}/helpers-marker"
+rm -f "${WB_TEST_HELPERS_MARKER}"
+expected_digest="$(printf '%064d' 0 | tr '0' 'a')"
+
+bash "${WB}" tools install helpers >/tmp/wb-tools-registry-helpers.log 2>&1
+got_digest="$(cat "${WB_TEST_HELPERS_MARKER}" 2>/dev/null)"
+
+if [[ "${got_digest}" == "${expected_digest}" ]]; then
+    ok "'wb tools install' (fresh process) gives install-* functions the Core API installer helpers"
+else
+    fail "'wb tools install' did not give install-helpers a working _wb_gh_asset_digest (got '${got_digest}')"
+    cat /tmp/wb-tools-registry-helpers.log
+fi
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."
