@@ -42,6 +42,7 @@ ${XDG_DATA_HOME:-~/.local/share}/workbench/modules/<name>/
 ├── current -> snapshots/<ref-slug>-<shortsha>
 ├── register.list
 ├── installers.list
+├── getters.list       register.getters[] function|label (D89)
 ├── files.list         engine-owned ledger (D81)
 ├── files.policy       host-owned per-file policy (D81)
 ├── files.forms        linked entries the user chose to have managed as copies (D81)
@@ -160,6 +161,24 @@ sync-enabled module whose manifest declares `register.installers[]`
 entries but whose `installers.list` is missing or empty — checked
 independently of the `register.list` check above (docs/decisions-log.md
 D71).
+
+### `getters.list`
+
+Rendered at exactly the points `register.list` and `installers.list` are,
+from the module's manifest `register.getters[]` entries
+(docs/decisions-log.md D89):
+
+```
+<function-name>|<label>
+```
+
+The loader defines each `<function-name>` the module didn't define itself
+as a call to `_wb_module_getter`, which reads `<label>` back from here.
+Entries whose function is empty, starts with `_`, or contains anything
+outside `[A-Za-z0-9_-]` are never written; `|`, tabs and newlines are
+stripped from the label. Additive: like the D81 `files.*` files it needs
+no `STATE_SCHEMA_VERSION` bump — a host without it simply has no generated
+getters until the next sync or `wb apply` renders it.
 
 ### `files.list`
 

@@ -292,7 +292,10 @@ fi
 # ── register.list tier resolution ─────────────────────────────────────────────
 # Six tiers, sourced in this fixed order for every loadable module — the
 # same order workbench-precursor's loader.sh already enforced, just no
-# longer scoped to a single root.
+# longer scoped to a single root. The loop below lists them literally:
+# zsh does not word-split an unquoted "${var}", so iterating over a
+# space-separated variable ran the loop once, with the whole string as one
+# tier name, and loaded no module content at all (docs/decisions-log.md D89).
 _WB_LOADER_TIERS="env core tools platform distro lazy"
 
 # _wb_loader_should_source_by_name <tier> <basename-without-.sh>
@@ -399,10 +402,31 @@ fi
 unset WORKBENCH_PROMPT_SET WORKBENCH_PROMPT_ENGINE
 
 if command -v workbench_list_loadable_modules &>/dev/null; then
-    for _wb_tier in ${_WB_LOADER_TIERS}; do
+    # Keep in step with _WB_LOADER_TIERS above.
+    for _wb_tier in env core tools platform distro lazy; do
         _wb_loader_source_tier "${_wb_tier}"
     done
     unset _wb_tier
+
+    # D89: define every declared getter a module didn't define itself.
+    # A hand-written getter always wins — it is already defined by now.
+    _wb_loader_define_getters() {
+        local _mod _gl _fn _label
+        while IFS= read -r _mod; do
+            [[ -z "${_mod}" ]] && continue
+            _gl="$(workbench_module_dir "${_mod}")/getters.list"
+            [[ -f "${_gl}" ]] || continue
+            while IFS='|' read -r _fn _label; do
+                case "${_fn}" in
+                    ''|_*|*[!A-Za-z0-9_-]*) continue ;;
+                esac
+                declare -f "${_fn}" >/dev/null 2>&1 && continue
+                eval "${_fn}() { _wb_module_getter '${_mod}' '${_fn}'; }"
+            done < "${_gl}"
+        done < <(workbench_list_loadable_modules)
+    }
+    _wb_loader_define_getters
+    unset -f _wb_loader_define_getters
 else
     log_warn "loader: lib/sync/state.sh not found — no modules were loaded (core itself may not be registered yet; run 'wb install')"
 fi
@@ -630,14 +654,28 @@ fi
 # counts — no lifecycle code is loaded here.
 if [[ $- == *i* ]] && command -v workbench_modules_dir &>/dev/null; then
     _wb_pending_count=0
-    for _wb_pending_file in "$(workbench_modules_dir)"/*/files.pending; do
+    # nullglob, as in _wb_loader_source_sh_files_once: with no files.pending
+    # anywhere (the usual case) zsh's default `nomatch` printed "no matches found"
+    # on every interactive start (docs/decisions-log.md D89).
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+        setopt nullglob
+    else
+        shopt -s nullglob
+    fi
+    _wb_pending_files=("$(workbench_modules_dir)"/*/files.pending)
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+        unsetopt nullglob
+    else
+        shopt -u nullglob
+    fi
+    for _wb_pending_file in ${_wb_pending_files[@]+"${_wb_pending_files[@]}"}; do
         [[ -s "${_wb_pending_file}" ]] || continue
         _wb_pending_count=$((_wb_pending_count + $(wc -l < "${_wb_pending_file}")))
     done
     if [[ "${_wb_pending_count}" -gt 0 ]]; then
         log_warn "workbench: ${_wb_pending_count} file(s) need your decision — run 'wb files status'"
     fi
-    unset _wb_pending_count _wb_pending_file
+    unset _wb_pending_count _wb_pending_file _wb_pending_files
 fi
 
 # ── Interactive startup ───────────────────────────────────────────────────────

@@ -159,6 +159,18 @@ else
     fail "_wb_gh_asset_digest: got '${d1}' / '${d2}'"
 fi
 
+# ── Check 10b: _wb_gh_release_asset_url (Core API 1.8, D90) ─────────────────
+# Same releases-API fixture as check 10: first match wins, no match is empty.
+u1="$(_wb_gh_release_asset_url "${json10}" 'tool_')"
+u2="$(_wb_gh_release_asset_url "${json10}" 'darwin_amd64$')"
+u3="$(_wb_gh_release_asset_url "${json10}" 'arm64')"
+if [[ "${u1}" == "https://example.invalid/tool_linux_amd64" \
+    && "${u2}" == "https://example.invalid/tool_darwin_amd64" && -z "${u3}" ]]; then
+    ok "_wb_gh_release_asset_url: first matching browser_download_url, empty when nothing matches"
+else
+    fail "_wb_gh_release_asset_url: got '${u1}' / '${u2}' / '${u3}'"
+fi
+
 # ── Check 11: _wb_key_has_fingerprint ───────────────────────────────────────
 if ! command -v gpg &>/dev/null; then
     ok "gpg not on PATH — skipping _wb_key_has_fingerprint checks"
@@ -198,7 +210,7 @@ else
     fi
 fi
 
-# ── zsh: re-run checks 1 and 10 under zsh if available ──────────────────────
+# ── zsh: re-run checks 1, 10 and 10b under zsh if available ──────────────────────
 if command -v zsh &>/dev/null; then
     # shellcheck disable=SC2097,SC2098
     zsh_out="$(REPO_ROOT="${REPO_ROOT}" WORK="${WORK}" H1="${h1}" JSON10_FILE="${WORK}/10-releases.json" \
@@ -212,6 +224,8 @@ if command -v zsh &>/dev/null; then
         json="$(cat "${JSON10_FILE}")"
         d="$(_wb_gh_asset_digest "${json}" "https://example.invalid/tool_linux_amd64")"
         [[ "${d}" == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ]] && echo ZSH_CHECK10_OK
+        u="$(_wb_gh_release_asset_url "${json}" "darwin_amd64\$")"
+        [[ "${u}" == "https://example.invalid/tool_darwin_amd64" ]] && echo ZSH_CHECK10B_OK
     ' 2>/tmp/wb-fetch-zsh.log)"
     if grep -q ZSH_CHECK1_OK <<<"${zsh_out}"; then
         ok "check 1 (literal hash match) also passes under zsh"
@@ -223,8 +237,13 @@ if command -v zsh &>/dev/null; then
     else
         fail "check 10 failed under zsh — see /tmp/wb-fetch-zsh.log"
     fi
+    if grep -q ZSH_CHECK10B_OK <<<"${zsh_out}"; then
+        ok "check 10b (_wb_gh_release_asset_url) also passes under zsh"
+    else
+        fail "check 10b failed under zsh — see /tmp/wb-fetch-zsh.log"
+    fi
 else
-    ok "zsh not on PATH — skipping the zsh re-run of checks 1 and 10"
+    ok "zsh not on PATH — skipping the zsh re-run of checks 1, 10 and 10b"
 fi
 
 echo
