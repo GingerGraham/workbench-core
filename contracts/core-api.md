@@ -117,6 +117,18 @@ once core's own `core`-tier registration is sourced:
   of the file, after a block that has to stay last. Runs `wb files
   settle <module>` (the interactive shell doesn't load `lib/files/`);
   silent, never fails the caller. **New in `CORE_API_VERSION` 1.6.**
+- `_wb_module_getter <module> <function>` — the body of every
+  core-generated getter: lists the functions and aliases in `<module>`'s
+  registered shell files (its `register.list`, platform/distro files that
+  don't apply to the host left out), labelled from its `getters.list`.
+  Needs no `BASH_SOURCE`, so it works the same in bash and zsh. The loader
+  defines `<function>() { _wb_module_getter <module> <function>; }` for
+  every `register.getters[]` entry that no registered file defined itself;
+  a hand-written getter always wins. Rule: declare the getter in
+  `register.getters[]` and don't define it; a module relying on generated
+  getters declares `core_api: ">=1.8 <2.0"` (docs/decisions-log.md D89).
+  `_extract_function_names` now also matches `function name {` and
+  `function name() {`. **New in `CORE_API_VERSION` 1.8.**
 - `_wb_prompt_hook_registered <function-name>` — true when
   `<function-name>` is already hooked into the prompt cycle: bash
   `PROMPT_COMMAND` (scalar or array) or zsh `precmd_functions`. Lets a
@@ -127,7 +139,8 @@ once core's own `core`-tier registration is sourced:
 Modules that declare `layers:` or call either 1.6 function declare
 `core_api: ">=1.6 <2.0"`. Modules that call `_wb_availability_needs` or
 pass `--needs`/`--install` to `_wb_alias_availability` declare
-`core_api: ">=1.7 <2.0"`.
+`core_api: ">=1.7 <2.0"`. Modules that rely on core-generated getters, or call
+`_wb_gh_release_asset_url`, declare `core_api: ">=1.8 <2.0"`.
 
 ## Install-helper functions (`lib/core/installers-common.sh`)
 
@@ -174,6 +187,14 @@ module) carrying its own copy:
   exactly `<fingerprint>` (40 hex; spaces and case ignored). Uses a
   throwaway `GNUPGHOME` so the user's keyring is never touched. **Presence
   check only — never a trust decision** (see 1.5 below).
+
+**New in `CORE_API_VERSION` 1.8.**
+
+- `_wb_gh_release_asset_url <releases-api-json> <ERE>` — prints the first
+  `browser_download_url` in a GitHub releases-API response that matches
+  `<ERE>`, or nothing. Promoted from identical private
+  `_gh_release_asset_url` copies in workbench-desktop, -devtools, -git and
+  -shell (docs/decisions-log.md D90).
 
 **New in `CORE_API_VERSION` 1.5.** Vendor signing keys are trusted only as
 pinned, local copies (D79). Modules must not pass a downloaded key file to

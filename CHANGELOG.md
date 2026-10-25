@@ -4,6 +4,25 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Core generates module getters (Core API 1.8).** A module can declare a
+  getter in `register.getters[]` without defining it; core defines it, and
+  it lists the module's functions and aliases in bash and zsh alike, under
+  whatever name the module was registered with. Hand-written getters keep
+  working and always win. See `docs/decisions-log.md` D89.
+- `_wb_gh_release_asset_url`, an installer helper that picks a release
+  asset URL from a GitHub releases-API response, replacing four identical
+  private copies in modules (Core API 1.8, D90).
+- Function listings now include functions written as `function name {`.
+
+### Fixed
+
+- **zsh now loads module content.** The loader's tier loop relied on word
+  splitting that zsh doesn't do, so an interactive zsh loaded no module
+  functions at all. Every interactive zsh start also printed a "no matches
+  found" error for the pending-files check; it no longer does (D89).
+
 ## [2.20.2] - 2026-10-24
 
 ### Fixed
