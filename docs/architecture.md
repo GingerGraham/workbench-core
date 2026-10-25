@@ -346,6 +346,8 @@ Confirmed gaps, with the fix each maps to:
 
 ## 8. Installer approach — Ansible vs. custom
 
+> **Superseded by D92: Ansible is retired; see the decisions log.**
+
 Recommendation stands: **don't drop Ansible wholesale — split by what
 actually runs unattended.**
 
@@ -620,7 +622,7 @@ Wave B. `workbench` is reserved for a separate TUI repo (Wave D) that fronts
 
 | Command | Purpose |
 |---|---|
-| `wb install [--bundle <n>]` | First-run convergence — prereqs, host-state generation, Ansible apply. `--bundle` expands to a sequence of `wb add` calls before applying. |
+| `wb install [--bundle <n>]` | First-run convergence — prereqs, host state, module registration. `--bundle` expands to a sequence of `wb add` calls before applying. |
 | `wb apply` | Re-run convergence without the interactive prompts (mirrors `install.sh --no-prereqs --skip-ssh` today). |
 | `wb add <n> [url] [--private] [--allow-hooks]` | Hot-path registration (§8's convergence constraint applies). `url` is optional if `<n>` resolves against the known-modules catalog. Defaults new registrations to `TRACK_MODE=latest`. |
 | `wb remove <n>` | Idempotent, non-destructive deregistration — never deletes deployed content the user might have touched. |
