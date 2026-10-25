@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.21.0] - 2026-10-25
+
 ### Added
 
 - **`full` bundle.** `wb install --bundle full` registers every module in
