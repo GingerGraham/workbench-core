@@ -302,6 +302,14 @@ Declares a domain getter so `wb functions` can enumerate it without a
 hardcoded registry entry in core. `name` and `function` are required and
 must be non-empty; `label` is free text shown in `wb functions`' output.
 
+Defining the function is optional (**Core API 1.8**, docs/decisions-log.md
+D89): if no registered file defines it, core generates it — it lists the
+functions and aliases in the module's `register.shell[]` files under
+`label`. A hand-written definition always wins. A module relying on the
+generated getter declares `core_api: ">=1.8 <2.0"`. `function` is used as a
+shell function name, so core skips (with a warning) any entry whose
+`function` starts with `_` or contains anything outside `A-Z a-z 0-9 _ -`.
+
 Unknown keys anywhere under `register:` (including unrecognised sub-blocks
 alongside `shell`/`installers`/`getters`) are ignored, not fatal — same
 forward-compatibility posture as the rest of this spec.
