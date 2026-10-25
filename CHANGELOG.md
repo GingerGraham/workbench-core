@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.21.1] - 2026-10-25
+
 ### Fixed
 
 - **Module CI's clean-shell check works with every module's workflow pin.**
