@@ -121,8 +121,15 @@ else
     cat /tmp/wb-completion-args-remove-a.log
 fi
 
-# ── 6. _wb_cmd_complete catalog-modules/catalog-bundles reflect a host
-#    override, not the shipped defaults. ───────────────────────────────
+# ── 6. _wb_cmd_complete catalog-bundles offers the shipped 'full' bundle
+#    (docs/decisions-log.md D88), then catalog-modules/catalog-bundles
+#    reflect a host override, not the shipped defaults. ──────────────────
+if _wb_cmd_complete catalog-bundles | grep -qx "full"; then
+    ok "'_wb_cmd_complete catalog-bundles' offers the shipped 'full' bundle for 'wb install --bundle <TAB>'"
+else
+    fail "'_wb_cmd_complete catalog-bundles' does not offer 'full': $(_wb_cmd_complete catalog-bundles | tr '\n' ' ')"
+fi
+
 mkdir -p "${XDG_CONFIG_HOME}/workbench/catalog"
 cat > "${XDG_CONFIG_HOME}/workbench/catalog/modules.list" <<'EOF'
 # comment line, must be skipped

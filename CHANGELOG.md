@@ -4,8 +4,18 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`full` bundle.** `wb install --bundle full` registers every module in
+  the catalog. `workstation`, `server` and `minimal` are unchanged. See
+  `docs/decisions-log.md` D88.
+
 ### Fixed
 
+- `wb install --bundle <unknown>` now exits 2, lists the known bundles and
+  changes nothing. Previously it registered nothing and reported success.
+- `wb install --bundle` now ends with an error, exit 1, naming any bundle
+  module that failed to register, instead of reporting success.
 - **A module release that needs a newer workbench-core no longer leaves the
   module empty.** The Core API check now runs before the new release is
   switched in: the module stays on the release it is on, `wb status` shows
