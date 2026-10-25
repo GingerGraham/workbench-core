@@ -91,7 +91,11 @@ for bin in "${_WB_SHELL_PREREQS_REQUIRED[@]}" "${baseline[@]}"; do
 done
 
 # shell_start <bash|zsh> <PATH> <commands> <stderr-file> — an interactive
-# shell, through the rc stub, in a clean environment.
+# shell, through the rc stub, in a clean environment. skip_global_compinit:
+# Ubuntu's /etc/zsh/zshrc runs compinit in every interactive zsh, and on a
+# GitHub runner compinit finds an fpath directory it calls insecure and,
+# with no terminal to ask on, prints "compinit: initialization aborted" —
+# runner noise, not the module's. Setting it is the documented opt-out.
 shell_start() {
     local shell="$1" path="$2" cmds="$3" err="$4"
     env -i \
@@ -101,6 +105,7 @@ shell_start() {
         XDG_CACHE_HOME="${XDG_CACHE_HOME:-${HOME}/.cache}" \
         USER="${USER:-runner}" \
         TERM=dumb \
+        skip_global_compinit=1 \
         PATH="${path}" \
         "${BARE_BIN}/${shell}" -i -c "${cmds}" 2>"${err}" </dev/null
 }
