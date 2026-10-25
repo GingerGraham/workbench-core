@@ -6,6 +6,9 @@ All notable changes to `workbench-core` are documented here.
 
 ### Added
 
+- **`full` bundle.** `wb install --bundle full` registers every module in
+  the catalog. `workstation`, `server` and `minimal` are unchanged. See
+  `docs/decisions-log.md` D88.
 - **Core generates module getters (Core API 1.8).** A module can declare a
   getter in `register.getters[]` without defining it; core defines it, and
   it lists the module's functions and aliases in bash and zsh alike, under
@@ -18,6 +21,10 @@ All notable changes to `workbench-core` are documented here.
 
 ### Fixed
 
+- `wb install --bundle <unknown>` now exits 2, lists the known bundles and
+  changes nothing. Previously it registered nothing and reported success.
+- `wb install --bundle` now ends with an error, exit 1, naming any bundle
+  module that failed to register, instead of reporting success.
 - **zsh now loads module content.** The loader's tier loop relied on word
   splitting that zsh doesn't do, so an interactive zsh loaded no module
   functions at all. Every interactive zsh start also printed a "no matches
