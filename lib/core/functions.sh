@@ -839,9 +839,16 @@ _wb_print_unavailable_block() {
 # — verbatim from the donor codebase, already domain-agnostic. Private
 # (_-prefixed) functions are always excluded from the function extractor;
 # there's no equivalent alias convention so none are excluded there.
+#
+# _extract_function_names matches all three definition forms, with or
+# without leading whitespace: `name()`, `function name() {` and
+# `function name {` (docs/decisions-log.md D89).
 _extract_function_names() {
-    grep -Eho '^[[:space:]]*[a-zA-Z_-][a-zA-Z0-9_-]*[[:space:]]*\(\)' "$@" 2>/dev/null \
-        | sed -E 's/^[[:space:]]*//; s/[[:space:]]*\(\)$//' \
+    grep -Eho \
+        -e '^[[:space:]]*[a-zA-Z_-][a-zA-Z0-9_-]*[[:space:]]*\(\)' \
+        -e '^[[:space:]]*function[[:space:]]+[a-zA-Z_-][a-zA-Z0-9_-]*' \
+        "$@" 2>/dev/null \
+        | sed -E 's/^[[:space:]]*//; s/^function[[:space:]]+//; s/[[:space:]]*\(\)$//' \
         | grep -v '^_' \
         | sort -u
 }
@@ -905,6 +912,63 @@ _get_aliases_in() {
     fi
     _wb_print_unavailable_block "${_label}" "${_names_all}" "${_names}" aliases
     echo
+}
+
+# _wb_module_getter <module> <function>
+# The body of every core-generated getter (docs/decisions-log.md D89).
+# Lists the functions and aliases in <module>'s registered shell files —
+# the same files the loader sources, read from its register.list — so it
+# needs no BASH_SOURCE and works the same in bash and zsh. Platform and
+# distro files that don't apply to this host are skipped, same rule as the
+# loader. The label comes from the module's getters.list.
+_wb_module_getter() {
+    local _module="$1" _fn="$2"
+    local _root _dir _label="" _line_fn _line_label _path _tier _base
+    local -a _files=()
+
+    if command -v workbench_modules_dir &>/dev/null; then
+        _root="$(workbench_modules_dir)"
+    else
+        _root="${WORKBENCH_MODULES_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/modules}"
+    fi
+    _dir="${_root}/${_module}"
+
+    if [[ -f "${_dir}/getters.list" ]]; then
+        while IFS='|' read -r _line_fn _line_label; do
+            if [[ "${_line_fn}" == "${_fn}" ]]; then
+                _label="${_line_label}"
+                break
+            fi
+        done < "${_dir}/getters.list"
+    fi
+    [[ -n "${_label}" ]] || _label="${_module}"
+
+    if [[ -f "${_dir}/register.list" ]]; then
+        while IFS='|' read -r _path _tier; do
+            [[ -z "${_path}" ]] && continue
+            case "${_tier}" in
+                platform|distro)
+                    _base="$(basename "${_path}" .sh)"
+                    if command -v _wb_loader_should_source_by_name &>/dev/null; then
+                        _wb_loader_should_source_by_name "${_tier}" "${_base}" || continue
+                    fi
+                    ;;
+            esac
+            _files+=("${_path}")
+        done < "${_dir}/register.list"
+    fi
+
+    if [[ "${#_files[@]}" -eq 0 ]]; then
+        echo
+        echo "[INFO] ${_label}: no shell content registered"
+        echo
+        return 0
+    fi
+
+    _get_functions_in "${_label} — functions" "" "${_files[@]}"
+    if [[ -n "$(_extract_alias_names "${_files[@]}")" ]]; then
+        _get_aliases_in "${_label} — aliases" "" "${_files[@]}"
+    fi
 }
 
 # _wb_print_live_names <label> <newline-separated names>
