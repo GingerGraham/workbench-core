@@ -3,8 +3,7 @@
 #
 # Hot-path registration: writes sync.conf, bootstraps SSH if private, then
 # runs one real sync cycle immediately (workbench_sync_module) — the exact
-# same function `wb apply`'s Ansible-driven convergence and the timer both
-# call. This IS the §8 convergence constraint: `wb add` writes a strict
+# same function `wb apply`'s convergence and the timer both call. This IS the §8 convergence constraint: `wb add` writes a strict
 # subset of what a full `wb apply` would produce for the same input, by
 # construction, because it invokes the identical engine rather than a
 # second implementation of "fetch and register a module."

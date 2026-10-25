@@ -86,16 +86,6 @@ regardless of gating.
   re-run `wb update <name>` once the key is added — nothing else needs
   re-doing.
 
-## `wb install`'s Ansible step failed
-
-The pure-shell bootstrap (prereqs, core registration, the loader stub)
-already ran and produced a working shell *before* Ansible was invoked — an
-Ansible failure here is never fatal to having a working shell. It usually
-means either `ansible-core` itself needs attention (check
-`ansible-playbook --version` is >= 2.14) or a module declared in
-`ansible/host_vars/localhost.yml` couldn't be reached; the printed error
-names which task failed.
-
 ## Modules aren't syncing automatically — I have to run `wb update` by hand
 
 `wb install`/`wb apply` install a fixed-interval OS timer (systemd user
