@@ -244,6 +244,7 @@ _wb_converge_module_registrations() {
         [[ -z "${name}" ]] && continue
         workbench_render_register_list "${name}"
         workbench_render_installers_list "${name}"
+        workbench_render_getters_list "${name}"
     done < <(workbench_list_loadable_modules)
 }
 

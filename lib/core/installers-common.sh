@@ -198,6 +198,19 @@ _wb_gh_asset_digest() {
         | sed -n 's/^sha256://p'
 }
 
+# _wb_gh_release_asset_url <releases-api-json> <ERE>
+# Prints the first browser_download_url in <releases-api-json> matching
+# <ERE>, or nothing. Promoted from identical private copies in
+# workbench-desktop, -devtools, -git and -shell (docs/decisions-log.md D90).
+_wb_gh_release_asset_url() {
+    local api_response="$1" pattern="$2"
+    printf '%s' "${api_response}" \
+        | grep -Eo '"browser_download_url": *"[^"]+"' \
+        | sed -E 's/.*"(https[^"]+)"/\1/' \
+        | grep -E "${pattern}" \
+        | head -1
+}
+
 # _wb_fetch_verified <url> <dest> <expectation> [asset-name]
 # Downloads <url>, verifies its SHA-256, and only then moves it to <dest>.
 # Fails closed: any missing, malformed or mismatching hash leaves <dest>
