@@ -9,7 +9,7 @@
 # second implementation of "fetch and register a module."
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/add.sh" "0.5.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/add.sh" "0.5.1" || true
 
 # workbench_cmd_add <name> [url] [--private] [--allow-hooks] [--keep-files | --use-files [--follow] [--yes]] [--skip-layer <id>]...
 # The first sync is staged (docs/decisions-log.md D84): fetched, nothing
