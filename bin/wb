@@ -786,7 +786,7 @@ _wb_status_check_rendered_lists() {
 }
 
 _wb_cmd_status() {
-    local name mode ref sha enabled registered hooks_pending fast="no"
+    local name mode ref sha enabled registered hooks_pending held_core_api fast="no"
     [[ "$(workbench_cadence_seconds)" -eq "${WORKBENCH_CADENCE_FAST_SECONDS}" ]] && fast="yes"
 
     printf '%-20s %-10s %-20s %-10s %-10s %-10s %-14s\n' "MODULE" "MODE" "REF" "SHA" "SYNC" "REGISTERED" "HOOKS_PENDING"
@@ -799,6 +799,11 @@ _wb_cmd_status() {
         registered="$(workbench_module_conf_get "${name}" REGISTERED true)"
         hooks_pending="$(workbench_module_conf_get "${name}" HOOKS_PENDING false)"
         printf '%-20s %-10s %-20s %-10s %-10s %-10s %-14s\n' "${name}" "${mode}" "${ref:--}" "${sha:0:10}" "${enabled}" "${registered}" "${hooks_pending}"
+        # D91: a newer release this host's Core API can't run yet.
+        held_core_api="$(workbench_module_conf_get "${name}" HELD_CORE_API "")"
+        if [[ -n "${held_core_api}" ]]; then
+            printf "  %s held: needs Core API %s — run 'wb update core'\n" "${name}" "${held_core_api}"
+        fi
     done < <(workbench_list_all_modules)
 
     echo
