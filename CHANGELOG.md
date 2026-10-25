@@ -29,6 +29,13 @@ All notable changes to `workbench-core` are documented here.
   splitting that zsh doesn't do, so an interactive zsh loaded no module
   functions at all. Every interactive zsh start also printed a "no matches
   found" error for the pending-files check; it no longer does (D89).
+- **A module release that needs a newer workbench-core no longer leaves the
+  module empty.** The Core API check now runs before the new release is
+  switched in: the module stays on the release it is on, `wb status` shows
+  `held: needs Core API <range> — run 'wb update core'`, and the release is
+  adopted once core supports it. Previously the module lost all its shell
+  functions and later syncs reported it up to date. See
+  `docs/decisions-log.md` D91.
 - **One installer can no longer end a `wb tools install all` or `wb tools
   upgrade all` run.** Each installer and each `installed-*` check now runs
   in its own subshell without `wb`'s strict-mode options, so an unset
