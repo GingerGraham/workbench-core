@@ -4,6 +4,16 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A module release that needs a newer workbench-core no longer leaves the
+  module empty.** The Core API check now runs before the new release is
+  switched in: the module stays on the release it is on, `wb status` shows
+  `held: needs Core API <range> — run 'wb update core'`, and the release is
+  adopted once core supports it. Previously the module lost all its shell
+  functions and later syncs reported it up to date. See
+  `docs/decisions-log.md` D91.
+
 ## [2.20.2] - 2026-10-24
 
 ### Fixed
