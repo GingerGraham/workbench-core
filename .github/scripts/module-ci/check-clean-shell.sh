@@ -76,6 +76,19 @@ fi
 # wb apply writes ~/.zshrc only when one exists or it runs under zsh.
 [[ -f "${HOME}/.zshrc" ]] || cp "${HOME}/.bashrc" "${HOME}/.zshrc"
 
+# ── zsh on Linux runners ────────────────────────────────────────────────────
+# Each module pins its own copy of module-ci.yml, and pins older than
+# v2.21.0 have no "Install zsh" step, while this script always comes from
+# core's latest release (D40). So install zsh here when it's missing rather
+# than depend on the caller's workflow version (docs/decisions-log.md D95).
+if ! command -v zsh &>/dev/null && [[ "$(uname -s)" == "Linux" ]] \
+    && command -v apt-get &>/dev/null && sudo -n true 2>/dev/null; then
+    echo "clean-shell: zsh not installed — installing it (apt-get)"
+    sudo -n apt-get update -q >/dev/null 2>&1
+    sudo -n apt-get install -y -q zsh >/dev/null 2>&1 \
+        || echo "clean-shell: apt-get install zsh failed"
+fi
+
 # ── Bare PATH: core's required prereqs, baseline utilities, the shells ─────
 BARE_BIN="${SCRATCH}/bare-bin"
 mkdir -p "${BARE_BIN}"
@@ -84,6 +97,8 @@ baseline=(
     cat cp mv rm mkdir rmdir ln ls touch chmod readlink basename dirname
     head tail sort uniq wc cut tee date env mktemp id groups printf test expr
     find xargs stat hostname tput
+    # macOS's /etc/zshrc runs `locale` in every interactive zsh (D95).
+    locale
 )
 for bin in "${_WB_SHELL_PREREQS_REQUIRED[@]}" "${baseline[@]}"; do
     path="$(command -v "${bin}" 2>/dev/null)"

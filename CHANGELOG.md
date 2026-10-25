@@ -4,6 +4,15 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Module CI's clean-shell check works with every module's workflow pin.**
+  It installs zsh itself on Linux runners that don't have it (modules pin
+  older `module-ci.yml` versions without the install step), and its bare
+  `PATH` includes `locale`, which macOS's `/etc/zshrc` runs. Changes to
+  `.github/scripts/module-ci/` now trigger a core release on their own, so
+  fixes like this one reach module CI. See `docs/decisions-log.md` D95.
+
 ## [2.21.0] - 2026-10-25
 
 ### Added
