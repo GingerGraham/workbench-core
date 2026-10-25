@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # tests/check-module-ci-release-trigger.sh — acceptance check for
 # .github/scripts/release/detect-module-ci-changes.sh (security review
-# follow-up R3, docs/decisions-log.md D80): changes to .github/actions/** or
-# .github/workflows/module-*.yml since the last tag must ask for a patch
-# release; nothing else may.
+# follow-up R3, docs/decisions-log.md D80, D95): changes to .github/actions/**,
+# .github/workflows/module-*.yml or .github/scripts/module-ci/** since the
+# last tag must ask for a patch release; nothing else may.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -61,6 +61,16 @@ if [[ "${out}" == "force_severity=" ]]; then ok "after a new tag the previous ch
 commit_file .github/workflows/module-ci.yml
 out="$(run_detect)"
 if grep -qx 'force_severity=patch' <<< "${out}"; then ok ".github/workflows/module-*.yml change forces a patch release"; else fail "module-ci.yml: got [${out}]"; fi
+
+# 7-8. Only a module-CI script changed (D95), and a sibling release script
+#      (not consumed by module CI) still doesn't count.
+git tag v1.0.2
+commit_file .github/scripts/release/compute-bumps.sh
+out="$(run_detect)"
+if [[ "${out}" == "force_severity=" ]]; then ok ".github/scripts/release/ change does not force a release"; else fail "release script: got [${out}]"; fi
+commit_file .github/scripts/module-ci/check-clean-shell.sh
+out="$(run_detect)"
+if grep -qx 'force_severity=patch' <<< "${out}"; then ok ".github/scripts/module-ci/** change forces a patch release (D95)"; else fail "module-ci script: got [${out}]"; fi
 
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
