@@ -172,7 +172,11 @@ else
 fi
 
 # run_in_shell <bash|zsh> <commands> — source the real loader in a clean
-# environment, then run <commands>.
+# environment, then run <commands>. skip_global_compinit: Ubuntu's
+# /etc/zsh/zshrc runs compinit in every interactive zsh, and on a GitHub
+# runner compinit finds an fpath directory it calls insecure and, with no
+# terminal to ask on, prints "compinit: initialization aborted" — system
+# noise, not the loader's. Setting it is the documented opt-out.
 run_in_shell() {
     local shell="$1" cmds="$2" flag="-c"
     [[ "${shell}" == "zsh" ]] && flag="-ic"
@@ -183,6 +187,7 @@ run_in_shell() {
         XDG_CACHE_HOME="${XDG_CACHE_HOME}" \
         WORKBENCH_USER_EXT_ENABLED=false \
         TERM=dumb \
+        skip_global_compinit=1 \
         PATH="${PATH}" \
         "${shell}" "${flag}" "source '${REPO_ROOT}/lib/loader.sh'; ${cmds}"
 }
