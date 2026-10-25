@@ -360,6 +360,7 @@ EOF
 
 _wb_cmd_install() {
     local bundle="" use_files="false" keep_files="false" follow="false" yes="false"
+    local -a failed_members=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --use-files) use_files="true" ;;
@@ -399,6 +400,16 @@ _wb_cmd_install() {
         return 1
     fi
 
+    # An unknown bundle is a usage error, caught before anything is checked,
+    # installed or written (D88).
+    if [[ -n "${bundle}" ]]; then
+        _wb_require modules/catalog.sh
+        if ! workbench_catalog_bundle_modules "${bundle}" >/dev/null; then
+            log_error "wb install: no bundle named '${bundle}'. Known bundles: $(workbench_catalog_list_bundles | tr '\n' ' ')— nothing was changed."
+            return 2
+        fi
+    fi
+
     log_info "wb install: workbench-core release: $(_workbench_release_version)"
     log_info "wb install: checking prerequisites..."
     workbench_check_shell_prereqs >/dev/null
@@ -436,7 +447,11 @@ _wb_cmd_install() {
                 log_info "wb install: '${member}' is already registered"
                 continue
             fi
-            workbench_cmd_add "${member}" --stage-only </dev/null && staged+=("${member}")
+            if workbench_cmd_add "${member}" --stage-only </dev/null; then
+                staged+=("${member}")
+            else
+                failed_members+=("${member}")
+            fi
         done < <(workbench_catalog_bundle_modules "${bundle}")
         # One plan and one question across the whole bundle, after the
         # loop (D84). Modules registered before keep D81's --use-files.
@@ -464,6 +479,11 @@ _wb_cmd_install() {
     workbench_scheduler_install
 
     log_info "wb install: done. Start a new shell (or 'source ~/.bashrc') to load workbench-core."
+
+    if [[ "${#failed_members[@]}" -gt 0 ]]; then
+        log_error "wb install: these bundle modules were not registered: ${failed_members[*]} — run 'wb add <name>' for each to see why"
+        return 1
+    fi
 }
 
 _wb_cmd_apply() {
