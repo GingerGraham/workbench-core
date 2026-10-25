@@ -162,6 +162,22 @@ if [[ -x "${MODULE_ROOT}/tests/check-add-to-core.sh" ]]; then
     fi
 fi
 
+# 8b. Clean shell start (docs/decisions-log.md D94): no register.shell file
+#     calls install-*, and with core plus this module registered,
+#     interactive bash and zsh start with empty stderr and every getter
+#     lists something — with tools absent and with the runner's PATH. Its
+#     own script: it runs 'wb apply' to register core and write the rc
+#     stubs, so it goes after every check above and before 'wb remove'.
+export HOME XDG_DATA_HOME XDG_CONFIG_HOME
+if WB="${WB}" MODULE_NAME="${MODULE_NAME}" MODULE_ROOT="${MODULE_ROOT}" \
+    "$(dirname "${BASH_SOURCE[0]}")/check-clean-shell.sh" >"${WORK}/clean-shell.log" 2>&1; then
+    ok "clean shell start (check-clean-shell.sh)"
+    cat "${WORK}/clean-shell.log"
+else
+    fail "clean shell start (check-clean-shell.sh):"
+    cat "${WORK}/clean-shell.log"
+fi
+
 # 9. wb remove deregisters cleanly. Non-destructive by design
 #    (lib/modules/remove.sh) -- assert the REGISTERED flag flips, not that
 #    deployed content disappears.
