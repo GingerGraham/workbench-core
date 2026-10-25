@@ -81,6 +81,7 @@ there rather than just reading key/value pairs (`workbench_module_conf_get`,
 | `HOOKS_PENDING` | `true`/`false` — a hook was deferred by an unattended sync and is owed a run on the next interactive one | `false` |
 | `PENDING_SHA` | A newly-resolved `latest` release currently held in cooldown, not yet adopted (docs/decisions-log.md D77) | — |
 | `PENDING_SINCE` | Unix epoch seconds this host first saw `PENDING_SHA` — measured against `RELEASE_COOLDOWN_DAYS` | — |
+| `HELD_CORE_API` | The `core_api` range of a fetched release this host's Core API doesn't satisfy; the module stays on its current release until core is updated, and `wb status` shows it. Cleared when a release is adopted (docs/decisions-log.md D91) | — |
 
 ### `scheduler.conf`
 

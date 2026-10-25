@@ -304,21 +304,28 @@ workbench_render_register_list() {
     manifest="$(workbench_resolve_manifest_path "${current_dir}")"
     reglist="$(workbench_module_dir "${name}")/register.list"
 
-    : > "${reglist}"
-    [[ -f "${manifest}" ]] || return 0
+    if [[ ! -f "${manifest}" ]]; then
+        : > "${reglist}"
+        return 0
+    fi
 
     local core_api
     core_api="$(workbench_manifest_scalar core_api "${manifest}")"
-    [[ -z "${core_api}" ]] && return 0
+    if [[ -z "${core_api}" ]]; then
+        : > "${reglist}"
+        return 0
+    fi
 
     if command -v _workbench_core_api_version &>/dev/null; then
         local running
         running="$(_workbench_core_api_version)"
         if [[ -n "${running}" ]] && ! _wb_version_satisfies "${running}" "${core_api}"; then
-            log_error "workbench_render_register_list: ${name}: declares core_api '${core_api}', running Core API is ${running} — refusing to register its shell content"
+            log_error "workbench_render_register_list: ${name}: declares core_api '${core_api}', running Core API is ${running} — refusing to register its shell content (the existing list is left as it was)"
             return 1
         fi
     fi
+
+    : > "${reglist}"
 
     while IFS='|' read -r src tier; do
         [[ -z "${src}" ]] && continue
@@ -408,21 +415,28 @@ workbench_render_installers_list() {
     manifest="$(workbench_resolve_manifest_path "${current_dir}")"
     instlist="$(workbench_module_dir "${name}")/installers.list"
 
-    : > "${instlist}"
-    [[ -f "${manifest}" ]] || return 0
+    if [[ ! -f "${manifest}" ]]; then
+        : > "${instlist}"
+        return 0
+    fi
 
     local core_api
     core_api="$(workbench_manifest_scalar core_api "${manifest}")"
-    [[ -z "${core_api}" ]] && return 0
+    if [[ -z "${core_api}" ]]; then
+        : > "${instlist}"
+        return 0
+    fi
 
     if command -v _workbench_core_api_version &>/dev/null; then
         local running
         running="$(_workbench_core_api_version)"
         if [[ -n "${running}" ]] && ! _wb_version_satisfies "${running}" "${core_api}"; then
-            log_error "workbench_render_installers_list: ${name}: declares core_api '${core_api}', running Core API is ${running} — refusing to register its installers"
+            log_error "workbench_render_installers_list: ${name}: declares core_api '${core_api}', running Core API is ${running} — refusing to register its installers (the existing list is left as it was)"
             return 1
         fi
     fi
+
+    : > "${instlist}"
 
     while IFS= read -r src; do
         [[ -z "${src}" ]] && continue
@@ -772,6 +786,22 @@ workbench_sync_module() {
             log_error "${name}: $(basename -- "${new_manifest}") failed path-safety validation — refusing to sync (previous snapshot, if any, stays current)"
             return 1
         fi
+
+        # D91: the Core API gate, before the swap — same refuse-and-hold
+        # semantics as the version gate above. The module stays on the
+        # release it is on until this host's core supports the new one.
+        # Like the version gate, the fetched snapshot is left on disk and
+        # the check repeats every cycle the mismatch persists.
+        local new_core_api running_api
+        new_core_api="$(workbench_manifest_scalar core_api "${new_manifest}")"
+        if [[ -n "${new_core_api}" ]] && command -v _workbench_core_api_version &>/dev/null; then
+            running_api="$(_workbench_core_api_version)"
+            if [[ -n "${running_api}" ]] && ! _wb_version_satisfies "${running_api}" "${new_core_api}"; then
+                log_error "${name}: ${ref_label} (${shortsha}) needs Core API '${new_core_api}', this host has ${running_api} — staying on the current release until workbench-core is updated ('wb update core')"
+                workbench_module_conf_set "${name}" HELD_CORE_API "${new_core_api}"
+                return 1
+            fi
+        fi
     fi
 
     # D81: record the new snapshot's checksums, then make sure no change
@@ -803,6 +833,7 @@ workbench_sync_module() {
     workbench_module_conf_set "${name}" TRACK_REF "${ref_value:-${ref_label}}"
     workbench_module_conf_set "${name}" PENDING_SHA ""
     workbench_module_conf_set "${name}" PENDING_SINCE ""
+    workbench_module_conf_set "${name}" HELD_CORE_API ""
     _wb_adoption_log_event "adopt" "${name}" "${current_sha}" "${new_sha}" "${ref_label}" "${reason}"
 
     workbench_render_register_list "${name}"
