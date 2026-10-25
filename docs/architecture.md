@@ -653,10 +653,12 @@ bundles:
   workstation: [git, gpg, ssh, shell]
   server:      [git, ssh, shell]
   minimal:     [git, ssh]
+  full:        [every module in the catalog]   # D88
 ```
 
-Default bundles mirror today's three `dotfiles` profiles for continuity, but
-this is convenience only — `wb install --bundle workstation` is exactly
+`workstation`, `server` and `minimal` mirror today's three `dotfiles`
+profiles for continuity; `full` is every catalog module
+(`docs/decisions-log.md` D88). Bundles are convenience only — `wb install --bundle workstation` is exactly
 equivalent to four `wb add` calls, nothing more. The catalog is empty of
 real URLs until Wave C's module repos exist; the *structure* ships in
 Wave B so `wb add <n>`/`wb install --bundle` have somewhere to resolve
