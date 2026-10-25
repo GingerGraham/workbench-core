@@ -19,6 +19,15 @@ All notable changes to `workbench-core` are documented here.
   private copies in modules (Core API 1.8, D90).
 - Function listings now include functions written as `function name {`.
 
+### Changed
+
+- **Module CI checks that a shell starts clean.** With only core and the
+  module registered, interactive bash and zsh must start with nothing on
+  stderr (with and without the module's tools installed), every declared
+  getter must list something in both shells, and no `register.shell` file
+  may call an `install-*` function — say `wb tools install <name>`
+  instead. See `docs/module-authoring.md` and `docs/decisions-log.md` D94.
+
 ### Removed
 
 - **Ansible.** `wb install`/`wb apply` no longer have an Ansible step or

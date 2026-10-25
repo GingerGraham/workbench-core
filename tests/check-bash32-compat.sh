@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # tests/check-bash32-compat.sh
-# Greps lib/ for bash-4+-only constructs that silently break (or hard-error)
-# on bash 3.2 — macOS's default /bin/bash, and a hard compatibility
-# requirement for the Core API library and loader (docs/architecture.md §6/§7
-# item 11, build brief §2). Fails if any are found.
+# Greps bin/, bootstrap.sh, lib/, tests/ and .github/scripts/ for
+# bash-4+-only constructs that silently break (or hard-error) on bash 3.2 —
+# macOS's default /bin/bash, and a hard compatibility requirement for
+# everything AGENTS.md lists (docs/architecture.md §6/§7 item 11, build brief
+# §2). .github/scripts/ may use bash 4 (it runs only on GitHub-hosted
+# runners) but by convention avoids these too (CONTRIBUTING.md). This file
+# is excluded: its own pattern table would match. Fails if any are found.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,12 +20,15 @@ fail() { check_no=$((check_no + 1)); echo "FAIL: [$check_no] $*"; FAILED=$((FAIL
 
 # Each pattern: description|grep -E pattern
 declare -a _checks=(
-    "declare -A (associative arrays, bash 4+)|declare[[:space:]]+-A"
+    "declare/local/typeset -A (associative arrays, bash 4+)|(declare|local|typeset)[[:space:]]+-A"
     "mapfile/readarray (bash 4+)|(^|[^[:alnum:]_])(mapfile|readarray)([^[:alnum:]_]|\$)"
     "shopt -s globstar (bash 4+)|shopt[[:space:]]+-s[[:space:]]+globstar"
     "\${var,,} / \${var^^} case conversion (bash 4+)|\\\$\\{[a-zA-Z_][a-zA-Z0-9_]*(,,|\\^\\^)"
     "declare -n nameref (bash 4.3+)|declare[[:space:]]+-n"
+    "\${var@Q}-style transforms (bash 4.4+)|\\\$\\{[a-zA-Z_][a-zA-Z0-9_]*@[QEPAa]\\}"
 )
+
+SELF="${REPO_ROOT}/tests/check-bash32-compat.sh"
 
 # Comment-only lines (first non-whitespace char is #) are stripped before
 # matching — this file's own header comments, and several lib/ files',
@@ -33,15 +39,17 @@ for entry in "${_checks[@]}"; do
     pattern="${entry#*|}"
     hit_files=""
     while IFS= read -r -d '' f; do
+        [[ "${f}" == "${SELF}" ]] && continue
         if grep -vE '^[[:space:]]*#' "${f}" | grep -qE "${pattern}"; then
             hit_files="${hit_files}${f}"$'\n'
         fi
-    done < <(find "${REPO_ROOT}/lib" -type f -print0)
+    done < <(find "${REPO_ROOT}/bin" "${REPO_ROOT}/bootstrap.sh" "${REPO_ROOT}/lib" \
+                  "${REPO_ROOT}/tests" "${REPO_ROOT}/.github/scripts" -type f -print0)
     if [[ -n "${hit_files}" ]]; then
         fail "${desc} found in:"
         printf '%s' "${hit_files}" | while IFS= read -r f; do echo "        ${f}"; done
     else
-        ok "no ${desc} in lib/"
+        ok "no ${desc} in bin/, bootstrap.sh, lib/, tests/, .github/scripts/"
     fi
 done
 

@@ -705,6 +705,21 @@ It runs, on every PR:
   deregisters cleanly. Runs with `--allow-hooks`, so your `hooks:` content
   executes for real, against an isolated scratch `HOME`/`XDG_*` — never
   the runner's own environment.
+- **clean shell start** (part of "add to core", `docs/decisions-log.md`
+  D94) — with only core and your module registered:
+  - No `register.shell` file calls an `install-*` function outside a
+    comment line — not in code, not in a message. Installer files are
+    never sourced into the user's shell, so a call fails and a message
+    points at a command that doesn't exist; say
+    `wb tools install <name>` (or `wb tools upgrade <name>`) instead.
+  - Interactive bash and zsh start with nothing on stderr, both with a
+    bare `PATH` (core's required prerequisites and basic utilities only —
+    none of the tools your module wraps) and with the runner's normal
+    `PATH`. Guard every call to an optional tool (`command -v direnv
+    &>/dev/null && eval "$(direnv hook bash)"`), and use only Core API
+    functions your declared `core_api` floor provides.
+  - Every `register.getters[]` function exits 0 and prints at least one
+    `[INFO]` header, in both shells, with that bare `PATH`.
 
 The `workbench-core` ref this checks against defaults to core's latest
 published GitHub Release, not `main` — override it with the

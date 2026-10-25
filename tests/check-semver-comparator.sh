@@ -18,24 +18,20 @@ ok()   { check_no=$((check_no + 1)); echo "OK:   [$check_no] $*"; }
 fail() { check_no=$((check_no + 1)); echo "FAIL: [$check_no] $*"; FAILED=$((FAILED + 1)); }
 
 # ── Clean-tag filtering ──────────────────────────────────────────────────────
-declare -A expect=(
-    [v1.2.3]=clean
-    [v1.10.0]=clean
-    [v0.0.1]=clean
-    [1.2.3]=clean
-    [2.5.6]=clean
-    [1.2]=not
-    [v1.2]=not
-    [1.2.3.4]=not
-    [v1.2.3.4]=not
-    [1.2.3-rc1]=not
-    [v1.2.3-rc1]=not
-    [v1.2.3+build5]=not
-    [vX.Y.Z]=not
-    [release]=not
+# Two parallel indexed arrays walked by index — bash 3.2 has no associative
+# arrays.
+tags=(
+    v1.2.3 v1.10.0 v0.0.1 1.2.3 2.5.6
+    1.2 v1.2 1.2.3.4 v1.2.3.4 1.2.3-rc1 v1.2.3-rc1 v1.2.3+build5 vX.Y.Z release
 )
-for tag in "${!expect[@]}"; do
-    if [[ "${expect[${tag}]}" == "clean" ]]; then
+expect=(
+    clean clean clean clean clean
+    not not not not not not not not not
+)
+i=0
+while [[ "${i}" -lt "${#tags[@]}" ]]; do
+    tag="${tags[${i}]}"
+    if [[ "${expect[${i}]}" == "clean" ]]; then
         if _wb_semver_is_clean_tag "${tag}"; then
             ok "'${tag}' correctly recognised as a clean tag"
         else
@@ -48,6 +44,7 @@ for tag in "${!expect[@]}"; do
             ok "'${tag}' correctly excluded from clean-tag filtering"
         fi
     fi
+    i=$((i + 1))
 done
 
 # ── Comparison correctness (naive string sort would get this wrong) ────────

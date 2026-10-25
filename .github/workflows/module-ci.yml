@@ -183,6 +183,12 @@ jobs:
           chmod +x /tmp/yq
           echo "/tmp" >> "$GITHUB_PATH"
 
+      # check-clean-shell.sh starts interactive zsh as well as bash (D94);
+      # macOS ships zsh, ubuntu runners don't.
+      - name: Install zsh
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q zsh
+
       - name: Resolve module ref under test
         id: ref
         shell: bash
