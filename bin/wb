@@ -1079,22 +1079,31 @@ _wb_tools_invoke() {
     # require them here, before the module's file is sourced and called.
     _wb_require core/installers-common.sh
 
-    if ! command -v "${func}" &>/dev/null; then
-        if [[ ! -f "${abs_path}" ]]; then
-            log_error "wb tools ${verb}: ${friendly} (${name}): installer file not found: ${abs_path}"
-            return 1
+    # D93: each installer runs in its own subshell with errexit, nounset and
+    # pipefail off. Module installers are written for an interactive shell,
+    # which sets none of them; under this file's `set -u` an unbound
+    # variable, or an installer's own `exit`, would end the whole wb process
+    # and every tool after it in an `all` run. Sourcing happens inside the
+    # subshell too: a file can trip nounset at source time.
+    (
+        set +e +u +o pipefail
+        if ! command -v "${func}" &>/dev/null; then
+            if [[ ! -f "${abs_path}" ]]; then
+                log_error "wb tools ${verb}: ${friendly} (${name}): installer file not found: ${abs_path}"
+                exit 1
+            fi
+            # shellcheck disable=SC1090
+            source "${abs_path}"
         fi
-        # shellcheck disable=SC1090
-        source "${abs_path}"
-    fi
 
-    if ! command -v "${func}" &>/dev/null; then
-        log_error "wb tools ${verb}: ${friendly} (${name}): '${func}' is not a function after sourcing ${abs_path}"
-        return 1
-    fi
+        if ! command -v "${func}" &>/dev/null; then
+            log_error "wb tools ${verb}: ${friendly} (${name}): '${func}' is not a function after sourcing ${abs_path}"
+            exit 1
+        fi
 
-    log_info "wb tools ${verb}: ${friendly} (${name}): running ${func}..."
-    "${func}"
+        log_info "wb tools ${verb}: ${friendly} (${name}): running ${func}..."
+        "${func}"
+    )
 }
 
 # _wb_tools_check_installed <module> <abs-path> <install-func> <friendly-name>
@@ -1119,23 +1128,28 @@ _wb_tools_check_installed() {
     local name="$1" abs_path="$2" install_func="$3" friendly="$4"
     local predicate="installed-${friendly}"
 
-    if ! command -v "${predicate}" &>/dev/null && [[ -f "${abs_path}" ]]; then
-        # shellcheck disable=SC1090
-        source "${abs_path}"
-    fi
+    # D93: same isolation as _wb_tools_invoke — a predicate (or its file)
+    # that trips nounset or calls `exit` must not end the wb process.
+    (
+        set +e +u +o pipefail
+        if ! command -v "${predicate}" &>/dev/null && [[ -f "${abs_path}" ]]; then
+            # shellcheck disable=SC1090
+            source "${abs_path}"
+        fi
 
-    if ! command -v "${predicate}" &>/dev/null; then
-        echo "unresponsive"
-        return 0
-    fi
+        if ! command -v "${predicate}" &>/dev/null; then
+            echo "unresponsive"
+            exit 0
+        fi
 
-    "${predicate}" &>/dev/null
-    local rc=$?
-    case "${rc}" in
-        0) echo "installed" ;;
-        1) echo "not-installed" ;;
-        *) echo "unresponsive" ;;
-    esac
+        "${predicate}" &>/dev/null
+        rc=$?
+        case "${rc}" in
+            0) echo "installed" ;;
+            1) echo "not-installed" ;;
+            *) echo "unresponsive" ;;
+        esac
+    )
 }
 
 # _wb_cmd_tools_install <name>|all
@@ -1197,11 +1211,22 @@ _wb_cmd_tools_install() {
             ;;
     esac
 
-    local failures=0
-    while IFS='|' read -r name abs_path func friendly; do
+    local failures=0 failed_names="" rc
+    # fd 3, not stdin: an installer that reads stdin (a prompt, a package
+    # manager without -y) must not swallow the rest of the tool list.
+    while IFS='|' read -r name abs_path func friendly <&3; do
         [[ -z "${friendly}" ]] && continue
-        _wb_tools_invoke "install" "${name}" "${abs_path}" "${func}" "${friendly}" || failures=$((failures + 1))
-    done < <(workbench_tools_collect)
+        _wb_tools_invoke "install" "${name}" "${abs_path}" "${func}" "${friendly}"
+        rc=$?
+        if [[ "${rc}" -ne 0 ]]; then
+            log_error "wb tools install: ${friendly} (${name}): failed (exit ${rc})"
+            failures=$((failures + 1))
+            failed_names="${failed_names} ${friendly}"
+        fi
+    done 3< <(workbench_tools_collect)
+    if [[ "${failures}" -gt 0 ]]; then
+        log_error "wb tools install: ${failures} tool(s) failed:${failed_names}"
+    fi
     return "${failures}"
 }
 
@@ -1256,7 +1281,9 @@ _wb_cmd_tools_upgrade() {
 
     local name abs_path func friendly status any="false"
     local upgraded_count=0 failed_count=0 unresponsive_count=0 unresponsive_names=""
-    while IFS='|' read -r name abs_path func friendly; do
+    # fd 3, not stdin: an installer that reads stdin (a prompt, a package
+    # manager without -y) must not swallow the rest of the tool list.
+    while IFS='|' read -r name abs_path func friendly <&3; do
         [[ -z "${friendly}" ]] && continue
         any="true"
         status="$(_wb_tools_check_installed "${name}" "${abs_path}" "${func}" "${friendly}")"
@@ -1265,6 +1292,7 @@ _wb_cmd_tools_upgrade() {
                 if _wb_tools_invoke "upgrade" "${name}" "${abs_path}" "${func}" "${friendly}"; then
                     upgraded_count=$((upgraded_count + 1))
                 else
+                    log_error "wb tools upgrade: ${friendly} (${name}): failed"
                     failed_count=$((failed_count + 1))
                 fi
                 ;;
@@ -1277,7 +1305,7 @@ _wb_cmd_tools_upgrade() {
 "
                 ;;
         esac
-    done < <(workbench_tools_collect)
+    done 3< <(workbench_tools_collect)
 
     if [[ "${any}" == "false" ]]; then
         log_info "wb tools upgrade: nothing discovered — nothing to do."
