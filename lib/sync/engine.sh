@@ -342,8 +342,9 @@ workbench_render_register_list() {
 # a warning (and again by the loader). The label is never evaluated; `|`,
 # tabs and newlines are stripped from it so it stays one field on one line.
 #
-# The core_api refusal leaves an existing getters.list in place: the list
-# is only truncated once the check has passed (docs/decisions-log.md D91).
+# A core_api refusal leaves an existing getters.list in place: the list is
+# only truncated once the check has passed, so a re-render after core was
+# pinned back doesn't strip a module's getters (docs/decisions-log.md D89).
 workbench_render_getters_list() {
     local name="$1"
     local current_dir manifest getlist getter_name getter_fn getter_label
