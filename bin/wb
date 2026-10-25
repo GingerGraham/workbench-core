@@ -126,11 +126,10 @@ DAILY USE
                                modules told you how to install current.
 
 SETUP & HOST-LEVEL CONVERGENCE
-  install [--bundle <name> [--use-files [--follow]]] [--skip-ansible]
+  install [--bundle <name> [--use-files [--follow]]]
                                First-run setup: prereqs, core bootstrap, PATH
-                               symlink, shell rc stub, SSH deploy keys,
-                               Ansible.
-  apply [--skip-ansible]      Re-run the same setup as 'install', non-
+                               symlink, shell rc stub, SSH deploy keys.
+  apply                       Re-run the same setup as 'install', non-
                                interactively. 'wb update core' already
                                triggers this automatically when core
                                changes — run by hand for anything else.
@@ -361,7 +360,7 @@ EOF
 }
 
 _wb_cmd_install() {
-    local bundle="" skip_ansible="false" use_files="false" keep_files="false" follow="false" yes="false"
+    local bundle="" use_files="false" keep_files="false" follow="false" yes="false"
     local -a failed_members=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -376,7 +375,9 @@ _wb_cmd_install() {
                 fi
                 bundle="$2"; shift
                 ;;
-            --skip-ansible) skip_ansible="true" ;;
+            # Accepted and ignored (docs/decisions-log.md D92): older
+            # releases, the D85 handoff and scripts still pass it.
+            --skip-ansible) ;;
             *) log_error "wb install: unknown argument '$1'"; return 2 ;;
         esac
         shift
@@ -478,21 +479,6 @@ _wb_cmd_install() {
     _wb_require sync/scheduler.sh
     workbench_scheduler_install
 
-    if [[ "${skip_ansible}" == "true" ]]; then
-        log_warn "wb install: --skip-ansible given — skipping the Ansible convergence step (host_vars templating etc.), regardless of whether ansible-playbook is available. The shell itself is already fully bootstrapped."
-    elif command -v ansible-playbook &>/dev/null; then
-        log_info "wb install: running Ansible convergence..."
-        (
-            cd "${WB_ROOT}/ansible" && \
-            ANSIBLE_CONFIG="${WB_ROOT}/ansible/ansible.cfg" \
-            ansible-playbook -i inventory/localhost.yml \
-                -e "workbench_core_install_dir=${WB_ROOT}" \
-                playbooks/core.yml
-        ) || log_warn "wb install: Ansible convergence reported a failure — the pure-shell bootstrap above already produced a working shell; see output for what Ansible additionally couldn't do"
-    else
-        log_warn "wb install: ansible-playbook not found — skipping the Ansible convergence step (host_vars templating etc.). The shell itself is already fully bootstrapped."
-    fi
-
     log_info "wb install: done. Start a new shell (or 'source ~/.bashrc') to load workbench-core."
 
     if [[ "${#failed_members[@]}" -gt 0 ]]; then
@@ -540,6 +526,10 @@ _wb_maybe_reconverge_core() {
     # The new release's own wb runs it, as a child process (D85): this
     # process's functions — the core API version it states, the deploy
     # code — are still the release that was running before the update.
+    #
+    # --skip-ansible is a no-op since D92, but stays on the unattended path:
+    # a pin back to a pre-D92 release runs that release's 'wb apply', which
+    # still has the Ansible step.
     local apply_rc=0 next
     next="$(_wb_core_next_wb)"
     if [[ -n "${next}" && "${unattended}" == "true" ]]; then
@@ -3168,8 +3158,8 @@ prompt as 'wb files resolve'); the scheduled timer never asks.
 
 Updating 'core' specifically also detects whether core's resolved commit
 actually changed and, if so, automatically re-runs the same host-level
-convergence 'wb apply' performs (PATH symlink, shell rc stub, prereqs,
-Ansible) — so a core update always leaves the host fully converged
+convergence 'wb apply' performs (PATH symlink, shell rc stub, prereqs)
+— so a core update always leaves the host fully converged
 without a separate manual step. A convergence failure here is logged as a
 warning and never fails the update itself.
 
@@ -3187,16 +3177,14 @@ EOF
 
 _wb_help_install() {
     cat <<'EOF'
-Usage: wb install [--bundle <name> [--keep-files | --use-files [--follow] [--yes]]] [--skip-ansible]
+Usage: wb install [--bundle <name> [--keep-files | --use-files [--follow] [--yes]]]
 
 First-run convergence for this host: checks/installs shell prerequisites,
 bootstraps the core module itself, symlinks 'wb' onto PATH, writes the
 shell rc loader stub, provisions SSH deploy keys for any private modules,
-refreshes the OS-level scheduled-sync timer IF it's already enabled (OFF
-by default — see 'wb scheduler enable'; never installed automatically),
-and (unless --skip-ansible is given, or ansible-playbook isn't found)
-runs the Ansible convergence pass for whatever else it still covers
-(host_vars templating etc.).
+and refreshes the OS-level scheduled-sync timer IF it's already enabled
+(OFF by default — see 'wb scheduler enable'; never installed
+automatically).
 
   --bundle <name>   Also register every module in the named bundle (the
                       known-modules catalog) before converging. If any of
@@ -3219,9 +3207,6 @@ runs the Ansible convergence pass for whatever else it still covers
 
 Through bootstrap, the same flags go after 'bash -s --' (see
 docs/getting-started.md).
-  --skip-ansible    Skip the Ansible convergence step even if
-                      ansible-playbook is available. Does not affect the
-                      scheduled-sync timer, which never depended on Ansible.
 
 Confused with 'wb apply'? Same convergence — 'wb install' is the first-run
 entry point (and accepts --bundle); 'wb apply' is a literal alias for
@@ -3231,22 +3216,17 @@ EOF
 
 _wb_help_apply() {
     cat <<'EOF'
-Usage: wb apply [--skip-ansible]
+Usage: wb apply
 
 Re-runs the exact same convergence as 'wb install' (it is a literal
 alias), minus --bundle — use this to re-converge a host after a manual
-change, after installing Ansible, or any time you want the PATH
-symlink/rc stub/prereqs/scheduled-sync timer (if enabled)/Ansible state
-re-checked.
+change, or any time you want the PATH symlink/rc stub/prereqs/
+scheduled-sync timer (if enabled) re-checked.
 
-  --skip-ansible    Skip the Ansible convergence step even if
-                      ansible-playbook is available. Does not affect the
-                      scheduled-sync timer, which never depended on Ansible.
-
-'wb update core' already calls this automatically — with --skip-ansible
-when the background timer detected the change, without it when a human
-ran 'wb update core'/'wb track core'/'wb dev core' directly — so you
-normally don't need to run 'wb apply' by hand for core. Run it yourself
+'wb update core' already calls this automatically — whether the
+background timer detected the change or a human ran 'wb update core'/
+'wb track core'/'wb dev core' directly — so you normally don't need to
+run 'wb apply' by hand for core. Run it yourself
 for anything 'wb update' doesn't cover.
 EOF
 }

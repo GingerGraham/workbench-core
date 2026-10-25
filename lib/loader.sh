@@ -2,7 +2,7 @@
 # lib/loader.sh — multi-root shell configuration loader.
 #
 # The single entry point sourced by a stub in ~/.bashrc and ~/.zshrc
-# (rendered by `wb install`/`wb apply` — see ansible/roles/module_sync).
+# (written by `wb install`/`wb apply` — see bin/wb's _wb_write_rc_stub).
 # Rewritten from workbench-precursor's shell/config/loader.sh (which assumed
 # a single SHELL_CONFIG_DIR root) to walk every registered, sync-enabled
 # module's state directory instead (docs/architecture.md §3) — core is "module

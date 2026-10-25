@@ -19,6 +19,16 @@ All notable changes to `workbench-core` are documented here.
   private copies in modules (Core API 1.8, D90).
 - Function listings now include functions written as `function name {`.
 
+### Removed
+
+- **Ansible.** `wb install`/`wb apply` no longer have an Ansible step or
+  print anything about it; everything it still did is done in shell (XDG
+  directories, the version file, module registration via bundles,
+  scheduled sync). The `ansible/` directory is gone. `--skip-ansible` is
+  still accepted and does nothing. To keep your own module set across
+  machines, define a bundle in `~/.config/workbench/catalog/bundles.list`
+  (see `docs/getting-started.md`). See `docs/decisions-log.md` D92.
+
 ### Fixed
 
 - `wb install --bundle <unknown>` now exits 2, lists the known bundles and
