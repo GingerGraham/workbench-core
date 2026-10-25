@@ -328,6 +328,65 @@ workbench_render_register_list() {
     done < <(workbench_manifest_register_shell_entries "${manifest}")
 }
 
+# ── getters.list rendering (docs/decisions-log.md D89) ──────────────────────────
+# workbench_render_getters_list <name>
+# Rewrites <module>/getters.list from the module's manifest
+# register.getters[] entries, one "function|label" line each. The loader
+# reads it to define every declared getter the module didn't define itself
+# (lib/loader.sh), and _wb_module_getter (lib/core/functions.sh) reads the
+# label back from it. Rendered at exactly the points register.list and
+# installers.list are.
+#
+# The loader `eval`s the function name, so a name that is empty, starts
+# with `_`, or contains anything outside [A-Za-z0-9_-] is skipped here with
+# a warning (and again by the loader). The label is never evaluated; `|`,
+# tabs and newlines are stripped from it so it stays one field on one line.
+#
+# A core_api refusal leaves an existing getters.list in place: the list is
+# only truncated once the check has passed, so a re-render after core was
+# pinned back doesn't strip a module's getters (docs/decisions-log.md D89).
+workbench_render_getters_list() {
+    local name="$1"
+    local current_dir manifest getlist getter_name getter_fn getter_label
+    current_dir="$(workbench_module_current_dir "${name}")"
+    manifest="$(workbench_resolve_manifest_path "${current_dir}")"
+    getlist="$(workbench_module_dir "${name}")/getters.list"
+
+    if [[ ! -f "${manifest}" ]]; then
+        : > "${getlist}"
+        return 0
+    fi
+
+    local core_api
+    core_api="$(workbench_manifest_scalar core_api "${manifest}")"
+    if [[ -z "${core_api}" ]]; then
+        : > "${getlist}"
+        return 0
+    fi
+
+    if command -v _workbench_core_api_version &>/dev/null; then
+        local running
+        running="$(_workbench_core_api_version)"
+        if [[ -n "${running}" ]] && ! _wb_version_satisfies "${running}" "${core_api}"; then
+            log_error "workbench_render_getters_list: ${name}: declares core_api '${core_api}', running Core API is ${running} — refusing to register its getters"
+            return 1
+        fi
+    fi
+
+    : > "${getlist}"
+    while IFS='|' read -r getter_name getter_fn getter_label; do
+        [[ -z "${getter_name}" && -z "${getter_fn}" ]] && continue
+        case "${getter_fn}" in
+            ''|_*|*[!A-Za-z0-9_-]*)
+                log_warn "workbench_render_getters_list: ${name}: skipping register.getters[] entry '${getter_name}' — function '${getter_fn}' must be non-empty, not start with '_', and use only A-Z a-z 0-9 _ -"
+                continue
+                ;;
+        esac
+        getter_label="$(printf '%s' "${getter_label}" | tr -d '|\t\n')"
+        printf '%s|%s\n' "${getter_fn}" "${getter_label}" >> "${getlist}"
+    done < <(workbench_manifest_register_getter_entries "${manifest}")
+}
+
 # ── installers.list rendering (docs/decisions-log.md D23) ───────────────────────
 # workbench_render_installers_list <name>
 # The tool-registry framework's discovery half: rewrites
@@ -749,6 +808,7 @@ workbench_sync_module() {
 
     workbench_render_register_list "${name}"
     workbench_render_installers_list "${name}"
+    workbench_render_getters_list "${name}"
     workbench_deploy_module "${name}"
     workbench_run_post_deploy_hook "${name}" "${reason}" "true" "${is_first}"
 

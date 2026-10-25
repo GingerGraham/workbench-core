@@ -10,6 +10,7 @@ and shell loader.
 - [The manifest](#the-manifest)
 - [The tag format contract](#the-tag-format-contract)
 - [Registering shell content](#registering-shell-content)
+- [Getters](#getters)
 - [Shipping overridable defaults (`overrides_src`)](#shipping-overridable-defaults-overrides_src)
 - [What core does with your files](#what-core-does-with-your-files)
 - [Layering config into a tool the user already uses](#layering-config-into-a-tool-the-user-already-uses)
@@ -103,6 +104,34 @@ supported field, and the validator rejects it. The engine computes where
 your registered files land; this is deliberate (see `architecture.md`
 principle 1) and is exactly what makes `register:` safe without a `dest`
 denylist of its own.
+
+## Getters
+
+A getter (`get-<domain>-functions`) lists the functions and aliases your
+module gives the user. Declare it in `register.getters[]` and don't define
+it: core generates it (`docs/decisions-log.md` D89, Core API 1.8).
+
+```yaml
+register:
+  getters:
+    - name: git
+      function: get-git-functions
+      label: "Git identity, project-context, and CLI-wiring helpers"
+```
+
+The generated getter lists every function and alias in your
+`register.shell[]` files — the same files the loader sources, platform and
+distro files that don't apply to the host left out — under your `label`.
+It works the same in bash and zsh, and under whatever name the user
+registered your module with. A module relying on it declares
+`core_api: ">=1.8 <2.0"`.
+
+`function` must be non-empty, must not start with `_`, and may use only
+`A-Z a-z 0-9 _ -`; core skips any other entry with a warning.
+
+A hand-written getter keeps working and always wins over the generated
+one. If you keep one, don't use `BASH_SOURCE` inside the function to find
+your own files: zsh doesn't set it, so the getter prints `(none)` there.
 
 ## Shipping overridable defaults (`overrides_src`)
 
