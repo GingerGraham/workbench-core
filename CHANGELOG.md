@@ -4,6 +4,15 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **One installer can no longer end a `wb tools install all` or `wb tools
+  upgrade all` run.** Each installer and each `installed-*` check now runs
+  in its own subshell without `wb`'s strict-mode options, so an unset
+  variable or an installer's own `exit` stops only that tool. An installer
+  that reads input no longer swallows the rest of the tool list. Failed
+  tools are named at the end of the run. See `docs/decisions-log.md` D93.
+
 ## [2.20.2] - 2026-10-24
 
 ### Fixed
