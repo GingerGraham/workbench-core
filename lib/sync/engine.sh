@@ -69,8 +69,7 @@ _wb_cadence_state_file() {
 # re-read fresh, never cached). This is what makes the "single shared
 # timer" dynamic without ever touching the OS scheduler: the design here is
 # a fixed, short-interval OS-level timer (systemd OnCalendar=*:0/5 /
-# launchd StartInterval=300 — see ansible/roles/module_sync's timer
-# templates) that invokes `wb sync run-if-due` every 5 minutes
+# launchd StartInterval=300 — see lib/sync/scheduler.sh) that invokes `wb sync run-if-due` every 5 minutes
 # unconditionally; THIS function is what decides, in userspace, whether that
 # firing should actually do anything. Reconfiguring a live systemd timer's
 # own interval requires a daemon-reload and timer restart, which is

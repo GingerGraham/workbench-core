@@ -2,8 +2,8 @@
 # lib/manifest/parse.sh — hot-path manifest reader.
 #
 # `wb add`/`wb apply`'s initial fetch, and the sync engine's own re-check of
-# a module's manifest, need to read a `.dotfiles-sync.yml` without invoking
-# Ansible or depending on yq/python3 (both are fine for the developer-time
+# a module's manifest, need to read a `.dotfiles-sync.yml` without
+# depending on yq/python3 (both are fine for the developer-time
 # validator in lib/manifest/validate.sh, neither is fine here — this runs on
 # every hot-path/timer invocation). Pure bash + awk, reusing the
 # "flatten a known-shape YAML subset with an awk state machine" technique
@@ -150,10 +150,9 @@ workbench_manifest_info_description() {
 # Emits one line per deploy[] entry:
 #   src|dest|dest_macos|mode|force|platforms|lifecycle|yield_to
 # (platforms and yield_to comma-joined, lifecycle as written — empty if
-# unset; the engine resolves the default, see docs/decisions-log.md D81). Mirrors the field set
-# ansible/roles/sync-external's deploy.list.j2 already renders, minus
-# Ansible-side path expansion — dest/dest_macos here are still the raw
-# manifest strings (with a literal leading ~), expanded by the caller.
+# unset; the engine resolves the default, see docs/decisions-log.md D81).
+# dest/dest_macos here are still the raw manifest strings (with a literal
+# leading ~), expanded by the caller.
 workbench_manifest_deploy_entries() {
     local file="$1"
     [[ -f "${file}" ]] || return 0

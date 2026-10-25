@@ -4,6 +4,16 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Removed
+
+- **Ansible.** `wb install`/`wb apply` no longer have an Ansible step or
+  print anything about it; everything it still did is done in shell (XDG
+  directories, the version file, module registration via bundles,
+  scheduled sync). The `ansible/` directory is gone. `--skip-ansible` is
+  still accepted and does nothing. To keep your own module set across
+  machines, define a bundle in `~/.config/workbench/catalog/bundles.list`
+  (see `docs/getting-started.md`). See `docs/decisions-log.md` D92.
+
 ## [2.20.2] - 2026-10-24
 
 ### Fixed

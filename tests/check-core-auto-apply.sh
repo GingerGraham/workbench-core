@@ -7,17 +7,17 @@
 # a `wb apply` convergence pass exactly when core's resolved commit actually
 # changed — never on a no-op cycle, never for a non-core module, always
 # without --skip-ansible when attended and always with it when triggered
-# from the unattended timer path, and never as something that can fail the
-# triggering command's own exit status.
+# from the unattended timer path (a no-op since D92, kept for a pin back to
+# a pre-D92 release), and never as something that can fail the triggering
+# command's own exit status.
 #
 # _wb_cmd_apply is stubbed for most of this file (recorded calls in
 # APPLY_CALLS[], forced exit code in APPLY_EXIT) so the trigger logic can be
 # tested in isolation from the real, heavier convergence machinery (prereq
-# installs, SSH bootstrap, Ansible) already covered by
+# installs, SSH bootstrap) already covered by
 # tests/check-wb-add-convergence.sh, tests/check-ssh-bootstrap-gating.sh and
-# tests/check-wb-on-path.sh. The one thing that stub can't prove — that
-# --skip-ansible actually skips the Ansible block — is checked separately in
-# §4 below against the real, unstubbed _wb_cmd_install.
+# tests/check-wb-on-path.sh. §4 runs the real, unstubbed _wb_cmd_install to
+# check that Ansible is gone from it (docs/decisions-log.md D92).
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -209,10 +209,10 @@ else
     fail "'wb sync run-if-due' convergence trigger unexpected: calls=${#APPLY_CALLS[@]} args='${APPLY_CALLS[*]-}'"
 fi
 
-# ── 4. --skip-ansible actually skips Ansible, driven by the flag and not by
-#    ansible-playbook's absence — tested against the real, unstubbed
-#    _wb_cmd_install/_wb_cmd_apply, with a stub ansible-playbook that would
-#    prove it ran (by writing a marker file) if invoked. ────────────────────
+# ── 4. Ansible is retired (docs/decisions-log.md D92): with or without
+#    --skip-ansible, the real, unstubbed _wb_cmd_apply exits 0, never runs
+#    ansible-playbook even when one is on PATH (a stub that writes a
+#    marker), and prints no line mentioning Ansible. ──────────────────────
 unset -f _wb_cmd_apply
 _wb_cmd_apply() { _wb_cmd_install "$@"; }
 
@@ -227,26 +227,29 @@ EOF
 chmod +x "${FAKE_BIN}/ansible-playbook"
 export PATH="${FAKE_BIN}:${PATH}"
 
-rm -f "${ANSIBLE_MARKER}"
-out_skip="$(_wb_cmd_apply --skip-ansible 2>&1)"
-if [[ ! -f "${ANSIBLE_MARKER}" ]]; then
-    ok "'wb apply --skip-ansible' does not invoke ansible-playbook even though it's present on PATH"
-else
-    fail "'wb apply --skip-ansible' invoked ansible-playbook despite the flag"
-fi
-if echo "${out_skip}" | grep -qi -- "--skip-ansible given"; then
-    ok "'wb apply --skip-ansible' logs that the skip was flag-driven, not absence-of-binary"
-else
-    fail "'wb apply --skip-ansible' did not log the correct reason for skipping: ${out_skip}"
-fi
-
-rm -f "${ANSIBLE_MARKER}"
-out_noskip="$(_wb_cmd_apply 2>&1)"
-if [[ -f "${ANSIBLE_MARKER}" ]]; then
-    ok "'wb apply' (no flag) with ansible-playbook present on PATH does invoke it — proves §4's skip above was flag-driven"
-else
-    fail "'wb apply' without --skip-ansible unexpectedly did not invoke ansible-playbook: ${out_noskip}"
-fi
+for apply_args in "" "--skip-ansible"; do
+    label="'wb apply${apply_args:+ ${apply_args}}'"
+    rm -f "${ANSIBLE_MARKER}"
+    # shellcheck disable=SC2086  # empty or one word, split on purpose
+    apply_out="$(_wb_cmd_apply ${apply_args} 2>&1)"
+    apply_rc=$?
+    if [[ "${apply_rc}" -eq 0 ]]; then
+        ok "${label} exits 0"
+    else
+        fail "${label} exited ${apply_rc}: ${apply_out}"
+    fi
+    if [[ ! -f "${ANSIBLE_MARKER}" ]]; then
+        ok "${label} does not run ansible-playbook, even with one on PATH"
+    else
+        fail "${label} ran ansible-playbook"
+    fi
+    if printf '%s\n' "${apply_out}" | grep -qi 'ansible'; then
+        fail "${label} printed a line mentioning Ansible:"
+        printf '%s\n' "${apply_out}" | grep -i 'ansible'
+    else
+        ok "${label} prints no line mentioning Ansible"
+    fi
+done
 
 export PATH="${PATH#"${FAKE_BIN}:"}"
 

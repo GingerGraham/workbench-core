@@ -10,7 +10,7 @@
 # on PATH with a fixture dispatcher keyed on the requested URL, and points
 # the fetched tarball at a minimal fixture tree with a stub bin/wb — this
 # keeps the suite hermetic (no real network, no real git, no real
-# sudo/apt/ansible from a full `wb install` run) while still exercising
+# sudo/apt from a full `wb install` run) while still exercising
 # bootstrap.sh's actual resolution/fetch/sync.conf logic unmodified.
 set -uo pipefail
 
@@ -30,7 +30,7 @@ trap 'rm -rf "${WORK}"' EXIT
 # Deliberately NOT the real repo tree — bootstrap.sh's own correctness
 # (steps 1-5: idempotency check, ref resolution, fetch-into-real-snapshot,
 # sync.conf write) is this test's whole scope; a full `wb install` run
-# (prereqs, ansible, ssh) is already exercised by the rest of this suite
+# (prereqs, ssh) is already exercised by the rest of this suite
 # and would otherwise pull sudo/apt/network into what should be a hermetic
 # check of bootstrap.sh alone.
 FIXTURE_SRC="${WORK}/fixture-src/workbench-core-testref"

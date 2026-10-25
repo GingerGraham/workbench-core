@@ -89,6 +89,15 @@ else
     cat "${REGLIST}" 2>/dev/null
 fi
 
+# Ansible is retired (docs/decisions-log.md D92): nothing in the install
+# output mentions it.
+if printf '%s\n' "${INSTALL_OUT}" | grep -qi 'ansible'; then
+    fail "'wb install' printed a line mentioning Ansible:"
+    printf '%s\n' "${INSTALL_OUT}" | grep -i 'ansible'
+else
+    ok "'wb install' output has no line mentioning Ansible"
+fi
+
 # ── 3. Core's shell content is actually callable in a brand-new shell ──────
 # shellcheck disable=SC2016
 FUNCS_OUT="$(env HOME="${HOME}" XDG_DATA_HOME="${XDG_DATA_HOME}" XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" XDG_CACHE_HOME="${XDG_CACHE_HOME}" \

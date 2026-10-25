@@ -71,14 +71,13 @@ No `git` required. This resolves the latest release tag (falling back to
 `main` if none is cut yet), fetches it as a tarball straight into its
 real, permanent snapshot location, and hands off to `wb install` — which
 checks and offers to install its own prerequisites, symlinks `wb` onto
-`PATH`, adds a loader stub to your shell rc file, and runs the one-time
-Ansible convergence pass if `ansible-playbook` is available.
+`PATH`, and adds a loader stub to your shell rc file.
 
 Start a new shell and you're done. See
 [`docs/getting-started.md`](docs/getting-started.md) for the full
 walkthrough, including the developer setup path (a real `git clone`, for
-working on `workbench-core` itself) and what happens without Ansible
-installed.
+working on `workbench-core` itself) and how to keep your own module
+set.
 
 ## Everyday use
 
@@ -113,9 +112,6 @@ installed automatically.
 - `lib/` — the shell library: Core API, loader, manifest parsing, the
   distribution/sync engine, versioning, prerequisite checks, module
   (de)registration commands.
-- `ansible/` — the one-time/occasional convergence path (`wb install`/
-  `wb apply`). Nothing that runs on the sync timer depends on Ansible or
-  Python.
 - `bootstrap.sh` — the production entry point for a machine that has
   nothing installed yet.
 - `contracts/` — the standing interfaces module authors build against.

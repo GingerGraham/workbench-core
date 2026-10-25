@@ -66,8 +66,6 @@ real engine code exists locally to run):
    - Adds a loader stub to `~/.bashrc` (and `~/.zshrc`/`~/.zshenv` if
      present) — see "Migrating from an existing shell config" below if
      any of those already had real content.
-   - Runs the Ansible convergence pass (if `ansible-playbook` is available
-     — see below if it isn't).
    - Sets up SSH deploy keys for any private module you've already
      registered (none, on a fresh install).
 
@@ -113,12 +111,26 @@ See `architecture.md` §9.6 for why your own editing clone and workbench's
 own fetched snapshot are expected to be two separate copies on disk, not a
 bug.
 
-### Without Ansible
+### Your own module set
 
-`wb install` still produces a fully working shell without
-`ansible-playbook` on `PATH` — the Ansible step only formalizes host-state
-templating for modules declared in `ansible/host_vars/localhost.yml`
-(none, by default in Wave B). You'll see a warning, not a failure.
+A bundle is a named list of modules from the catalog. To keep your own set
+— the modules you want on every machine — define a bundle in
+`~/.config/workbench/catalog/bundles.list`:
+
+```
+# <bundle-name>|<comma-separated module names>
+mine|git,ssh,shell,cloud,iac
+```
+
+Then a new machine needs one command:
+
+```sh
+curl -fsSL .../bootstrap.sh | bash -s -- --bundle mine
+```
+
+This file replaces the shipped `bundles.list` rather than adding to it,
+so copy any shipped bundle you still want into it (see
+`docs/architecture.md` §10).
 
 ## Adding a module or independent tool
 
@@ -167,9 +179,9 @@ This is a separate, host-wide switch from `wb sync enable|disable
 [<name>]` — that one controls which *registered modules* a running timer
 is allowed to touch; `wb scheduler enable|disable` controls whether the
 timer runs at all. Both need to be "on" for a given module to ever sync
-in the background. If you'd previously gotten scheduled sync via this
-project's Ansible integration, upgrading to a core release with this
-built-in timer preserves that as enabled automatically the first time you
+in the background. If an older release had already set up scheduled
+sync on this host, upgrading to a core release with this built-in timer
+preserves that as enabled automatically the first time you
 run `wb apply` — you don't need to re-run `wb scheduler enable` yourself
 unless you'd rather turn it off.
 

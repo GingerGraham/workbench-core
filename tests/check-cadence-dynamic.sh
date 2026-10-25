@@ -7,7 +7,7 @@
 # without any OS-timer re-registration: workbench_cadence_seconds()
 # re-derives the interval fresh on every call from current sync.conf state,
 # so a running fixed-interval poller (the actual OS-level timer — see
-# ansible/roles/module_sync's timer templates) never itself needs to change.
+# lib/sync/scheduler.sh) never itself needs to change.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
