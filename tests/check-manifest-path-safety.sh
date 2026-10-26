@@ -45,7 +45,7 @@ fi
 
 # A sibling that only shares a prefix with a denylisted directory (D97).
 if _wb_dest_is_safe "~/.sshconfig-notes" "git"; then
-    ok "_wb_dest_is_safe accepts ~/.sshconfig-notes (shares a prefix with ~/.ssh, isn't it)"
+    ok "_wb_dest_is_safe accepts ~/.sshconfig-notes (it only shares a prefix with ~/.ssh)"
 else
     fail "_wb_dest_is_safe wrongly rejected ~/.sshconfig-notes"
 fi
