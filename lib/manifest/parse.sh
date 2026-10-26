@@ -427,8 +427,8 @@ workbench_manifest_hook_post_deploy() {
 # must run standalone (same precedent as D30/D46). tests/check-dest-denylist-
 # sync.sh fails if the two copies drift. Space-separated, not arrays, so the
 # drift test can compare single lines.
-_WB_DEST_DENYLIST_DIRS_REL=".ssh/ .gnupg/ .config/shell/ .config/git/ .config/dotfiles/ .config/workbench/ .config/external-sync/ .config/systemd/user/ library/launchagents/ .local/bin/ .local/share/workbench/ .config/autostart/ .config/environment.d/"
-_WB_DEST_DENYLIST_FILES_REL=".bashrc .zshrc .profile .gitconfig .bash_profile .bash_login .bash_logout .zshenv .zprofile .zlogin .zlogout"
+_WB_DEST_DENYLIST_DIRS_REL=".ssh/ .gnupg/ .config/shell/ .config/git/ .config/dotfiles/ .config/workbench/ .config/external-sync/ .config/systemd/user/ library/launchagents/ .local/bin/ .local/share/workbench/ .config/autostart/ .config/environment.d/ .bashrc.d/"
+_WB_DEST_DENYLIST_FILES_REL=".bashrc .zshrc .profile .gitconfig .bash_profile .bash_login .bash_logout .zshenv .zprofile .zlogin .zlogout .bash_aliases"
 
 # _wb_path_is_safe_relative <path>
 # True iff <path> is non-empty, not absolute, and has no ".." segment.
@@ -473,8 +473,11 @@ _wb_dest_is_safe() {
     if [[ -n "${module}" && "${lower}" == ".local/share/workbench/modules/${module}/files/"?* ]]; then
         return 0
     fi
+    # A denylisted directory is refused as itself too, not only what's
+    # beneath it: "~/.ssh" as a dest writes into ~/.ssh (cp) or replaces it
+    # (link + force) (docs/decisions-log.md D97).
     for entry in ${_WB_DEST_DENYLIST_DIRS_REL}; do
-        [[ "${lower}" == "${entry}"* ]] && return 1
+        [[ "${lower}" == "${entry}"* || "${lower}" == "${entry%/}" ]] && return 1
     done
     for entry in ${_WB_DEST_DENYLIST_FILES_REL}; do
         [[ "${lower}" == "${entry}" ]] && return 1
