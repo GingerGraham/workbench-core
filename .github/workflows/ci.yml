@@ -59,8 +59,9 @@ jobs:
           fi
 
       # tests/check-generated-getters.sh runs its getters in zsh too, and
-      # only skips those checks when zsh is missing; macOS ships zsh, ubuntu
-      # runners don't, so install it there so CI never skips them (D89).
+      # tests/check-zsh-single-load.sh starts zsh through the rc stubs; both
+      # only skip when zsh is missing. macOS ships zsh, ubuntu runners
+      # don't, so install it there so CI never skips them (D89, D96).
       - name: Install zsh
         if: runner.os == 'Linux'
         run: sudo apt-get update -q && sudo apt-get install -y -q zsh

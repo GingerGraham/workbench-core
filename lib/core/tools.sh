@@ -15,7 +15,7 @@
 # declares, exactly the way register.getters[]/get-functions already works
 # (principle 4: core provides the mechanism, modules provide the content).
 
-_wb_tools_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+_wb_tools_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 # shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/tools.sh" "1.0.0" || true
 

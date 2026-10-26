@@ -12,7 +12,7 @@
 # what 'wb' actually dispatches on.
 
 # shellcheck source=lib/core/log.sh
-_wb_completion_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+_wb_completion_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 [[ -f "${_wb_completion_dir}/log.sh" ]] && source "${_wb_completion_dir}/log.sh"
 unset _wb_completion_dir
 

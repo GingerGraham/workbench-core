@@ -20,7 +20,7 @@
 # framing in docs/architecture.md §10 without inventing a merge algorithm this
 # task doesn't need yet.
 
-_wb_catalog_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+_wb_catalog_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 # shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/catalog.sh" "0.1.1" || true
 
