@@ -183,7 +183,7 @@ if ! yq eval '.' "${MANIFEST}" > /dev/null 2>&1; then
     exit 1
 fi
 
-REPO_ROOT="$(cd "$(dirname "${MANIFEST}")" && pwd)"
+REPO_ROOT="$(cd -- "$(dirname -- "${MANIFEST}")" >/dev/null 2>&1 && pwd)"
 
 # ── Path-safety helpers (unchanged from the donor script) ───────────────────
 

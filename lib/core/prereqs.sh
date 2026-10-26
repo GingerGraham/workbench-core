@@ -11,7 +11,7 @@
 # loader/wb add/wb track/timer). Since D92 there is no separate
 # install-time list: wb install/apply need nothing beyond these.
 
-_wb_prereqs_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+_wb_prereqs_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 # shellcheck source=lib/core/functions.sh
 [[ -f "${_wb_prereqs_lib_dir}/functions.sh" ]] && source "${_wb_prereqs_lib_dir}/functions.sh"
 # shellcheck source=lib/core/semver.sh

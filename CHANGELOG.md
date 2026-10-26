@@ -15,6 +15,19 @@ All notable changes to `workbench-core` are documented here.
   join the list. No published module deploys there. See
   `docs/decisions-log.md` D97.
 
+### Fixed
+
+- **zsh loads workbench once per start.** An interactive zsh read the
+  loader stub from both `~/.zshenv` and `~/.zshrc` and ran the loader
+  twice; with workbench-shell installed, the second pass printed `file
+  name too long` on every start and garbled every path workbench computes.
+  The `~/.zshenv` stub now loads workbench only for non-interactive zsh
+  (`zsh -c`, ssh commands, scripts), and `wb apply` rewrites an existing
+  stub in place — your next `wb apply`, or the automatic one after this
+  update, fixes an existing install. A `chpwd` hook or `CDPATH` of your
+  own can no longer break those paths either. See
+  `docs/decisions-log.md` D96.
+
 ## [2.21.1] - 2026-10-25
 
 ### Fixed

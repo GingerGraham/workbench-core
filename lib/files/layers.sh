@@ -283,7 +283,7 @@ _wb_layers_resolve() {
         suffix="/$(basename "${probe}")${suffix}"
         probe="$(dirname "${probe}")"
     done
-    phys="$(cd "${probe}" 2>/dev/null && pwd -P)" || return 1
+    phys="$(cd -- "${probe}" >/dev/null 2>&1 && pwd -P)" || return 1
     printf '%s%s\n' "${phys%/}" "${suffix}"
 }
 
@@ -294,7 +294,7 @@ _wb_layers_resolve() {
 _wb_layers_physical_ok() {
     local real="$1" resolved phys_home
     resolved="$(_wb_layers_resolve "${real}")" || return 1
-    phys_home="$(cd "${HOME}" 2>/dev/null && pwd -P)" || return 1
+    phys_home="$(cd -- "${HOME}" >/dev/null 2>&1 && pwd -P)" || return 1
     case "${resolved}" in
         "${phys_home}/.local/share/workbench/"*|"${phys_home}/.config/workbench/"*) return 1 ;;
         "${phys_home}"/*) return 0 ;;

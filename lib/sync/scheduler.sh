@@ -27,7 +27,7 @@
 # failure is warned about, never fatal to the rest of `wb install`/`wb
 # apply`.
 
-_wb_scheduler_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+_wb_scheduler_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 
 # shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/sync/scheduler.sh" "0.2.2" || true

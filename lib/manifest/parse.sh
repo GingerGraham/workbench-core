@@ -17,7 +17,7 @@
 # lib/manifest/validate.sh (the developer-time, yq-based validator) before
 # it ever reaches this code path.
 
-_wb_manifest_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+_wb_manifest_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 # shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/manifest/parse.sh" "0.6.1" || true
 
@@ -500,8 +500,8 @@ _wb_dest_physical_is_safe() {
         suffix="/$(basename "${probe}")${suffix}"
         probe="$(dirname "${probe}")"
     done
-    phys_probe="$(cd "${probe}" 2>/dev/null && pwd -P)" || return 1
-    phys_home="$(cd "${HOME}" 2>/dev/null && pwd -P)" || return 1
+    phys_probe="$(cd -- "${probe}" >/dev/null 2>&1 && pwd -P)" || return 1
+    phys_home="$(cd -- "${HOME}" >/dev/null 2>&1 && pwd -P)" || return 1
     phys_target="${phys_probe}${suffix}"
 
     case "${phys_target}" in

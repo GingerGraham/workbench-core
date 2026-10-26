@@ -19,7 +19,7 @@ set -uo pipefail
 # lib/distribution/snapshot.sh.
 _wb_self="${BASH_SOURCE[0]}"
 while [[ -L "${_wb_self}" ]]; do
-    _wb_self_dir="$(cd "$(dirname "${_wb_self}")" && pwd)"
+    _wb_self_dir="$(cd -- "$(dirname -- "${_wb_self}")" >/dev/null 2>&1 && pwd)"
     _wb_self="$(readlink "${_wb_self}")"
     case "${_wb_self}" in
         /*) ;;
@@ -28,9 +28,9 @@ while [[ -L "${_wb_self}" ]]; do
 done
 unset _wb_self_dir
 
-WB_BIN_DIR="$(cd "$(dirname "${_wb_self}")" && pwd)"
+WB_BIN_DIR="$(cd -- "$(dirname -- "${_wb_self}")" >/dev/null 2>&1 && pwd)"
 unset _wb_self
-WB_ROOT="$(cd "${WB_BIN_DIR}/.." && pwd)"
+WB_ROOT="$(cd -- "${WB_BIN_DIR}/.." >/dev/null 2>&1 && pwd)"
 LIB="${WB_ROOT}/lib"
 export WORKBENCH_CORE_INSTALL_DIR="${WB_ROOT}"
 
@@ -281,10 +281,23 @@ _wb_link_cli_bin() {
     fi
 }
 
+# _wb_write_rc_stub <rc-file> [interactive|zshenv]
+# interactive (default): load workbench every time this file is read.
+# zshenv: load it only in non-interactive zsh (zsh -c, ssh host commands,
+# scripts). An interactive zsh reads .zshenv and then .zshrc, and loading
+# from both ran the whole loader twice (docs/decisions-log.md D96).
 _wb_write_rc_stub() {
-    local rc_file="$1" marker="# workbench-core loader"
+    local rc_file="$1" kind="${2:-interactive}" marker="# workbench-core loader"
     local loader_path="\${XDG_DATA_HOME:-\${HOME}/.local/share}/workbench/modules/core/current/lib/loader.sh"
-    local stub_line="[ -f \"${loader_path}\" ] && source \"${loader_path}\"  ${marker}"
+    local stub_line
+    case "${kind}" in
+        zshenv)
+            stub_line="[[ -o interactive ]] || { [ -f \"${loader_path}\" ] && source \"${loader_path}\"; }  ${marker}"
+            ;;
+        *)
+            stub_line="[ -f \"${loader_path}\" ] && source \"${loader_path}\"  ${marker}"
+            ;;
+    esac
 
     if [[ -s "${rc_file}" ]] && ! grep -qF "${marker}" "${rc_file}" 2>/dev/null; then
         # First time workbench has ever touched this file, and it already
@@ -304,10 +317,35 @@ _wb_write_rc_stub() {
 
     touch "${rc_file}"
     if grep -qF "${marker}" "${rc_file}" 2>/dev/null; then
-        return 0
+        # Already stubbed. Bring an older stub line up to date in place
+        # (D96), and drop any duplicate marker lines.
+        _wb_rc_stub_rewrite "${rc_file}" "${marker}" "${stub_line}"
+        return $?
     fi
     printf '\n%s\n' "${stub_line}" >> "${rc_file}"
     log_info "wb install: added loader stub to ${rc_file}"
+}
+
+# _wb_rc_stub_rewrite <rc-file> <marker> <stub-line>
+# Replaces the first line containing <marker> with <stub-line> and removes
+# any later line containing <marker>. Leaves the file untouched when it is
+# already right. Writes through the existing file (cat > file), so a
+# symlinked rc file (common in dotfiles setups) stays a symlink and keeps
+# its permissions.
+_wb_rc_stub_rewrite() {
+    local rc_file="$1" marker="$2" stub_line="$3" tmp
+    tmp="$(mktemp)" || return 1
+    awk -v m="${marker}" -v s="${stub_line}" '
+        index($0, m) { if (!done) { print s; done = 1 } ; next }
+        { print }
+    ' "${rc_file}" > "${tmp}" || { rm -f "${tmp}"; return 1; }
+    if cmp -s "${tmp}" "${rc_file}"; then
+        rm -f "${tmp}"
+        return 0
+    fi
+    cat "${tmp}" > "${rc_file}" || { rm -f "${tmp}"; return 1; }
+    rm -f "${tmp}"
+    log_info "wb install: updated the loader stub in ${rc_file}"
 }
 
 _wb_scaffold_local_overrides() {
@@ -434,7 +472,7 @@ _wb_cmd_install() {
     _wb_write_rc_stub "${HOME}/.bashrc"
     if [[ -n "${ZSH_VERSION:-}" || -f "${HOME}/.zshrc" ]]; then
         _wb_write_rc_stub "${HOME}/.zshrc"
-        _wb_write_rc_stub "${HOME}/.zshenv"
+        _wb_write_rc_stub "${HOME}/.zshenv" zshenv
     fi
 
     if [[ -n "${bundle}" ]]; then
@@ -557,7 +595,7 @@ _wb_core_next_wb() {
     workbench_is_registered core || return 0
     next="$(workbench_module_current_dir core)/bin/wb"
     [[ -x "${next}" ]] || return 0
-    [[ "$(cd "$(dirname "${next}")/.." && pwd -P)" == "$(cd "${WB_ROOT}" && pwd -P)" ]] && return 0
+    [[ "$(cd -- "$(dirname -- "${next}")/.." >/dev/null 2>&1 && pwd -P)" == "$(cd -- "${WB_ROOT}" >/dev/null 2>&1 && pwd -P)" ]] && return 0
     grep -q '__sync-continue)' "${next}" 2>/dev/null || return 0
     printf '%s\n' "${next}"
 }

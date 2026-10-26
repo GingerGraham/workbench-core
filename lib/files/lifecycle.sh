@@ -156,7 +156,7 @@ _wb_files_move_aside() {
 # entered the same way on GNU and BSD find; .git is never included.
 _wb_files_list_tree() {
     local dir="$1" phys file
-    phys="$(cd "${dir}" 2>/dev/null && pwd -P)" || return 1
+    phys="$(cd -- "${dir}" >/dev/null 2>&1 && pwd -P)" || return 1
     while IFS= read -r -d '' file; do
         printf '%s\0' "${file#"${phys}"/}"
     done < <(find "${phys}" -name .git -prune -o -type f -print0)
