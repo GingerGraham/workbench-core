@@ -105,6 +105,82 @@ else
 fi
 rm -f "${BACKUP_ROOT}"
 
+# ── 5b. Stub kinds (D96): .zshenv loads only non-interactive zsh, the
+#    other rc files load unconditionally. ──────────────────────────────────
+STUB_DIR="${WORK}/stubs"
+mkdir -p "${STUB_DIR}"
+: > "${STUB_DIR}/.bashrc"
+: > "${STUB_DIR}/.zshrc"
+: > "${STUB_DIR}/.zshenv"
+_wb_write_rc_stub "${STUB_DIR}/.bashrc" >/dev/null 2>&1
+_wb_write_rc_stub "${STUB_DIR}/.zshrc" >/dev/null 2>&1
+_wb_write_rc_stub "${STUB_DIR}/.zshenv" zshenv >/dev/null 2>&1
+PLAIN_STUB="$(grep -F "# workbench-core loader" "${STUB_DIR}/.bashrc")"
+ZSHENV_STUB="$(grep -F "# workbench-core loader" "${STUB_DIR}/.zshenv")"
+if [[ "${ZSHENV_STUB}" == "[[ -o interactive ]] ||"* ]]; then
+    ok "a fresh .zshenv gets the non-interactive-only stub line"
+else
+    fail "a fresh .zshenv got: '${ZSHENV_STUB}'"
+fi
+if [[ "${PLAIN_STUB}" == "[ -f "* ]] \
+    && [[ "$(grep -F "# workbench-core loader" "${STUB_DIR}/.zshrc")" == "${PLAIN_STUB}" ]]; then
+    ok "a fresh .bashrc and .zshrc get the plain stub line"
+else
+    fail "unexpected plain stub lines: .bashrc '${PLAIN_STUB}', .zshrc '$(grep -F "# workbench-core loader" "${STUB_DIR}/.zshrc")'"
+fi
+
+# ── 5c. An old plain stub in .zshenv is rewritten in place; every other
+#    line is byte-identical, and a second run changes nothing. ────────────
+ZE="${STUB_DIR}/old.zshenv"
+{
+    echo "# above the stub"
+    echo "export FOO=1"
+    echo ""
+    echo "${PLAIN_STUB}"
+    echo "# below the stub"
+    echo "export BAR=2"
+} > "${ZE}"
+_wb_write_rc_stub "${ZE}" zshenv >/dev/null 2>&1
+EXPECTED_ZE="$(printf '%s\n' "# above the stub" "export FOO=1" "" "${ZSHENV_STUB}" "# below the stub" "export BAR=2")"
+if [[ "$(cat "${ZE}")" == "${EXPECTED_ZE}" ]]; then
+    ok "an old plain .zshenv stub is rewritten to the new line, everything else unchanged"
+else
+    fail "unexpected .zshenv after rewrite:"
+    cat "${ZE}"
+fi
+SUM_BEFORE="$(cksum < "${ZE}")"
+_wb_write_rc_stub "${ZE}" zshenv >"${WORK}/rewrite-2.log" 2>&1
+if [[ "$(cksum < "${ZE}")" == "${SUM_BEFORE}" ]] && ! grep -q "updated the loader stub" "${WORK}/rewrite-2.log"; then
+    ok "a second _wb_write_rc_stub call on an up-to-date .zshenv changes nothing"
+else
+    fail "a second _wb_write_rc_stub call changed the file or claimed an update"
+fi
+
+# ── 5d. Two marker lines collapse to one. ──────────────────────────────────
+DUP="${STUB_DIR}/dup.zshenv"
+printf '%s\n' "# top" "${PLAIN_STUB}" "# middle" "${PLAIN_STUB}" "# end" > "${DUP}"
+_wb_write_rc_stub "${DUP}" zshenv >/dev/null 2>&1
+if [[ "$(grep -cF "# workbench-core loader" "${DUP}")" -eq 1 ]] \
+    && [[ "$(cat "${DUP}")" == "$(printf '%s\n' "# top" "${ZSHENV_STUB}" "# middle" "# end")" ]]; then
+    ok "two marker lines collapse to one, in the first one's place"
+else
+    fail "duplicate marker lines were not collapsed:"
+    cat "${DUP}"
+fi
+
+# ── 5e. A symlinked .zshenv stays a symlink; its target gets the new line. ─
+LINK_TARGET="${STUB_DIR}/dotfiles-zshenv"
+printf '%s\n' "# managed elsewhere" "${PLAIN_STUB}" > "${LINK_TARGET}"
+ln -s "${LINK_TARGET}" "${STUB_DIR}/link.zshenv"
+_wb_write_rc_stub "${STUB_DIR}/link.zshenv" zshenv >/dev/null 2>&1
+if [[ -L "${STUB_DIR}/link.zshenv" ]] \
+    && [[ "$(grep -F "# workbench-core loader" "${LINK_TARGET}")" == "${ZSHENV_STUB}" ]]; then
+    ok "a symlinked .zshenv stays a symlink, and its target holds the new stub line"
+else
+    fail "the symlinked .zshenv was replaced, or its target was not rewritten"
+    ls -l "${STUB_DIR}/link.zshenv"
+fi
+
 # ── 6. lib/loader.sh: the persistent migration warning fires while a
 #    rc-stub-tagged backup exists, naming the file, and clears once it's
 #    removed. Isolated with env -i, same pattern as

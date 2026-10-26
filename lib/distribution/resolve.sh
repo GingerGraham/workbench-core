@@ -13,7 +13,7 @@
 # ordering (a tag object's "name" key always precedes its "commit"."sha"),
 # not on any general JSON-parsing guarantee.
 
-_wb_resolve_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+_wb_resolve_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 # shellcheck disable=SC2015
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/distribution/resolve.sh" "0.1.0" || true
 

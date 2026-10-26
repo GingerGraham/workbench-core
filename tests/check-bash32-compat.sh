@@ -6,7 +6,9 @@
 # everything AGENTS.md lists (docs/architecture.md §6/§7 item 11, build brief
 # §2). .github/scripts/ may use bash 4 (it runs only on GitHub-hosted
 # runners) but by convention avoids these too (CONTRIBUTING.md). This file
-# is excluded: its own pattern table would match. Fails if any are found.
+# is excluded: its own pattern table would match. Also checks that every
+# `$(cd … && pwd)` in shipped code discards cd's output (D96). Fails if any
+# are found.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -52,6 +54,30 @@ for entry in "${_checks[@]}"; do
         ok "no ${desc} in bin/, bootstrap.sh, lib/, tests/, .github/scripts/"
     fi
 done
+
+# Every `$(cd … && pwd)` in shipped code discards cd's own output: zsh runs
+# chpwd hooks inside $(…), and CDPATH makes cd print the directory, and
+# either would land in the captured path (docs/decisions-log.md D96).
+# tests/ is left out: it runs under bash with no hooks. Each match runs from
+# `$(cd ` to its first `&&`, so two substitutions on one line are checked
+# separately.
+cd_hits=""
+while IFS= read -r -d '' f; do
+    while IFS= read -r site; do
+        [[ -z "${site}" ]] && continue
+        case "${site}" in
+            *">/dev/null"*) ;;
+            *) cd_hits="${cd_hits}${f#"${REPO_ROOT}/"}: ${site}"$'\n' ;;
+        esac
+    done < <(grep -vE '^[[:space:]]*#' "${f}" | grep -oE '\$\(cd ([^&]|&[^&])*&&[[:space:]]*pwd' || true)
+done < <(find "${REPO_ROOT}/bin" "${REPO_ROOT}/bootstrap.sh" "${REPO_ROOT}/lib" \
+              "${REPO_ROOT}/shell" -type f -print0 2>/dev/null)
+if [[ -n "${cd_hits}" ]]; then
+    fail "\$(cd … && pwd) without >/dev/null on cd found in:"
+    printf '%s' "${cd_hits}" | while IFS= read -r h; do echo "        ${h}"; done
+else
+    ok "every \$(cd … && pwd) in bin/, bootstrap.sh, lib/, shell/ discards cd's output"
+fi
 
 echo
 if [[ "${FAILED}" -eq 0 ]]; then

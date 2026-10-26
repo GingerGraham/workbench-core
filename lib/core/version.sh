@@ -9,7 +9,7 @@
 # this file at all, just grep the plain KEY=VALUE file directly. These
 # functions exist for convenience, not as the only supported access path.
 
-_wb_version_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+_wb_version_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 
 _workbench_version_file_path() {
     printf '%s\n' "${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/core/version"

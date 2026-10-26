@@ -15,7 +15,7 @@
 # registered as PRIVATE=true. No `workbench-*` repo is ever private (§2), so
 # core itself never triggers this path.
 
-_wb_ssh_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+_wb_ssh_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 # shellcheck source=lib/sync/state.sh
 [[ -f "${_wb_ssh_lib_dir}/../sync/state.sh" ]] && source "${_wb_ssh_lib_dir}/../sync/state.sh"
 
