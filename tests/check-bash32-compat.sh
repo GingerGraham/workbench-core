@@ -65,7 +65,11 @@ cd_hits=""
 while IFS= read -r -d '' f; do
     while IFS= read -r site; do
         [[ -z "${site}" ]] && continue
-        case "${site}" in
+        # Drop stderr-only redirects first: "2>/dev/null" contains
+        # ">/dev/null" but still lets cd's stdout through, and it is the
+        # exact pre-D96 shape.
+        site_stdout="${site//2>\/dev\/null/}"
+        case "${site_stdout}" in
             *">/dev/null"*) ;;
             *) cd_hits="${cd_hits}${f#"${REPO_ROOT}/"}: ${site}"$'\n' ;;
         esac
