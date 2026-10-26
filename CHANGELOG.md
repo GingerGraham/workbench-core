@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.21.2] - 2026-10-26
+
 ### Security
 
 - **A module can't deploy onto a protected directory itself.** The deploy
