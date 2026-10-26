@@ -357,9 +357,13 @@ Every `deploy[].dest`/`dest_macos` must:
   `~/.config/external-sync/`, `~/.config/systemd/user/`,
   `~/Library/LaunchAgents/`, `~/.local/bin/`,
   `~/.local/share/workbench/`, `~/.config/autostart/`,
-  `~/.config/environment.d/`, `~/.bashrc`, `~/.zshrc`, `~/.profile`,
-  `~/.gitconfig`, `~/.bash_profile`, `~/.bash_login`, `~/.bash_logout`,
-  `~/.zshenv`, `~/.zprofile`, `~/.zlogin`, `~/.zlogout`.
+  `~/.config/environment.d/`, `~/.bashrc.d/`, `~/.bashrc`, `~/.zshrc`,
+  `~/.profile`, `~/.gitconfig`, `~/.bash_profile`, `~/.bash_login`,
+  `~/.bash_logout`, `~/.zshenv`, `~/.zprofile`, `~/.zlogin`, `~/.zlogout`,
+  `~/.bash_aliases`.
+  - A denylisted directory is refused as itself as well as everything
+    beneath it: `~/.ssh` is refused just like `~/.ssh/x`
+    (`docs/decisions-log.md` D97).
   - The single exception to `~/.local/share/workbench/` is a module's own
     `~/.local/share/workbench/modules/<name>/files/` subtree (used to
     deploy a file only that module's own registered content should ever

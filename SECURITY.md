@@ -43,8 +43,9 @@ worth reporting against specifically:
   `validate.sh` at developer/CI time (`docs/decisions-log.md` D75). The
   sync engine refuses, before ever swapping a new snapshot live, any
   manifest whose `src`/`dest`-shaped fields are absolute, contain `..`,
-  or target the denylist (`~/.ssh/`, shell startup files, `~/.local/bin/`,
-  and more — see `contracts/manifest-spec.md`'s `dest` validation
+  or target the denylist (`~/.ssh/` — the directory itself as well as
+  anything in it — shell startup files including `~/.bashrc.d/` and
+  `~/.bash_aliases`, `~/.local/bin/`, and more — see `contracts/manifest-spec.md`'s `dest` validation
   section for the full list), and re-checks every resolved deploy target
   against its symlink-resolved physical location immediately before the
   write, refusing a `deploy[].src` that is itself a symlink outright.

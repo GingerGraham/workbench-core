@@ -43,6 +43,13 @@ else
     fail "_wb_dest_is_safe wrongly rejected modules/git/files/ignore for module git"
 fi
 
+# A sibling that only shares a prefix with a denylisted directory (D97).
+if _wb_dest_is_safe "~/.sshconfig-notes" "git"; then
+    ok "_wb_dest_is_safe accepts ~/.sshconfig-notes (shares a prefix with ~/.ssh, isn't it)"
+else
+    fail "_wb_dest_is_safe wrongly rejected ~/.sshconfig-notes"
+fi
+
 # ── 2. _wb_dest_is_safe rejects unsafe/denylisted destinations ─────────────
 declare -a UNSAFE_DESTS=(
     "/etc/x"
@@ -55,6 +62,18 @@ declare -a UNSAFE_DESTS=(
     "~/.local/share/workbench/modules/core/sync.conf"
     "~/.zshenv"
     "~/Library/LaunchAgents/x.plist"
+    # A denylisted directory as itself, not only what's beneath it (D97).
+    "~/.ssh"
+    "~/.gnupg"
+    "~/.local/bin"
+    "~/.config/systemd/user"
+    "~/.config/workbench"
+    "~/.local/share/workbench"
+    "~/Library/LaunchAgents"
+    "~/.bashrc.d"
+    "~/.bashrc.d/x.sh"
+    "~/.bash_aliases"
+    "~/.SSH"
 )
 _all_rejected=1
 for _d in "${UNSAFE_DESTS[@]}"; do
@@ -76,6 +95,20 @@ if _wb_dest_is_safe "~/.local/share/workbench/modules/git/sync.conf" "git"; then
 else
     ok "_wb_dest_is_safe rejects a module's own sync.conf (not under files/)"
 fi
+
+# ── 2b. The physical re-check refuses a bare denylisted directory (D97) ───
+mkdir -p "${HOME}/.ssh" "${HOME}/.local/bin"
+if _wb_dest_physical_is_safe "${HOME}/.ssh" git; then
+    fail "_wb_dest_physical_is_safe wrongly accepted ${HOME}/.ssh"
+else
+    ok "_wb_dest_physical_is_safe refuses an existing ~/.ssh as a target"
+fi
+if _wb_dest_physical_is_safe "${HOME}/.local/bin" git; then
+    fail "_wb_dest_physical_is_safe wrongly accepted ${HOME}/.local/bin"
+else
+    ok "_wb_dest_physical_is_safe refuses an existing ~/.local/bin as a target"
+fi
+rmdir "${HOME}/.local/bin" "${HOME}/.local" "${HOME}/.ssh"
 
 # ── 3. _wb_path_is_safe_relative ────────────────────────────────────────────
 if _wb_path_is_safe_relative "../x" || _wb_path_is_safe_relative "a/../b" || _wb_path_is_safe_relative "/abs"; then
@@ -129,7 +162,8 @@ core_api: ">=1.0 <2.0"
 EOF
     git add -A && git commit -q -m "v1"
     git branch -M main
-    git push -q origin main
+    git tag v1.0.0
+    git push -q origin main --tags
 )
 setup_module bashrctest "${BARE4}"
 workbench_sync_module bashrctest >/tmp/wb-path-safety-4.log 2>&1
@@ -149,6 +183,67 @@ if [[ ! -e "${HOME}/.bashrc" ]]; then
 else
     fail "engine gate: ~/.bashrc was written despite the unsafe manifest"
 fi
+# The fixture is tagged so the sync resolves a ref and reaches the gate;
+# untagged, it stopped at "could not resolve tracked ref" and every check
+# above passed without testing the gate at all.
+if grep -q "deploy dest '~/.bashrc' violates dest validation" /tmp/wb-path-safety-4.log; then
+    ok "engine gate: the refusal names the ~/.bashrc dest"
+else
+    fail "engine gate: no dest-validation refusal logged — see /tmp/wb-path-safety-4.log"
+    cat /tmp/wb-path-safety-4.log
+fi
+
+# ── 4b. Engine gate: a forced deploy to bare ~/.ssh — refused before swap
+#    (D97). With ~/.ssh present, cp would write ~/.ssh/authorized_keys, and
+#    link + force would replace the directory. ─────────────────────────────
+mkdir -p "${HOME}/.ssh"
+BARE4B="${WORK}/bare4b.git"
+SRC4B="${WORK}/src4b"
+mkdir -p "${SRC4B}"
+git init -q --bare "${BARE4B}"
+git clone -q "${BARE4B}" "${SRC4B}"
+(
+    cd "${SRC4B}" || exit 1
+    git config user.email t@t.com
+    git config user.name Test
+    mkdir -p files
+    echo 'ssh-ed25519 AAAA-not-a-real-key attacker' > files/authorized_keys
+    cat > .dotfiles-sync.yml <<'EOF'
+version: 1
+branch: main
+deploy:
+  - src: files/authorized_keys
+    dest: ~/.ssh
+    force: true
+core_api: ">=1.0 <2.0"
+EOF
+    git add -A && git commit -q -m "v1"
+    git branch -M main
+    git tag v1.0.0
+    git push -q origin main --tags
+)
+setup_module sshdirtest "${BARE4B}"
+workbench_sync_module sshdirtest >/tmp/wb-path-safety-4b.log 2>&1
+rc4b=$?
+if [[ "${rc4b}" -ne 0 ]] && [[ ! -e "$(workbench_module_current_dir sshdirtest)" ]]; then
+    ok "engine gate: a forced deploy to bare ~/.ssh is refused before the snapshot swap"
+else
+    fail "engine gate: a forced deploy to bare ~/.ssh was not refused before the swap (rc=${rc4b})"
+    cat /tmp/wb-path-safety-4b.log
+fi
+if [[ -d "${HOME}/.ssh" && ! -L "${HOME}/.ssh" && ! -e "${HOME}/.ssh/authorized_keys" ]]; then
+    ok "engine gate: ~/.ssh is untouched and ~/.ssh/authorized_keys does not exist"
+else
+    fail "engine gate: ~/.ssh was replaced or written into"
+    ls -la "${HOME}/.ssh"
+fi
+if grep -q "deploy dest '~/.ssh' violates dest validation" /tmp/wb-path-safety-4b.log; then
+    ok "engine gate: the refusal names the bare ~/.ssh dest"
+else
+    fail "engine gate: no dest-validation refusal logged — see /tmp/wb-path-safety-4b.log"
+    cat /tmp/wb-path-safety-4b.log
+fi
+rmdir "${HOME}/.ssh"
 
 # ── 5. Hook gate: command: ["../../x.sh"] refused at the gate ──────────────
 BARE5="${WORK}/bare5.git"
@@ -178,7 +273,8 @@ hooks:
 EOF
     git add -A && git commit -q -m "v1"
     git branch -M main
-    git push -q origin main
+    git tag v1.0.0
+    git push -q origin main --tags
 )
 setup_module hooktest "${BARE5}"
 workbench_sync_module hooktest >/tmp/wb-path-safety-5.log 2>&1
@@ -192,6 +288,12 @@ if [[ ! -e "$(workbench_module_current_dir hooktest)" ]]; then
     ok "hook gate: current snapshot was not created for the unsafe hook manifest"
 else
     fail "hook gate: current snapshot exists despite the unsafe hook manifest"
+fi
+if grep -q "hooks.post_deploy.command\[0\] '../../x.sh' is absolute or contains '..'" /tmp/wb-path-safety-5.log; then
+    ok "hook gate: the refusal names the unsafe hook command"
+else
+    fail "hook gate: no hook-command refusal logged — see /tmp/wb-path-safety-5.log"
+    cat /tmp/wb-path-safety-5.log
 fi
 
 # ── 6. Symlink parent: ~/.config/evil -> ~/.ssh, deploy target resolves

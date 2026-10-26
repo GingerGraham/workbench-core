@@ -211,8 +211,8 @@ _is_safe_relative_path() {
 # (this file must run standalone — same precedent as D30/D46 — so the list
 # can't be sourced from there). tests/check-dest-denylist-sync.sh fails if
 # the two copies drift.
-_WB_DEST_DENYLIST_DIRS_REL=".ssh/ .gnupg/ .config/shell/ .config/git/ .config/dotfiles/ .config/workbench/ .config/external-sync/ .config/systemd/user/ library/launchagents/ .local/bin/ .local/share/workbench/ .config/autostart/ .config/environment.d/"
-_WB_DEST_DENYLIST_FILES_REL=".bashrc .zshrc .profile .gitconfig .bash_profile .bash_login .bash_logout .zshenv .zprofile .zlogin .zlogout"
+_WB_DEST_DENYLIST_DIRS_REL=".ssh/ .gnupg/ .config/shell/ .config/git/ .config/dotfiles/ .config/workbench/ .config/external-sync/ .config/systemd/user/ library/launchagents/ .local/bin/ .local/share/workbench/ .config/autostart/ .config/environment.d/ .bashrc.d/"
+_WB_DEST_DENYLIST_FILES_REL=".bashrc .zshrc .profile .gitconfig .bash_profile .bash_login .bash_logout .zshenv .zprofile .zlogin .zlogout .bash_aliases"
 
 # _is_safe_dest <dest>
 # Lexical dest check (docs/decisions-log.md D75). Compared lowercase so a
@@ -239,8 +239,11 @@ _is_safe_dest() {
     case "${lower}" in
         .local/share/workbench/modules/*/files/?*) return 0 ;;
     esac
+    # A denylisted directory is refused as itself too, not only what's
+    # beneath it: "~/.ssh" as a dest writes into ~/.ssh (cp) or replaces it
+    # (link + force) (docs/decisions-log.md D97).
     for entry in ${_WB_DEST_DENYLIST_DIRS_REL}; do
-        [[ "${lower}" == "${entry}"* ]] && return 1
+        [[ "${lower}" == "${entry}"* || "${lower}" == "${entry%/}" ]] && return 1
     done
     for entry in ${_WB_DEST_DENYLIST_FILES_REL}; do
         [[ "${lower}" == "${entry}" ]] && return 1

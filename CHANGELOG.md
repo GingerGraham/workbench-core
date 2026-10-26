@@ -4,6 +4,17 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- **A module can't deploy onto a protected directory itself.** The deploy
+  denylist refused `~/.ssh/<file>` but not a bare `~/.ssh` (or `~/.gnupg`,
+  `~/.local/bin`, `~/.config/systemd/user`, `~/.config/workbench`, …), so
+  a manifest could write into, or with `force: true` replace, one of
+  those directories. A denylisted directory is now refused with or
+  without its trailing slash, and `~/.bashrc.d/` and `~/.bash_aliases`
+  join the list. No published module deploys there. See
+  `docs/decisions-log.md` D97.
+
 ## [2.21.1] - 2026-10-25
 
 ### Fixed
