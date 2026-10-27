@@ -24,6 +24,9 @@ Two ways in, depending on what you want from workbench:
   use workbench's, or add `--use-files --yes` to script it. Your files are
   backed up first; your git identity and ssh hosts are carried into the
   new files.
+
+  The README's [Modules and bundles](../README.md#modules-and-bundles)
+  table lists every module and what each bundle installs.
 - **"I like my config, I want your tooling."** Run bootstrap, or `wb add
   <module>` later, and press Enter at the question (keep mine), or add
   `--keep-files`. What keep means:

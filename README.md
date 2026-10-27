@@ -11,8 +11,8 @@ exact same engine any other `workbench-*` module or independent tracked
 tool will use. There's no special-cased core path and no hardcoded
 profile logic — a named **bundle** (e.g. `--bundle workstation`) is just
 shorthand for a sequence of `wb add` calls, not a branch inside the
-engine itself. A separate TUI repo, `workbench`, will eventually front
-`wb` (Wave D) — it isn't this repo, and won't own a second copy of
+engine itself. A separate TUI repo, `workbench`, is planned as a front
+end for `wb` — it isn't this repo, and won't own a second copy of
 anything `wb` already knows.
 
 ## What it ships
@@ -48,18 +48,35 @@ anything `wb` already knows.
 
 ## Status
 
-Wave B — core itself, including a baseline-completion pass (self-
-convergence on `core` updates, the `wb tools` tool-updating framework,
-per-command `wb help`, the `~/.config/workbench/local/` overrides
-directory, the `bootstrap.sh` no-`git` install path) — is functionally
-complete. See [`CHANGELOG.md`](CHANGELOG.md) for the detailed history.
+Released and in daily use. Core and eleven modules are published; each
+module is its own repo with its own releases. See
+[`CHANGELOG.md`](CHANGELOG.md) for core's history.
 
-No release has been tagged yet (`wb version` reports the release version
-as `unreleased` until the first tag is cut), and no ecosystem modules
-(`workbench-git`, `workbench-gpg`, `workbench-ssh`, `workbench-shell`)
-exist yet — those are Wave C. Core is designed and tested to work
-correctly standalone, with **zero** non-core modules registered, since
-that's the only state that exists until Wave C ships.
+## Modules and bundles
+
+Install a bundle at bootstrap, or `wb add <name>` any module later. Each
+module works with only core installed.
+
+| Module | What it adds |
+|---|---|
+| [`git`](https://github.com/GingerGraham/workbench-git) | Git identity, multi-context project management, and CLI-wiring helpers |
+| [`gpg`](https://github.com/GingerGraham/workbench-gpg) | GPG day-to-day and key-lifecycle management |
+| [`ssh`](https://github.com/GingerGraham/workbench-ssh) | Hardened SSH client config, agent routing, and pinned forge host keys |
+| [`shell`](https://github.com/GingerGraham/workbench-shell) | Shell, editor and prompt layer: aliases, direnv, fzf, and the omp/starship/omz prompt engines |
+| [`cloud`](https://github.com/GingerGraham/workbench-cloud) | AWS/Azure/GCP CLI aliases and installers |
+| [`iac`](https://github.com/GingerGraham/workbench-iac) | Terraform/OpenTofu/Terragrunt/Ansible aliases and installers |
+| [`containers`](https://github.com/GingerGraham/workbench-containers) | Docker/Podman/Kubernetes aliases and installers |
+| [`security`](https://github.com/GingerGraham/workbench-security) | Security scanners, signing tooling, password manager CLIs/apps, and LUKS2+TPM2 disk encryption management |
+| [`ai`](https://github.com/GingerGraham/workbench-ai) | Installers for AI CLIs (Claude Code, GitHub Copilot CLI, Antigravity, Specify/spec-kit) |
+| [`desktop`](https://github.com/GingerGraham/workbench-desktop) | GUI desktop app installers and Flatpak |
+| [`devtools`](https://github.com/GingerGraham/workbench-devtools) | Go/Python/Node dev environment wiring, plus nvm/Edit/jq/uv/snapd installers |
+
+| Bundle | Modules |
+|---|---|
+| `workstation` | git, gpg, ssh, shell |
+| `server` | git, ssh, shell |
+| `minimal` | git, ssh |
+| `full` | every module above |
 
 ## Quick start
 
@@ -67,9 +84,9 @@ that's the only state that exists until Wave C ships.
 curl -fsSL https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh | bash
 ```
 
-No `git` required. This resolves the latest release tag (falling back to
-`main` if none is cut yet), fetches it as a tarball straight into its
-real, permanent snapshot location, and hands off to `wb install` — which
+No `git` required. This resolves the latest release tag, fetches it as
+a tarball straight into its real, permanent snapshot location, and
+hands off to `wb install` — which
 checks and offers to install its own prerequisites, symlinks `wb` onto
 `PATH`, and adds a loader stub to your shell rc file.
 
@@ -127,10 +144,10 @@ and the rationale behind it.
 | Document | For |
 |---|---|
 | [`docs/getting-started.md`](docs/getting-started.md) | Installing, adding modules, everyday commands, personal overrides. |
-| [`docs/module-authoring.md`](docs/module-authoring.md) | Writing a `.dotfiles-sync.yml` for a new module or tracked tool. |
+| [`docs/module-authoring.md`](docs/module-authoring.md) | Writing a `workbench.yml` manifest for a new module or tracked tool. |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | Diagnosing prereq, loader, sync, and SSH issues. |
 | [`docs/release-process.md`](docs/release-process.md) | How merges to `main` become version bumps, tags, and GitHub Releases — Conventional Commit scoping, the `core` scope, and the CHANGELOG discipline. |
-| [`contracts/manifest-spec.md`](contracts/manifest-spec.md) | The authoritative `.dotfiles-sync.yml` field reference. |
+| [`contracts/manifest-spec.md`](contracts/manifest-spec.md) | The authoritative manifest (`workbench.yml`, or legacy `.dotfiles-sync.yml`) field reference. |
 | [`contracts/core-api.md`](contracts/core-api.md) | The shell functions/variables every module can rely on, and the loader-tier order. |
 | [`contracts/tracking-spec.md`](contracts/tracking-spec.md) | How a module's tracked ref is resolved, fetched, and re-checked. |
 | [`contracts/state-schema.md`](contracts/state-schema.md) | The on-disk file/directory shapes `wb` reads and writes. |
