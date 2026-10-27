@@ -160,13 +160,30 @@ for _stub_sha in "../../etc" "0123456789ABCDEF0123456789ABCDEF01234567" \
     workbench_resolve_tag_public o r v1.2.3 >/dev/null 2>&1 && _bad_accepted="${_bad_accepted} tag:${_stub_sha}"
     workbench_resolve_branch_public o r main >/dev/null 2>&1 && _bad_accepted="${_bad_accepted} branch:${_stub_sha}"
 done
-if workbench_resolve_commit_public o r "../x" >/dev/null 2>&1; then
-    _bad_accepted="${_bad_accepted} commit:../x"
-fi
+for _pin in "../x" "0123456789ABCDEF" "abc"; do
+    if workbench_resolve_commit_public o r "${_pin}" >/dev/null 2>&1; then
+        _bad_accepted="${_bad_accepted} commit:${_pin}"
+    fi
+done
 if [[ -z "${_bad_accepted}" ]]; then
-    ok "a non-hex, short, uppercase or padded sha is refused (latest, tag, branch, commit)"
+    ok "a non-hex, short, uppercase or padded sha is refused (latest, tag, branch, commit pin)"
 else
     fail "non-hex sha accepted:${_bad_accepted}"
+fi
+
+# A commit: pin may be abbreviated, as `wb track --commit` allows (7-40 hex).
+_stub_sha="${GOOD_SHA}"
+if [[ "$(workbench_resolve_commit_public o r "${GOOD_SHA:0:7}" 2>/dev/null)" == "${GOOD_SHA:0:7}" ]] \
+    && [[ "$(workbench_resolve_commit_public o r "${GOOD_SHA}" 2>/dev/null)" == "${GOOD_SHA}" ]]; then
+    ok "an abbreviated (7-hex) and a full commit: pin both resolve"
+else
+    fail "a valid commit: pin (abbreviated or full) was refused"
+fi
+_pin_err="$(workbench_resolve_commit_public o r "../x" 2>&1 >/dev/null)"
+if [[ "${_pin_err}" == *"refusing it"* ]]; then
+    ok "a refused commit: pin is logged, not silent"
+else
+    fail "a refused commit: pin produced no error"
 fi
 
 # bootstrap.sh: a fake curl first on PATH serves a tag whose sha is not

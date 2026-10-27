@@ -147,9 +147,17 @@ workbench_resolve_branch_public() {
 # exists upstream. Prints <sha> back on success. This is the defensive,
 # not-normally-expected check docs/architecture.md §9.2 describes for
 # commit:<sha> pins.
+#
+# <sha> is the user's pin, not an API answer, so it follows the
+# `wb track --commit` contract (_wb_track_commit_is_safe): 7-40 hex
+# characters, an abbreviated sha included. Lowercase only, since the API
+# reports lowercase and the match below is exact.
 workbench_resolve_commit_public() {
     local owner="$1" repo="$2" sha="$3" body
-    _wb_is_commit_sha "${sha}" || return 1
+    if ! [[ "${sha}" =~ ^[0-9a-f]{7,40}$ ]]; then
+        log_error "workbench_resolve_commit_public: ${owner}/${repo}: commit pin '${sha}' is not 7-40 lowercase hex characters — refusing it"
+        return 1
+    fi
     body="$(_wb_gh_curl "https://api.github.com/repos/${owner}/${repo}/commits/${sha}")" || return 1
     printf '%s' "${body}" | grep -q "\"sha\": *\"${sha}" || \
     printf '%s' "${body}" | grep -q "\"sha\":\"${sha}" || return 1
