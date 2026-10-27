@@ -66,7 +66,8 @@ _slugify() {
 # Duplicated from lib/distribution/resolve.sh's _wb_gh_curl, including its
 # WORKBENCH_GITHUB_TOKEN handling: sent only to https://api.github.com/, on
 # curl's stdin as a config line, never as an argument or in a file
-# (docs/decisions-log.md D99).
+# (docs/decisions-log.md D99). https only, redirects included (security
+# status N14).
 _gh_curl() {
     local url="$1"
     if [[ -n "${WORKBENCH_GITHUB_TOKEN:-}" ]]; then
@@ -78,7 +79,8 @@ _gh_curl() {
                         ;;
                     *)
                         printf 'header = "Authorization: Bearer %s"\n' "${WORKBENCH_GITHUB_TOKEN}" \
-                            | curl -fsSL -H "Accept: application/vnd.github+json" -A "workbench-core-bootstrap" \
+                            | curl -fsSL --proto '=https' --proto-redir '=https' \
+                                -H "Accept: application/vnd.github+json" -A "workbench-core-bootstrap" \
                                 --config - "${url}" 2>/dev/null
                         return
                         ;;
@@ -86,7 +88,15 @@ _gh_curl() {
                 ;;
         esac
     fi
-    curl -fsSL -H "Accept: application/vnd.github+json" -A "workbench-core-bootstrap" "${url}" 2>/dev/null
+    curl -fsSL --proto '=https' --proto-redir '=https' \
+        -H "Accept: application/vnd.github+json" -A "workbench-core-bootstrap" "${url}" 2>/dev/null
+}
+
+# _is_commit_sha <value> — duplicated from lib/distribution/resolve.sh's
+# _wb_is_commit_sha: a full, lowercase 40-hex sha. The resolved sha becomes
+# part of a URL and of the snapshot directory name (security status N14).
+_is_commit_sha() {
+    [[ "$1" =~ ^[0-9a-f]{40}$ ]]
 }
 
 # _is_clean_tag / _cmp — duplicated (minimal) from lib/core/semver.sh's
@@ -214,6 +224,10 @@ main() {
         TRACK_REF="main"
         log "resolved fallback: main (${SHA:0:7})"
     fi
+    if ! _is_commit_sha "${SHA}"; then
+        log "ERROR: the GitHub API returned '${SHA}' for ${OWNER}/${REPO}, not a commit sha — refusing it"
+        exit 1
+    fi
     SHORT_SHA="${SHA:0:7}"
 
     # ── 4. Fetch + extract directly into the real, permanent snapshot path ────
@@ -233,7 +247,8 @@ main() {
         trap 'rm -f "${_tmp_tar}"; rm -rf "${_tmp_extract}"' EXIT
 
         # REF_PATH is always the resolved commit sha — content-addressed, matches RESOLVED_SHA (L1).
-        curl -fsSL "https://codeload.github.com/${OWNER}/${REPO}/tar.gz/${REF_PATH}" -o "${_tmp_tar}"
+        curl -fsSL --proto '=https' --proto-redir '=https' \
+            "https://codeload.github.com/${OWNER}/${REPO}/tar.gz/${REF_PATH}" -o "${_tmp_tar}"
         # -m: entries carry the commit time; GNU tar warns per file when
         # that is ahead of this clock. Files get the fetch time instead.
         tar -xmzf "${_tmp_tar}" -C "${_tmp_extract}"

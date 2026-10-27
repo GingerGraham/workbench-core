@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # tests/check-module-ci-release-trigger.sh — acceptance check for
 # .github/scripts/release/detect-module-ci-changes.sh (security review
-# follow-up R3, docs/decisions-log.md D80, D95): changes to .github/actions/**,
-# .github/workflows/module-*.yml or .github/scripts/module-ci/** since the
-# last tag must ask for a patch release; nothing else may.
+# follow-up R3, docs/decisions-log.md D80, D95, security status N10): changes
+# to .github/actions/**, .github/workflows/module-*.yml,
+# .github/scripts/module-ci/**, .github/scripts/module-release/** or
+# .github/scripts/module-pr-check/** since the last tag must ask for a patch
+# release; nothing else may.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -71,6 +73,17 @@ if [[ "${out}" == "force_severity=" ]]; then ok ".github/scripts/release/ change
 commit_file .github/scripts/module-ci/check-clean-shell.sh
 out="$(run_detect)"
 if grep -qx 'force_severity=patch' <<< "${out}"; then ok ".github/scripts/module-ci/** change forces a patch release (D95)"; else fail "module-ci script: got [${out}]"; fi
+
+# 9-10. The scripts module-release.yml and module-pr-check.yml run from the
+#       core checkout count too (security status N10), each on its own.
+git tag v1.0.3
+commit_file .github/scripts/module-release/compute-bump.sh
+out="$(run_detect)"
+if grep -qx 'force_severity=patch' <<< "${out}"; then ok ".github/scripts/module-release/** change forces a patch release (N10)"; else fail "module-release script: got [${out}]"; fi
+git tag v1.0.4
+commit_file .github/scripts/module-pr-check/check-pr-title-format.sh
+out="$(run_detect)"
+if grep -qx 'force_severity=patch' <<< "${out}"; then ok ".github/scripts/module-pr-check/** change forces a patch release (N10)"; else fail "module-pr-check script: got [${out}]"; fi
 
 echo
 if [[ "${FAILED}" -eq 0 ]]; then

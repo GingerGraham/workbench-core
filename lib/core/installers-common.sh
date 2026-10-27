@@ -274,8 +274,21 @@ _wb_fetch_verified() {
         return 1
     fi
 
-    mkdir -p "$(dirname "${dest}")" && mv -f "${tmp_dir}/payload" "${dest}"
-    rc=$?
+    # Stage next to <dest> and rename there: $TMPDIR is often a different
+    # filesystem (tmpfs on Fedora), where mv is a copy, and an interrupted
+    # copy left a partial binary at <dest> (security status N13). mktemp
+    # creates the stage 0600; set 0644, as _download_file_robust does, so
+    # <dest> gets the same mode as before.
+    local dest_dir stage
+    dest_dir="$(dirname "${dest}")"
+    mkdir -p "${dest_dir}" || { rm -rf "${tmp_dir}"; return 1; }
+    stage="$(mktemp "${dest_dir}/.wb-fetch.XXXXXX")" || { rm -rf "${tmp_dir}"; return 1; }
+    if cp "${tmp_dir}/payload" "${stage}" && chmod 0644 "${stage}" && mv -f "${stage}" "${dest}"; then
+        rc=0
+    else
+        rc=1
+        rm -f "${stage}"
+    fi
     rm -rf "${tmp_dir}"
     return ${rc}
 }
