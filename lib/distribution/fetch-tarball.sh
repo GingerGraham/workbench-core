@@ -38,7 +38,8 @@ workbench_fetch_tarball_public() {
     tmp_tar="$(mktemp "${TMPDIR:-/tmp}/workbench-fetch.XXXXXX")"
     tmp_extract="$(mktemp -d "${TMPDIR:-/tmp}/workbench-fetch.XXXXXX")"
 
-    if ! curl -fsSL "https://codeload.github.com/${owner}/${repo}/tar.gz/${path}" -o "${tmp_tar}"; then
+    # https only, redirects included (security status N14).
+    if ! curl -fsSL --proto '=https' --proto-redir '=https' "https://codeload.github.com/${owner}/${repo}/tar.gz/${path}" -o "${tmp_tar}"; then
         log_warn "workbench_fetch_tarball_public: could not fetch tarball for ${owner}/${repo}@${ref_value} — network issue, will retry next cycle"
         rm -f "${tmp_tar}"
         rm -rf "${tmp_extract}"
