@@ -706,6 +706,17 @@ shellcheck against the shell surface (`bin/wb`, `bootstrap.sh`, `lib/`,
 file and D26 for the mechanics and the rationale behind the shellcheck
 baseline fixes that came with it.
 
+Module CI tests each module with only core installed (D40).
+`.github/workflows/ecosystem.yml` covers the combination (D99): on both
+runners it installs the `full` bundle, every catalog module at its latest
+release, on top of the core commit under test, into a clean `HOME`, and
+checks that bash and zsh start clean, that every getter lists its
+module's names, that `wb functions` and `wb tools list --status` report
+nothing unexplained, and that removing and re-adding a module leaves a
+clean shell. It runs weekly, on every core release, on demand, and on a
+PR that changes the check itself
+(`.github/scripts/ecosystem/check-ecosystem.sh`).
+
 ## 14. Release automation
 
 Automated semver/tagging/release pipeline, D27/D28. `.github/workflows/

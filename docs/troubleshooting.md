@@ -73,7 +73,8 @@ regardless of gating.
   to go back to auto-tracking.
 - For a public repo, resolution goes through GitHub's unauthenticated API,
   which rate-limits at 60 requests/hour per IP — if you're hitting that,
-  it will self-correct on the next cycle; the log will say so.
+  it will self-correct on the next cycle; the log will say so. Behind a
+  shared IP, set `WORKBENCH_GITHUB_TOKEN` (see `docs/getting-started.md`).
 
 ## SSH deploy key issues for a private module
 

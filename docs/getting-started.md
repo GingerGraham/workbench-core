@@ -137,6 +137,24 @@ This file replaces the shipped `bundles.list` rather than adding to it,
 so copy any shipped bundle you still want into it (see
 `docs/architecture.md` §10).
 
+### Behind a shared IP: `WORKBENCH_GITHUB_TOKEN`
+
+Resolving releases goes through GitHub's API, which allows 60
+unauthenticated requests an hour per IP. Behind a shared IP (an office
+NAT, a CI runner) that can run out. Set `WORKBENCH_GITHUB_TOKEN` to any
+GitHub token (a fine-grained one with read-only access to public
+repositories is enough), in the environment you run bootstrap or `wb` from:
+
+```sh
+export WORKBENCH_GITHUB_TOKEN=github_pat_...
+curl -fsSL .../bootstrap.sh | bash
+```
+
+The token is sent only to `api.github.com`, never to the tarball host or
+anywhere else, is passed to `curl` on stdin rather than its command line,
+and is never written to a file. The scheduled sync doesn't see a variable
+exported in your shell.
+
 ## Adding a module or independent tool
 
 ```sh

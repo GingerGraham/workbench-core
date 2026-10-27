@@ -30,6 +30,10 @@ worth reporting against specifically:
   sync engine resolve the latest release tag via the GitHub API and
   fetch a tarball — trust is rooted in GitHub's tag/release integrity,
   not an incrementally-mutated working tree.
+- **`WORKBENCH_GITHUB_TOKEN` is sent only to `api.github.com`.** When set,
+  it authenticates the release lookups (`docs/decisions-log.md` D99). It
+  never goes to the tarball host or anywhere else, reaches `curl` on
+  stdin rather than its argument list, and is never written to a file.
 - **Releases are not signed.** Trust in a release rests on GitHub's tags
   and the release cooldown (`docs/decisions-log.md` D77), not on a
   signature workbench checks.

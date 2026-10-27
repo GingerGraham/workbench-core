@@ -43,9 +43,43 @@ workbench_parse_github_url() {
 # failure as "skip this cycle, retry later" (docs/architecture.md §9.4's
 # rate-limit note), never fatal. https only, redirects included (security
 # status N14).
+#
+# With WORKBENCH_GITHUB_TOKEN set and non-empty, an api.github.com request
+# is authenticated (5,000 requests an hour instead of 60 per IP). The token
+# is only ever sent to https://api.github.com/, and goes to curl as a config
+# file on stdin, written by the printf builtin, so it never appears in an
+# argument list (`ps`) or in a file (docs/decisions-log.md D99).
 _wb_gh_curl() {
+    local url="$1"
+    if _wb_gh_token_applies "${url}"; then
+        printf 'header = "Authorization: Bearer %s"\n' "${WORKBENCH_GITHUB_TOKEN}" \
+            | curl -fsSL --proto '=https' --proto-redir '=https' \
+                -H "Accept: application/vnd.github+json" -A "workbench-core" \
+                --config - "${url}" 2>/dev/null
+        return
+    fi
     curl -fsSL --proto '=https' --proto-redir '=https' \
-        -H "Accept: application/vnd.github+json" -A "workbench-core" "$1" 2>/dev/null
+        -H "Accept: application/vnd.github+json" -A "workbench-core" "${url}" 2>/dev/null
+}
+
+# _wb_gh_token_applies <url>
+# True when WORKBENCH_GITHUB_TOKEN should go with a request to <url>: the
+# token is set, looks like a GitHub token (letters, digits, '_', '-', '.',
+# so it can't break out of the curl config line), and <url> is on
+# https://api.github.com/. A malformed token is never sent.
+_wb_gh_token_applies() {
+    [[ -n "${WORKBENCH_GITHUB_TOKEN:-}" ]] || return 1
+    case "$1" in
+        https://api.github.com/*) ;;
+        *) return 1 ;;
+    esac
+    case "${WORKBENCH_GITHUB_TOKEN}" in
+        *[!A-Za-z0-9_.-]*)
+            log_warn "WORKBENCH_GITHUB_TOKEN holds characters a GitHub token never has — not sending it"
+            return 1
+            ;;
+    esac
+    return 0
 }
 
 # _wb_is_commit_sha <value>

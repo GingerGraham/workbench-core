@@ -63,11 +63,33 @@ _slugify() {
 
 # _gh_curl <url> — GitHub's API requires a User-Agent header on every
 # request (rejected outright without one, independent of rate limiting).
-# Duplicated from lib/distribution/resolve.sh's _wb_gh_curl. https only,
-# redirects included (security status N14).
+# Duplicated from lib/distribution/resolve.sh's _wb_gh_curl, including its
+# WORKBENCH_GITHUB_TOKEN handling: sent only to https://api.github.com/, on
+# curl's stdin as a config line, never as an argument or in a file
+# (docs/decisions-log.md D99). https only, redirects included (security
+# status N14).
 _gh_curl() {
+    local url="$1"
+    if [[ -n "${WORKBENCH_GITHUB_TOKEN:-}" ]]; then
+        case "${url}" in
+            https://api.github.com/*)
+                case "${WORKBENCH_GITHUB_TOKEN}" in
+                    *[!A-Za-z0-9_.-]*)
+                        log "WARNING: WORKBENCH_GITHUB_TOKEN holds characters a GitHub token never has — not sending it"
+                        ;;
+                    *)
+                        printf 'header = "Authorization: Bearer %s"\n' "${WORKBENCH_GITHUB_TOKEN}" \
+                            | curl -fsSL --proto '=https' --proto-redir '=https' \
+                                -H "Accept: application/vnd.github+json" -A "workbench-core-bootstrap" \
+                                --config - "${url}" 2>/dev/null
+                        return
+                        ;;
+                esac
+                ;;
+        esac
+    fi
     curl -fsSL --proto '=https' --proto-redir '=https' \
-        -H "Accept: application/vnd.github+json" -A "workbench-core-bootstrap" "$1" 2>/dev/null
+        -H "Accept: application/vnd.github+json" -A "workbench-core-bootstrap" "${url}" 2>/dev/null
 }
 
 # _is_commit_sha <value> — duplicated from lib/distribution/resolve.sh's

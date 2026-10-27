@@ -1,0 +1,53 @@
+name: Ecosystem
+
+# Ecosystem smoke test (docs/decisions-log.md D99): installs the 'full'
+# bundle — every catalog module at its latest release — on top of the core
+# commit under test, in a clean HOME, and checks shell starts, getters,
+# 'wb functions', 'wb tools list --status' and remove/re-add.
+# .github/scripts/ecosystem/check-ecosystem.sh has the details.
+#
+# Runs weekly (module releases land between core releases), on every core
+# release, and on demand. The pull_request trigger covers changes to the
+# check itself, so a broken check never reaches main.
+on:
+  schedule:
+    # Mondays 05:17 UTC.
+    - cron: "17 5 * * 1"
+  release:
+    types: [published]
+  workflow_dispatch: {}
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/ecosystem.yml"
+      - ".github/scripts/ecosystem/**"
+      - ".github/scripts/module-ci/shell-checks-lib.sh"
+
+permissions:
+  contents: read
+
+jobs:
+  ecosystem:
+    name: ecosystem (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # macOS ships zsh; ubuntu runners don't.
+      - name: Install zsh
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q zsh
+
+      # Twelve repos resolved from one runner IP can exhaust GitHub's
+      # unauthenticated API limit. The token is read-only (permissions
+      # above) and sent only to api.github.com (D99).
+      - name: Install the full bundle and check it
+        env:
+          WORKBENCH_GITHUB_TOKEN: ${{ github.token }}
+        run: .github/scripts/ecosystem/check-ecosystem.sh
+        shell: bash
