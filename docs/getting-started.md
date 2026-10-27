@@ -199,6 +199,10 @@ etc.), and it's sourced twice: once early, so a flag you set there gates
 everything else that loads afterward, and again at the very end, so it
 wins over anything a module also touched.
 
+One of those switches, `WORKBENCH_ALLOW_AUR=true`, lets installers use the
+Arch User Repository (`yay`/`makepkg`). It is off by default: without it,
+an installer that would need the AUR prints the command to run yourself.
+
 Want your own functions or aliases, entirely separate from that switches
 file? Drop any number of other `*.sh` files into the same
 `~/.config/workbench/local/` directory — they're sourced once, together,

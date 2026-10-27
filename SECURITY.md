@@ -30,9 +30,16 @@ worth reporting against specifically:
   sync engine resolve the latest release tag via the GitHub API and
   fetch a tarball — trust is rooted in GitHub's tag/release integrity,
   not an incrementally-mutated working tree.
-- **Private-repo/`branch:`-tracked modules use SSH deploy keys**,
-  shallow-clone-and-discard rather than a persistent checkout
-  (`lib/ssh/bootstrap.sh`).
+- **Releases are not signed.** Trust in a release rests on GitHub's tags
+  and the release cooldown (`docs/decisions-log.md` D77), not on a
+  signature workbench checks.
+- **Private repos use SSH deploy keys** (`lib/ssh/bootstrap.sh`); public
+  `branch:`-tracked modules use `git` over HTTPS. Both shallow-clone and
+  discard rather than keep a persistent checkout.
+- **A module's `post_deploy` hook needs your consent.** Run from a script
+  with no terminal, that consent is automatic on a `manual` or `track`
+  sync (kept as designed, security status N12); the scheduled sync never
+  runs a hook without it.
 - **A module's registered shell content is engine-computed, not
   author-specified**, and confined to that module's own snapshot
   namespace (`docs/architecture.md` principle 1, `lib/manifest/validate.sh`'s

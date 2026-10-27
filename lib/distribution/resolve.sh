@@ -41,9 +41,19 @@ workbench_parse_github_url() {
 # the response body on stdout; returns non-zero on any failure (network,
 # 4xx/5xx, rate limit) without ever calling exit — callers treat resolution
 # failure as "skip this cycle, retry later" (docs/architecture.md §9.4's
-# rate-limit note), never fatal.
+# rate-limit note), never fatal. https only, redirects included (security
+# status N14).
 _wb_gh_curl() {
-    curl -fsSL -H "Accept: application/vnd.github+json" -A "workbench-core" "$1" 2>/dev/null
+    curl -fsSL --proto '=https' --proto-redir '=https' \
+        -H "Accept: application/vnd.github+json" -A "workbench-core" "$1" 2>/dev/null
+}
+
+# _wb_is_commit_sha <value>
+# True iff <value> is a full, lowercase 40-hex commit sha. Every sha the
+# API returns is checked with this before it reaches a URL or a directory
+# name (security status N14).
+_wb_is_commit_sha() {
+    [[ "$1" =~ ^[0-9a-f]{40}$ ]]
 }
 
 # _wb_gh_tags_json <owner> <repo>
@@ -91,6 +101,10 @@ workbench_resolve_latest_tag_public() {
     done <<< "${pairs}"
 
     [[ -z "${best_tag}" ]] && return 1
+    if ! _wb_is_commit_sha "${best_sha}"; then
+        log_error "workbench_resolve_latest_tag_public: ${owner}/${repo} ${best_tag}: the API returned '${best_sha}', not a commit sha — refusing it"
+        return 1
+    fi
     printf '%s|%s\n' "${best_tag}" "${best_sha}"
 }
 
@@ -101,7 +115,13 @@ workbench_resolve_tag_public() {
     local owner="$1" repo="$2" want="$3" pairs tag sha
     pairs="$(_wb_gh_tags_name_sha_pairs "${owner}" "${repo}")" || return 1
     while IFS='|' read -r tag sha; do
-        [[ "${tag}" == "${want}" ]] && { printf '%s\n' "${sha}"; return 0; }
+        [[ "${tag}" == "${want}" ]] || continue
+        if ! _wb_is_commit_sha "${sha}"; then
+            log_error "workbench_resolve_tag_public: ${owner}/${repo} ${want}: the API returned '${sha}', not a commit sha — refusing it"
+            return 1
+        fi
+        printf '%s\n' "${sha}"
+        return 0
     done <<< "${pairs}"
     return 1
 }
@@ -110,11 +130,16 @@ workbench_resolve_tag_public() {
 # Prints the branch tip's full sha. Ported from install.sh's
 # _resolve_branch_sha(), unchanged.
 workbench_resolve_branch_public() {
-    local owner="$1" repo="$2" branch="$3"
-    _wb_gh_curl "https://api.github.com/repos/${owner}/${repo}/commits/${branch}" \
+    local owner="$1" repo="$2" branch="$3" sha
+    sha="$(_wb_gh_curl "https://api.github.com/repos/${owner}/${repo}/commits/${branch}" \
         | grep -o '"sha":[^,]*' \
         | head -1 \
-        | grep -oE '[0-9a-f]{40}'
+        | sed -E 's/^"sha":[[:space:]]*"?([^"]*)"?[[:space:]]*$/\1/')"
+    if ! _wb_is_commit_sha "${sha}"; then
+        [[ -n "${sha}" ]] && log_error "workbench_resolve_branch_public: ${owner}/${repo} ${branch}: the API returned '${sha}', not a commit sha — refusing it"
+        return 1
+    fi
+    printf '%s\n' "${sha}"
 }
 
 # workbench_resolve_commit_public <owner> <repo> <sha>
@@ -122,8 +147,17 @@ workbench_resolve_branch_public() {
 # exists upstream. Prints <sha> back on success. This is the defensive,
 # not-normally-expected check docs/architecture.md §9.2 describes for
 # commit:<sha> pins.
+#
+# <sha> is the user's pin, not an API answer, so it follows the
+# `wb track --commit` contract (_wb_track_commit_is_safe): 7-40 hex
+# characters, an abbreviated sha included. Lowercase only, since the API
+# reports lowercase and the match below is exact.
 workbench_resolve_commit_public() {
     local owner="$1" repo="$2" sha="$3" body
+    if ! [[ "${sha}" =~ ^[0-9a-f]{7,40}$ ]]; then
+        log_error "workbench_resolve_commit_public: ${owner}/${repo}: commit pin '${sha}' is not 7-40 lowercase hex characters — refusing it"
+        return 1
+    fi
     body="$(_wb_gh_curl "https://api.github.com/repos/${owner}/${repo}/commits/${sha}")" || return 1
     printf '%s' "${body}" | grep -q "\"sha\": *\"${sha}" || \
     printf '%s' "${body}" | grep -q "\"sha\":\"${sha}" || return 1

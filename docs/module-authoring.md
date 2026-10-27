@@ -328,6 +328,27 @@ reserved for `wb tools`'s own subcommands/argument — an `install-all` or
 one-time warning, rather than silently shadowing (or colliding with) the
 verb itself. Pick a different name.
 
+### The AUR is opt-in (`WORKBENCH_ALLOW_AUR`)
+
+An installer whose only Arch route is the Arch User Repository (`yay`, or
+`makepkg` on a cloned PKGBUILD) must check
+`[[ "${WORKBENCH_ALLOW_AUR:-false}" == "true" ]]` before using it. AUR
+packages are unreviewed build scripts, run as the user and then installed
+as root. Without the opt-in, log the exact command for the user to run
+themselves and return 1:
+
+```sh
+if [[ "${WORKBENCH_ALLOW_AUR:-false}" != "true" ]]; then
+    log_warn "1password is only in the AUR on Arch. Install it yourself: yay -S 1password"
+    log_warn "(or set WORKBENCH_ALLOW_AUR=true in ~/.config/workbench/local/settings.sh)"
+    return 1
+fi
+```
+
+The user sets it in `~/.config/workbench/local/settings.sh`. Core only
+documents the switch; each module checks it itself
+(`docs/decisions-log.md` D100).
+
 ## Reporting install status (optional but recommended)
 
 Declare `installed-<name>` in the **same file** as `install-<name>` (no

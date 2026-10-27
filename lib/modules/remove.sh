@@ -58,5 +58,5 @@ workbench_cmd_remove() {
     fi
 
     workbench_module_conf_set "${name}" REGISTERED "false"
-    log_info "wb remove: '${name}' deregistered — its deployed content and snapshots are left in place; re-run 'wb add ${name}' to bring it back — to put back the files it replaced, run 'wb remove ${name} --restore' instead"
+    log_info "wb remove: '${name}' deregistered — its deployed files, and its blocks in your config files (still active), are left in place; re-run 'wb add ${name}' to bring it back — to take them out and put back what it replaced, run 'wb remove ${name} --restore' instead"
 }
