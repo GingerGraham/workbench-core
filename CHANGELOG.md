@@ -4,6 +4,16 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Module CI's clean-shell check is stricter.** It writes the zsh rc
+  stubs a zsh user gets (`.zshrc` and `.zshenv`), fails a shell start that
+  leaves `WORKBENCH_LOADER_PATH` garbled, requires every getter to list at
+  least one of the module's own names (a getter printing only `(none)`
+  used to pass), and fails when a getter lists a name under "module gave
+  no reason" (`docs/decisions-log.md` D98, D101). Declaring what a gated
+  name needs is now required (`docs/module-authoring.md`).
+
 ### Added
 
 - **`WORKBENCH_GITHUB_TOKEN`.** Set it to any GitHub token to

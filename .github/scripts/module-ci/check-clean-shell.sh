@@ -12,15 +12,18 @@
 #      'wb tools install|upgrade <name>'.
 #   2. Clean start, tools absent: with a bare PATH (core's required prereqs
 #      plus baseline utilities), interactive bash and zsh start with empty
-#      stderr (bash's two job-control lines aside), and every
-#      register.getters[] function exits 0 and prints an [INFO] header in
-#      each shell.
+#      stderr (bash's two job-control lines aside) and a
+#      WORKBENCH_LOADER_PATH that names an existing file, and every
+#      register.getters[] function exits 0 in each shell, lists at least
+#      one of the module's own names (D98), and lists no name under
+#      "module gave no reason" (D101).
 #   3. Clean start, runner PATH: the same two shell starts with the
 #      runner's normal PATH, stderr empty.
 #
 # Before the shell starts, 'wb apply' registers core from the core checkout
-# under test and writes the real rc stubs, so the shells load exactly what a
-# user's would: core plus this module.
+# under test and writes the real rc stubs — ~/.bashrc, ~/.zshrc and
+# ~/.zshenv, as a zsh user's install does (D98) — so the shells load
+# exactly what a user's would: core plus this module.
 #
 # Required env: WB, MODULE_NAME, MODULE_ROOT, and the HOME / XDG_DATA_HOME /
 # XDG_CONFIG_HOME check-add-to-core.sh exported. Prints numbered OK:/FAIL:
@@ -37,11 +40,20 @@ check_no=0
 ok()   { check_no=$((check_no + 1)); echo "OK:   [clean-shell ${check_no}] $*"; }
 fail() { check_no=$((check_no + 1)); echo "FAIL: [clean-shell ${check_no}] $*"; FAILED=$((FAILED + 1)); }
 
-CORE_ROOT="$(cd "$(dirname "${WB}")/.." && pwd)"
+CORE_ROOT="$(cd -- "$(dirname -- "${WB}")/.." >/dev/null 2>&1 && pwd)"
 # shellcheck source=lib/manifest/parse.sh
 source "${CORE_ROOT}/lib/manifest/parse.sh"
 # shellcheck source=lib/core/prereqs.sh
 source "${CORE_ROOT}/lib/core/prereqs.sh" >/dev/null 2>&1
+# log.sh and functions.sh for _extract_function_names/_extract_alias_names.
+# shellcheck source=lib/core/log.sh
+source "${CORE_ROOT}/lib/core/log.sh" >/dev/null 2>&1
+# shellcheck source=lib/core/functions.sh
+source "${CORE_ROOT}/lib/core/functions.sh" >/dev/null 2>&1
+# Shared with the ecosystem smoke test (D99): the bare PATH, the shell
+# start, the loader-path check and the module-name check.
+# shellcheck source=.github/scripts/module-ci/shell-checks-lib.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/shell-checks-lib.sh"
 
 MANIFEST="$(workbench_resolve_manifest_path "${MODULE_ROOT}")"
 SCRATCH="$(mktemp -d)"
@@ -67,14 +79,22 @@ else
 fi
 
 # ── Register core and write the rc stubs ────────────────────────────────────
+# An existing ~/.zshrc is what makes wb apply write the zsh stubs, both
+# ~/.zshrc and ~/.zshenv, exactly as a zsh user's install does (D98).
+touch "${HOME}/.zshrc"
 if "${WB}" apply </dev/null >"${SCRATCH}/apply.log" 2>&1; then
     ok "wb apply registered core and wrote the rc stubs"
 else
     fail "wb apply failed — the shell-start checks below may be meaningless"
     cat "${SCRATCH}/apply.log"
 fi
-# wb apply writes ~/.zshrc only when one exists or it runs under zsh.
-[[ -f "${HOME}/.zshrc" ]] || cp "${HOME}/.bashrc" "${HOME}/.zshrc"
+for rc in .bashrc .zshrc .zshenv; do
+    if grep -qF "# workbench-core loader" "${HOME}/${rc}" 2>/dev/null; then
+        ok "wb apply wrote the loader stub to ~/${rc}"
+    else
+        fail "wb apply did not write the loader stub to ~/${rc}"
+    fi
+done
 
 # ── zsh on Linux runners ────────────────────────────────────────────────────
 # Each module pins its own copy of module-ci.yml, and pins older than
@@ -91,57 +111,19 @@ fi
 
 # ── Bare PATH: core's required prereqs, baseline utilities, the shells ─────
 BARE_BIN="${SCRATCH}/bare-bin"
-mkdir -p "${BARE_BIN}"
-baseline=(
-    bash zsh uname sleep kill
-    cat cp mv rm mkdir rmdir ln ls touch chmod readlink basename dirname
-    head tail sort uniq wc cut tee date env mktemp id groups printf test expr
-    find xargs stat hostname tput
-    # macOS's /etc/zshrc runs `locale` in every interactive zsh (D95).
-    locale
-)
-for bin in "${_WB_SHELL_PREREQS_REQUIRED[@]}" "${baseline[@]}"; do
-    path="$(command -v "${bin}" 2>/dev/null)"
-    [[ -n "${path}" && "${path}" == /* ]] && ln -sf "${path}" "${BARE_BIN}/${bin}"
-done
-
-# shell_start <bash|zsh> <PATH> <commands> <stderr-file> — an interactive
-# shell, through the rc stub, in a clean environment. skip_global_compinit:
-# Ubuntu's /etc/zsh/zshrc runs compinit in every interactive zsh, and on a
-# GitHub runner compinit finds an fpath directory it calls insecure and,
-# with no terminal to ask on, prints "compinit: initialization aborted" —
-# runner noise, not the module's. Setting it is the documented opt-out.
-shell_start() {
-    local shell="$1" path="$2" cmds="$3" err="$4"
-    env -i \
-        HOME="${HOME}" \
-        XDG_DATA_HOME="${XDG_DATA_HOME}" \
-        XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" \
-        XDG_CACHE_HOME="${XDG_CACHE_HOME:-${HOME}/.cache}" \
-        USER="${USER:-runner}" \
-        TERM=dumb \
-        skip_global_compinit=1 \
-        PATH="${path}" \
-        "${BARE_BIN}/${shell}" -i -c "${cmds}" 2>"${err}" </dev/null
-}
-
-# Bash prints two job-control lines when -i has no terminal; nothing else
-# on stderr is acceptable.
-filtered_stderr() {
-    grep -vE 'cannot set terminal process group|no job control in this shell' "$1"
-}
+_wb_ci_make_bare_bin "${BARE_BIN}"
 
 check_start() {
     local label="$1" shell="$2" path="$3"
     local err="${SCRATCH}/${shell}-${label// /-}.err"
-    # ':' rather than 'exit': an interactive bash prints "exit" to stderr
-    # when the exit builtin runs.
-    shell_start "${shell}" "${path}" ':' "${err}" >/dev/null
-    if [[ -z "$(filtered_stderr "${err}")" ]]; then
-        ok "${label}: interactive ${shell} starts with empty stderr"
+    # The command fails by name when the loader's own path didn't survive
+    # the start (D98).
+    _wb_ci_shell_start "${BARE_BIN}/${shell}" "${path}" "${_WB_CI_LOADER_PATH_CHECK}" "${err}" >/dev/null
+    if [[ -z "$(_wb_ci_filtered_stderr "${err}")" ]]; then
+        ok "${label}: interactive ${shell} starts with empty stderr and a valid WORKBENCH_LOADER_PATH"
     else
         fail "${label}: interactive ${shell} wrote to stderr:"
-        filtered_stderr "${err}" | sed 's/^/        /'
+        _wb_ci_filtered_stderr "${err}" | sed 's/^/        /'
     fi
 }
 
@@ -149,6 +131,12 @@ getters=()
 while IFS='|' read -r _gname gfn _glabel; do
     [[ -n "${gfn}" ]] && getters+=("${gfn}")
 done < <(workbench_manifest_register_getter_entries "${MANIFEST}")
+
+# The module's own public names, from its registered shell files: what any
+# working getter must show, either as usable or under "available once
+# tooling is installed" (D98). Empty for a module that registers no names;
+# then any [INFO] header is enough.
+module_names="$(_wb_ci_module_names "${MODULE_NAME}")"
 
 for shell in bash zsh; do
     if [[ ! -x "${BARE_BIN}/${shell}" ]]; then
@@ -162,14 +150,19 @@ for shell in bash zsh; do
     for fn in ${getters[@]+"${getters[@]}"}; do
         out_file="${SCRATCH}/${shell}-${fn}.out"
         err_file="${SCRATCH}/${shell}-${fn}.err"
-        shell_start "${shell}" "${BARE_BIN}" "${fn}" "${err_file}" >"${out_file}"
+        _wb_ci_shell_start "${BARE_BIN}/${shell}" "${BARE_BIN}" "${fn}" "${err_file}" >"${out_file}"
         rc=$?
-        if [[ "${rc}" -eq 0 ]] && grep -q '\[INFO\]' "${out_file}"; then
-            ok "tools absent: ${shell}: getter ${fn} exits 0 and lists something"
+        if [[ "${rc}" -eq 0 ]] && _wb_ci_lists_a_module_name "${out_file}" "${module_names}"; then
+            ok "tools absent: ${shell}: getter ${fn} exits 0 and lists the module's names"
         else
-            fail "tools absent: ${shell}: getter ${fn} exited ${rc} or printed no [INFO] header"
+            fail "tools absent: ${shell}: getter ${fn} exited ${rc} or listed none of the module's names"
             sed 's/^/        out: /' "${out_file}"
-            filtered_stderr "${err_file}" | sed 's/^/        err: /'
+            _wb_ci_filtered_stderr "${err_file}" | sed 's/^/        err: /'
+        fi
+        # Every name a getter shows as unavailable says why (D101).
+        if grep -q "module gave no reason" "${out_file}"; then
+            fail "tools absent: ${shell}: getter ${fn} lists names with no reason — give each predicate a --needs text (docs/module-authoring.md, 'Declaring function availability')"
+            sed -n '/module gave no reason/,/^$/p' "${out_file}" | sed 's/^/        /'
         fi
     done
 
