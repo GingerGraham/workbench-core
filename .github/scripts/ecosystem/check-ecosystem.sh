@@ -182,7 +182,7 @@ for shell in ${SHELLS}; do
         fail "${shell}: wb functions --no-pager exited ${rc}, or lists names with no reason or a timed-out predicate:"
         if [[ -n "${problems}" ]]; then
             # The section for each problem line, so the names show.
-            sed -n '/module gave no reason\|timed out\|were killed/,/^$/p' "${out_file}" | indent ""
+            sed -E -n '/module gave no reason|timed out|were killed/,/^$/p' "${out_file}" | indent ""
             grep -E 'timed out|were killed' "${err_file}" | indent "err: "
         else
             indent "out: " < "${out_file}"
