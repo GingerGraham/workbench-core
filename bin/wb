@@ -393,6 +393,11 @@ _wb_scaffold_local_overrides() {
 # Disable ~/.config/workbench/user/*.sh entirely (hand-authored "pseudo-
 # module" extensions) — on by default.
 # WORKBENCH_USER_EXT_ENABLED=false
+
+# Let installers build and install packages from the Arch User Repository
+# (yay, or makepkg). AUR packages are unreviewed build scripts run as you,
+# then installed as root. Off by default (docs/decisions-log.md D100).
+# WORKBENCH_ALLOW_AUR=true
 EOF
     log_info "wb install: wrote default local-overrides file to ${settings}"
 }
