@@ -4,6 +4,15 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`WORKBENCH_GITHUB_TOKEN`.** Set it to any GitHub token to
+  authenticate bootstrap's and the sync engine's release lookups, for
+  hosts behind a shared IP that run out of GitHub's 60 unauthenticated
+  API requests an hour. It is sent only to `api.github.com`, passed to
+  `curl` on stdin rather than its command line, and never written to a
+  file (`docs/decisions-log.md` D99).
+
 ## [2.21.2] - 2026-10-26
 
 ### Security
