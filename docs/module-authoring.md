@@ -15,7 +15,7 @@ and shell loader.
 - [What core does with your files](#what-core-does-with-your-files)
 - [Layering config into a tool the user already uses](#layering-config-into-a-tool-the-user-already-uses)
 - [Declaring installers (`wb tools`)](#declaring-installers-wb-tools)
-- [Declaring function availability (optional but recommended)](#declaring-function-availability-optional-but-recommended)
+- [Declaring function availability (required for names that need a tool)](#declaring-function-availability-required-for-names-that-need-a-tool)
 - [Publishing module info & docs (optional but recommended)](#publishing-module-info--docs-optional-but-recommended)
 - [The arch-normalization snippet](#the-arch-normalization-snippet)
 - [Hooks](#hooks)
@@ -392,7 +392,17 @@ This predicate should be cheap and side-effect-free (typically a single
 `command -v`/file-existence check) — it may run once per tool on every
 `wb tools list --status` or `wb tools upgrade` invocation.
 
-## Declaring function availability (optional but recommended)
+## Declaring function availability (required for names that need a tool)
+
+**Requirement** (`docs/decisions-log.md` D101): a public function or alias
+that can't work without an external tool declares a predicate, and the
+predicate says what it needs — a `--needs` text, a
+`_wb_availability_needs` line, or the command given to
+`_wb_declare_availability`. Module CI's clean-shell check fails when a
+getter lists any name under "module gave no reason". Place declarations
+before any early `return` in the file, and declare a name defined only
+inside an `if command -v …` block too: listings read the file
+statically.
 
 Declare `_<name>-available` in the **same file** as `<name>` (no manifest
 entry needed) to let `<name>` be hidden from every listing surface —
@@ -452,9 +462,10 @@ _wb_alias_availability _tpm_tools_present enroll-luks-tpm2 rotate-luks-key
 
 `--needs` is what listings print for these names. `--install` is the
 `wb tools` friendly name that provides it (`install-<tool>` in a module's
-`register.installers[]`); it needs `--needs` beside it. Both are optional:
-without them the names are still hidden correctly, but listed under
-"module gave no reason" (see Discoverability below).
+`register.installers[]`); it needs `--needs` beside it. `--install` is
+optional. `--needs` is required (D101): without it the names are still
+hidden correctly, but listed under "module gave no reason" (see
+Discoverability below), and module CI fails.
 
 A check that is a variant test rather than a plain `command -v` is where
 `--needs` earns its place, because the listing cannot work out for itself
@@ -538,8 +549,8 @@ get-git-functions  git-cleanup  git-projects-base  git-setup-identity  gwt  gwt-
   really has an installer by that friendly name. A name that no installer
   provides is never given an install command.
 - A predicate with no declared reason is still shown, under "module gave
-  no reason (predicate reports unavailable)". Declare one with
-  `_wb_availability_needs` to replace that with something useful.
+  no reason (predicate reports unavailable)", and fails module CI.
+  Declare one with `_wb_availability_needs` (or `--needs`).
 - A predicate killed by `WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS` is shown
   under "availability check timed out (> Ns)", and `wb functions` still
   prints its warning.
@@ -559,6 +570,23 @@ everything in the main list with no block. You don't need to do anything
 for your module to get any of this — it is automatic once you're using the
 predicate convention above; `--needs`/`_wb_availability_needs` only make it
 more useful.
+
+### Writing for bash and zsh
+
+Every `register.shell` file is sourced into zsh as well as bash, and
+module CI starts both. In zsh:
+
+- an unquoted `${var}` does not word-split;
+- arrays start at 1;
+- `shopt`, `read -a` and `compgen` don't exist — use them only inside a
+  bash-only branch;
+- `${BASH_SOURCE[0]}` is empty inside a function — resolve paths at file
+  top level, as `${BASH_SOURCE[0]:-$0}`;
+- an unmatched glob is an error, not a literal — use `find` or test for
+  matches first.
+
+Installer files are never sourced into the user's shell: `wb tools` runs
+them in bash, with `WORKBENCH_SHELL=bash` whatever the user's shell is.
 
 ## Publishing module info & docs (optional but recommended)
 
@@ -739,8 +767,18 @@ It runs, on every PR:
     `PATH`. Guard every call to an optional tool (`command -v direnv
     &>/dev/null && eval "$(direnv hook bash)"`), and use only Core API
     functions your declared `core_api` floor provides.
-  - Every `register.getters[]` function exits 0 and prints at least one
-    `[INFO]` header, in both shells, with that bare `PATH`.
+  - Every `register.getters[]` function exits 0 in both shells, with that
+    bare `PATH`, and lists at least one of your module's own function or
+    alias names (taken from your registered shell files), either as usable
+    or as needing a tool. A module that registers no names needs only an
+    `[INFO]` header.
+  - No getter lists a name under "module gave no reason": every predicate
+    says what it needs (see "Declaring function availability").
+
+  The check writes the rc stubs a zsh user gets (`~/.bashrc`, `~/.zshrc`
+  and `~/.zshenv`), and each shell start also fails if
+  `WORKBENCH_LOADER_PATH` doesn't name an existing file afterwards
+  (`docs/decisions-log.md` D98).
 
 The `workbench-core` ref this checks against defaults to core's latest
 published GitHub Release, not `main` — override it with the
