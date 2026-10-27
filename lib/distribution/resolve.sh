@@ -15,7 +15,7 @@
 
 _wb_resolve_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/distribution/resolve.sh" "0.1.1" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/distribution/resolve.sh" "0.2.0" || true
 
 # workbench_parse_github_url <url>
 # Prints "<owner> <repo>" for an https or ssh GitHub remote URL. Empty
