@@ -210,6 +210,46 @@ else
     fi
 fi
 
+# ── Checks 12-14: <dest> is replaced atomically (security status N13) ──────
+# Staged in <dest>'s own directory and renamed there, so an interrupted
+# copy can never leave a partial file at <dest>.
+mkdir -p "${WORK}/12"
+printf 'old binary\n' > "${WORK}/12/tool"
+printf 'new binary\n' > "${WORK}/12-src"
+h12="$(sha256_of "${WORK}/12-src")"
+_wb_fetch_verified "file://${WORK}/12-src" "${WORK}/12/tool" "${h12}" >/dev/null 2>&1
+mode12="$(stat -c '%a' "${WORK}/12/tool" 2>/dev/null || stat -f '%Lp' "${WORK}/12/tool")"
+if cmp -s "${WORK}/12-src" "${WORK}/12/tool" && [[ "${mode12}" == "644" ]] \
+    && [[ -z "$(find "${WORK}/12" -name '.wb-fetch.*')" ]]; then
+    ok "an existing dest is replaced, mode 644, and no stage file is left beside it"
+else
+    fail "replace: content, mode (${mode12}) or a leftover .wb-fetch.* stage file is wrong"
+    ls -la "${WORK}/12"
+fi
+
+# A copy that fails part-way: the old dest is untouched, no stage left.
+printf 'old binary\n' > "${WORK}/12/tool"
+# shellcheck disable=SC2317,SC2329  # invoked indirectly, by _wb_fetch_verified (SC2317 on shellcheck < 0.11)
+cp() { return 1; }
+_wb_fetch_verified "file://${WORK}/12-src" "${WORK}/12/tool" "${h12}" >/dev/null 2>&1
+rc13=$?
+unset -f cp
+if [[ "${rc13}" -ne 0 ]] && [[ "$(cat "${WORK}/12/tool")" == "old binary" ]] \
+    && [[ -z "$(find "${WORK}/12" -name '.wb-fetch.*')" ]]; then
+    ok "a failed copy returns non-zero, leaves the old dest intact and no stage file"
+else
+    fail "failed copy: rc ${rc13}, dest '$(cat "${WORK}/12/tool")', stage files: $(find "${WORK}/12" -name '.wb-fetch.*')"
+fi
+
+# A hash mismatch never touches an existing dest.
+if ! _wb_fetch_verified "file://${WORK}/12-src" "${WORK}/12/tool" \
+        "0000000000000000000000000000000000000000000000000000000000000000" >/dev/null 2>&1 \
+    && [[ "$(cat "${WORK}/12/tool")" == "old binary" ]]; then
+    ok "a hash mismatch leaves an existing dest untouched"
+else
+    fail "a hash mismatch changed an existing dest"
+fi
+
 # ── zsh: re-run checks 1, 10 and 10b under zsh if available ──────────────────────
 if command -v zsh &>/dev/null; then
     # shellcheck disable=SC2097,SC2098

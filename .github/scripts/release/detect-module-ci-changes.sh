@@ -2,8 +2,10 @@
 # .github/scripts/release/detect-module-ci-changes.sh — decides whether
 # commits since the last release tag touched anything module CI consumes
 # from core's *release* (.github/actions/**, .github/workflows/module-*.yml,
-# or .github/scripts/module-ci/** — the scripts module-ci.yml runs from the
-# core checkout it resolves, D40; added by D95).
+# or the scripts those workflows run from the core checkout they resolve:
+# .github/scripts/module-ci/** (D40, added by D95),
+# .github/scripts/module-release/** and .github/scripts/module-pr-check/**
+# (added for security status N10).
 # Those paths are not registered files, so compute-bumps.sh would never bump
 # for them on its own, and module CI (which resolves core's latest release,
 # D78) would keep running stale rules (security review follow-up R3, D80).
@@ -29,7 +31,7 @@ if [[ -z "${prev_tag}" ]]; then
     exit 0
 fi
 
-changed="$(git diff --name-only "${prev_tag}..HEAD" -- '.github/actions' '.github/workflows/module-*.yml' '.github/scripts/module-ci')"
+changed="$(git diff --name-only "${prev_tag}..HEAD" -- '.github/actions' '.github/workflows/module-*.yml' '.github/scripts/module-ci' '.github/scripts/module-release' '.github/scripts/module-pr-check')"
 if [[ -z "${changed}" ]]; then
     echo "force_severity="
     exit 0

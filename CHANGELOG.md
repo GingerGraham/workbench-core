@@ -4,8 +4,39 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- **Downloads stay on https, redirects included.** Every `curl` that
+  resolves or fetches core and modules (`bootstrap.sh`, the sync engine's
+  GitHub API calls and tarball fetch) now refuses a redirect to anything
+  but https (security status N14).
+- **A commit sha from the GitHub API is checked before use.** The sha
+  becomes part of a download URL and of a snapshot directory name;
+  anything other than 40 lowercase hex characters is refused, in
+  `bootstrap.sh` and the sync engine (N14).
+- **`_wb_fetch_verified` replaces its destination atomically.** The
+  verified file is staged beside the destination and renamed into place,
+  so an interrupted copy across filesystems (a tmpfs `/tmp`) can no
+  longer leave a partial binary behind (N13).
+- **Changes to the module release and PR-check scripts now release core.**
+  Modules run `.github/scripts/module-release/` and
+  `.github/scripts/module-pr-check/` from core's latest release, so a
+  change there now triggers a core patch release, as module CI changes
+  already did (N10).
+
 ### Changed
 
+- **`wb remove` says what stays active.** Without `--restore`, a removed
+  module's blocks in your own config files (`~/.gitconfig`, `ssh_config`,
+  …) stay in place and keep working; the message now says so, and that
+  `--restore` takes them out.
+- **`WORKBENCH_ALLOW_AUR`.** New hosts' `settings.sh` lists the switch
+  that lets module installers use the Arch User Repository; it is off by
+  default (`docs/decisions-log.md` D100). `docs/module-authoring.md`
+  states the rule installers follow.
+- **`SECURITY.md`** corrects which modules use deploy keys (private repos
+  only) and adds that releases are unsigned and how hook consent works
+  without a terminal.
 - **Module CI's clean-shell check is stricter.** It writes the zsh rc
   stubs a zsh user gets (`.zshrc` and `.zshenv`), fails a shell start that
   leaves `WORKBENCH_LOADER_PATH` garbled, requires every getter to list at

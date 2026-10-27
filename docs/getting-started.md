@@ -24,6 +24,9 @@ Two ways in, depending on what you want from workbench:
   use workbench's, or add `--use-files --yes` to script it. Your files are
   backed up first; your git identity and ssh hosts are carried into the
   new files.
+
+  The README's [Modules and bundles](../README.md#modules-and-bundles)
+  table lists every module and what each bundle installs.
 - **"I like my config, I want your tooling."** Run bootstrap, or `wb add
   <module>` later, and press Enter at the question (keep mine), or add
   `--keep-files`. What keep means:
@@ -213,6 +216,10 @@ documented switches live (`WORKBENCH_PLAIN_SHELL`, `WORKBENCH_SHOW_FUNCTIONS`,
 etc.), and it's sourced twice: once early, so a flag you set there gates
 everything else that loads afterward, and again at the very end, so it
 wins over anything a module also touched.
+
+One of those switches, `WORKBENCH_ALLOW_AUR=true`, lets installers use the
+Arch User Repository (`yay`/`makepkg`). It is off by default: without it,
+an installer that would need the AUR prints the command to run yourself.
 
 Want your own functions or aliases, entirely separate from that switches
 file? Drop any number of other `*.sh` files into the same
