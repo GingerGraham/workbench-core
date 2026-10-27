@@ -3,7 +3,8 @@
 #
 # The shipped bundles.list and modules.list stay in step: every bundle
 # member resolves in the catalog, and 'full' lists exactly the catalog's
-# modules. An unknown bundle name is a usage error that changes nothing.
+# modules. README.md's "Modules and bundles" section names every module
+# and bundle. An unknown bundle name is a usage error that changes nothing.
 # Offline: no module is fetched.
 set -uo pipefail
 
@@ -56,7 +57,44 @@ else
     diff <(echo "${FULL_MEMBERS}") <(echo "${SHIPPED_MODULES}")
 fi
 
-# ── 3-6. wb install --bundle <unknown> changes nothing. ────────────────────
+# ── 3-4. README's "Modules and bundles" section names every module and ─────
+# bundle, so the table can't go stale when one is added. Each name must
+# appear in backticks inside that section.
+readme_section="$(awk '
+    /^## Modules and bundles$/ { in_section = 1; next }
+    /^## / && in_section { exit }
+    in_section { print }
+' "${REPO_ROOT}/README.md")"
+
+missing_modules=""
+while IFS= read -r module; do
+    [[ -z "${module}" ]] && continue
+    case "${readme_section}" in
+        *"\`${module}\`"*) ;;
+        *) missing_modules="${missing_modules} ${module}" ;;
+    esac
+done <<< "${SHIPPED_MODULES}"
+if [[ -n "${readme_section}" && -z "${missing_modules}" ]]; then
+    ok "README's Modules and bundles section names every module in modules.list"
+else
+    fail "README's Modules and bundles section is missing or lacks modules:${missing_modules}"
+fi
+
+missing_bundles=""
+while IFS= read -r bundle; do
+    [[ -z "${bundle}" ]] && continue
+    case "${readme_section}" in
+        *"\`${bundle}\`"*) ;;
+        *) missing_bundles="${missing_bundles} ${bundle}" ;;
+    esac
+done < <(workbench_catalog_list_bundles)
+if [[ -n "${readme_section}" && -z "${missing_bundles}" ]]; then
+    ok "README's Modules and bundles section names every bundle in bundles.list"
+else
+    fail "README's Modules and bundles section is missing or lacks bundles:${missing_bundles}"
+fi
+
+# ── 5-8. wb install --bundle <unknown> changes nothing. ────────────────────
 bash "${WB}" install --bundle no-such-bundle </dev/null >"${WORK}/install.log" 2>&1
 rc=$?
 if [[ "${rc}" -eq 2 ]]; then
