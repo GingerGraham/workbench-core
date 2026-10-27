@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.22.0] - 2026-10-27
+
 ### Security
 
 - **Downloads stay on https, redirects included.** Every `curl` that
