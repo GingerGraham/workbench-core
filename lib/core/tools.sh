@@ -92,7 +92,17 @@ ${friendly}|${name}"
 # most once per lookup, and the fallback spelling is only ever returned
 # once the whole stream has been checked for an exact match.
 workbench_tools_lookup() {
-    local target="$1"
+    workbench_tools_lookup_in "$(workbench_tools_collect)" "$1"
+}
+
+# workbench_tools_lookup_in <collected> <name>
+# The same match as workbench_tools_lookup, against <collected>: the
+# output of one earlier workbench_tools_collect call. 'wb tools install
+# a b c' resolves every name against one collection, so a collision or
+# reserved-name warning prints once per command, not once per name
+# (docs/decisions-log.md D106).
+workbench_tools_lookup_in() {
+    local collected="$1" target="$2"
     local fallback=""
     case "${target}" in
         install-*) fallback="${target#install-}" ;;
@@ -100,6 +110,7 @@ workbench_tools_lookup() {
 
     local name abs_path func friendly fallback_hit=""
     while IFS='|' read -r name abs_path func friendly; do
+        [[ -z "${friendly}" ]] && continue
         if [[ "${friendly}" == "${target}" ]]; then
             printf '%s|%s|%s\n' "${name}" "${abs_path}" "${func}"
             return 0
@@ -107,7 +118,7 @@ workbench_tools_lookup() {
         if [[ -n "${fallback}" && -z "${fallback_hit}" && "${friendly}" == "${fallback}" ]]; then
             fallback_hit="${name}|${abs_path}|${func}"
         fi
-    done < <(workbench_tools_collect)
+    done <<< "${collected}"
 
     if [[ -n "${fallback_hit}" ]]; then
         printf '%s\n' "${fallback_hit}"

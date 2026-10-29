@@ -114,7 +114,7 @@ DAILY USE
                                'core' also auto-triggers 'wb apply' when
                                core's commit actually changed.
   functions                   List registered shell functions/getters.
-  tools [list [--status] | install <name>|all | upgrade [<name>|all]]
+  tools [list [--status] | install <name>...|all | upgrade [<name>...|all]]
                                List/run the install-* functions modules
                                declared via register.installers[] — manual
                                only, never on the sync timer. 'install'
@@ -1077,7 +1077,7 @@ _wb_cmd_tools_list() {
     local name abs_path func friendly current_module="" any="false" status
     echo
     echo "[INFO] Discovered install-* tools, by module:"
-    echo "  Run 'wb tools install <name>' (or 'wb tools upgrade <name>') using the name"
+    echo "  Run 'wb tools install <name>...' (or 'wb tools upgrade <name>...') using the names"
     echo "  in the left column below — the right column is the underlying function name,"
     echo "  not something to type directly."
     if [[ "${show_status}" == "false" ]]; then
@@ -1195,25 +1195,121 @@ _wb_tools_check_installed() {
     )
 }
 
-# _wb_cmd_tools_install <name>|all
+# _wb_tools_exit_status <count>
+# A failure count as an exit status. Capped at 125 so a large count can
+# never wrap to 0 (256 failures would exit 0) or land on the shell's own
+# 126/127 meanings.
+_wb_tools_exit_status() {
+    local count="$1"
+    if [[ "${count}" -gt 125 ]]; then
+        count=125
+    fi
+    return "${count}"
+}
+
+# _wb_tools_resolve <verb> <collected> <name>...
+# Resolves every <name> against <collected> (one workbench_tools_collect
+# run) and prints module|abs_path|function|friendly once per distinct
+# tool, in the order given. A name and its install-<name> spelling (D41)
+# resolve to the same tool and are printed once. If any name doesn't
+# resolve, prints nothing, names every unresolved one in a single error,
+# and returns 2: nothing has run yet, so a typo in the fifth name never
+# leaves four tools installed (docs/decisions-log.md D106).
+_wb_tools_resolve() {
+    local verb="$1" collected="$2"
+    shift 2
+    local target hit name abs_path func friendly
+    local resolved="" seen="" unknown=""
+
+    for target in "$@"; do
+        if ! hit="$(workbench_tools_lookup_in "${collected}" "${target}")"; then
+            unknown="${unknown} ${target}"
+            continue
+        fi
+        IFS='|' read -r name abs_path func <<< "${hit}"
+        if printf '%s\n' "${seen}" | grep -qx -- "${func}"; then
+            continue
+        fi
+        seen="${seen}
+${func}"
+        friendly="${func#install-}"
+        resolved="${resolved}${name}|${abs_path}|${func}|${friendly}
+"
+    done
+
+    if [[ -n "${unknown}" ]]; then
+        log_error "wb tools ${verb}: no discovered installer named:${unknown} — see 'wb tools list'. Nothing was run."
+        return 2
+    fi
+    printf '%s' "${resolved}"
+}
+
+# _wb_tools_install_entries <entries>
+# Runs install-<name> for every line of <entries> (module|abs_path|
+# function|friendly), then prints one summary of what was installed and
+# what failed, so the result doesn't have to be found by scrolling back
+# through package-manager output. Exit status is the failure count.
+_wb_tools_install_entries() {
+    local entries="$1"
+    local name abs_path func friendly rc
+    local failures=0 failed_names="" installed_count=0 installed_names=""
+
+    # fd 3, not stdin: an installer that reads stdin (a prompt, a package
+    # manager without -y) must not swallow the rest of the tool list.
+    while IFS='|' read -r name abs_path func friendly <&3; do
+        [[ -z "${friendly}" ]] && continue
+        _wb_tools_invoke "install" "${name}" "${abs_path}" "${func}" "${friendly}"
+        rc=$?
+        if [[ "${rc}" -eq 0 ]]; then
+            installed_count=$((installed_count + 1))
+            installed_names="${installed_names} ${friendly}"
+        else
+            log_error "wb tools install: ${friendly} (${name}): failed (exit ${rc})"
+            failures=$((failures + 1))
+            failed_names="${failed_names} ${friendly}"
+        fi
+    done 3<<< "${entries}"
+
+    echo
+    echo "[INFO] wb tools install: ${installed_count} tool(s) installed:${installed_names:- none}"
+    if [[ "${failures}" -gt 0 ]]; then
+        log_error "wb tools install: ${failures} tool(s) failed:${failed_names}"
+    fi
+    echo
+    _wb_tools_exit_status "${failures}"
+}
+
+# _wb_cmd_tools_install <name>...|all
 # 'install' always runs install-<name>, first-time or not — no target and
 # no bare invocation are accepted; you must say what you mean
 # (docs/decisions-log.md D43 — "never install something unless specifically
-# directed to"). 'all' is the one way to mean "everything discovered",
-# and is itself gated behind printing the full list and a plain-stdin
-# y/N confirmation — plain `read -r`, not _read_prompt's /dev/tty read,
-# matching lib/modules/dev.sh's existing precedent: this is a top-level
-# interactive command a human runs directly, not a provisioning-script
-# context. No/empty/EOF input all abort cleanly with nothing run.
+# directed to"). One or more names install exactly those tools, with no
+# confirmation: naming them is the deliberate act (D43, D106). Every name
+# is resolved before any installer runs. 'all' is the one way to mean
+# "everything discovered", can't be combined with names, and is gated
+# behind printing the full list and a plain-stdin y/N confirmation — plain
+# `read -r`, not _read_prompt's /dev/tty read, matching lib/modules/dev.sh's
+# existing precedent: this is a top-level interactive command a human runs
+# directly, not a provisioning-script context. No/empty/EOF input all
+# abort cleanly with nothing run.
 _wb_cmd_tools_install() {
-    local target="${1:-}"
+    local target collected entries
 
-    if [[ -z "${target}" ]]; then
-        log_error "wb tools install: usage: wb tools install <name>|all — install never runs without an explicit target."
+    if [[ $# -eq 0 ]]; then
+        log_error "wb tools install: usage: wb tools install <name>...|all — install never runs without an explicit target."
         return 2
     fi
+    for target in "$@"; do
+        if [[ "${target}" == "all" && $# -gt 1 ]]; then
+            log_error "wb tools install: 'all' can't be combined with tool names — use 'wb tools install all' or name the tools. Nothing was run."
+            return 2
+        fi
+    done
 
-    if [[ "${target}" != "all" ]]; then
+    # One name: unchanged single-target behaviour — the installer's own
+    # exit status is wb's exit status.
+    if [[ $# -eq 1 && "$1" != "all" ]]; then
+        target="$1"
         local hit name abs_path func
         hit="$(workbench_tools_lookup "${target}")" || {
             log_error "wb tools install: no discovered installer named '${target}' — see 'wb tools list'"
@@ -1224,6 +1320,14 @@ _wb_cmd_tools_install() {
         return $?
     fi
 
+    collected="$(workbench_tools_collect)"
+
+    if [[ "$1" != "all" ]]; then
+        entries="$(_wb_tools_resolve install "${collected}" "$@")" || return $?
+        _wb_tools_install_entries "${entries}"
+        return $?
+    fi
+
     local name abs_path func friendly any="false"
     echo
     echo "[INFO] About to install ALL of the following discovered tools:"
@@ -1231,7 +1335,7 @@ _wb_cmd_tools_install() {
         [[ -z "${friendly}" ]] && continue
         any="true"
         printf '    %-24s (%s)\n' "${friendly}" "${name}"
-    done < <(workbench_tools_collect)
+    done <<< "${collected}"
     echo
 
     if [[ "${any}" == "false" ]]; then
@@ -1254,42 +1358,103 @@ _wb_cmd_tools_install() {
             ;;
     esac
 
-    local failures=0 failed_names="" rc
+    _wb_tools_install_entries "${collected}"
+}
+
+# _wb_tools_upgrade_entries <named:true|false> <entries>
+# Walks <entries> (module|abs_path|function|friendly) through
+# _wb_tools_check_installed:
+#   installed     -> run install-<name> (the actual "upgrade" action)
+#   not-installed -> never run. Silent for 'all' (most of a fresh host's
+#                     discovered tools land here); listed in the summary
+#                     when the user named the tools (<named> = true)
+#   unresponsive  -> never run; counted and listed once at the end, so a
+#                     module missing/failing its predicate is visible
+#                     instead of either silently ignored or blindly run
+# Exit status is the failure count.
+_wb_tools_upgrade_entries() {
+    local named="$1" entries="$2"
+    local name abs_path func friendly status any="false"
+    local upgraded_count=0 upgraded_names="" failed_count=0 failed_names=""
+    local unresponsive_count=0 unresponsive_names=""
+    local not_installed_count=0 not_installed_names=""
+
     # fd 3, not stdin: an installer that reads stdin (a prompt, a package
     # manager without -y) must not swallow the rest of the tool list.
     while IFS='|' read -r name abs_path func friendly <&3; do
         [[ -z "${friendly}" ]] && continue
-        _wb_tools_invoke "install" "${name}" "${abs_path}" "${func}" "${friendly}"
-        rc=$?
-        if [[ "${rc}" -ne 0 ]]; then
-            log_error "wb tools install: ${friendly} (${name}): failed (exit ${rc})"
-            failures=$((failures + 1))
-            failed_names="${failed_names} ${friendly}"
-        fi
-    done 3< <(workbench_tools_collect)
-    if [[ "${failures}" -gt 0 ]]; then
-        log_error "wb tools install: ${failures} tool(s) failed:${failed_names}"
+        any="true"
+        status="$(_wb_tools_check_installed "${name}" "${abs_path}" "${func}" "${friendly}")"
+        case "${status}" in
+            installed)
+                if _wb_tools_invoke "upgrade" "${name}" "${abs_path}" "${func}" "${friendly}"; then
+                    upgraded_count=$((upgraded_count + 1))
+                    upgraded_names="${upgraded_names} ${friendly}"
+                else
+                    log_error "wb tools upgrade: ${friendly} (${name}): failed"
+                    failed_count=$((failed_count + 1))
+                    failed_names="${failed_names} ${friendly}"
+                fi
+                ;;
+            not-installed)
+                not_installed_count=$((not_installed_count + 1))
+                not_installed_names="${not_installed_names} ${friendly}"
+                ;;
+            *)
+                unresponsive_count=$((unresponsive_count + 1))
+                unresponsive_names="${unresponsive_names}    ${friendly} (${name})
+"
+                ;;
+        esac
+    done 3<<< "${entries}"
+
+    if [[ "${any}" == "false" ]]; then
+        log_info "wb tools upgrade: nothing discovered — nothing to do."
+        return 0
     fi
-    return "${failures}"
+
+    echo
+    if [[ "${failed_count}" -gt 0 ]]; then
+        echo "[INFO] wb tools upgrade: ${upgraded_count} tool(s) upgraded, ${failed_count} failed."
+    else
+        echo "[INFO] wb tools upgrade: ${upgraded_count} tool(s) upgraded."
+    fi
+    if [[ "${named}" == "true" ]]; then
+        [[ "${upgraded_count}" -gt 0 ]] && echo "[INFO] wb tools upgrade: upgraded:${upgraded_names}"
+        [[ "${failed_count}" -gt 0 ]] && echo "[INFO] wb tools upgrade: failed:${failed_names}"
+        if [[ "${not_installed_count}" -gt 0 ]]; then
+            echo "[INFO] wb tools upgrade: ${not_installed_count} tool(s) not installed — nothing to upgrade (use 'wb tools install'):${not_installed_names}"
+        fi
+    fi
+    if [[ "${unresponsive_count}" -gt 0 ]]; then
+        echo "[INFO] wb tools upgrade: ${unresponsive_count} tool(s) skipped as unresponsive (no installed-<name> predicate, or it failed) — no-op:"
+        printf '%s' "${unresponsive_names}"
+    fi
+    echo
+    _wb_tools_exit_status "${failed_count}"
 }
 
-# _wb_cmd_tools_upgrade [<name>|all]
+# _wb_cmd_tools_upgrade [<name>...|all]
 # Only ever runs install-<name> for a tool whose installed-<name>
 # predicate actually reports it's installed (docs/decisions-log.md D43).
-# Bare/'all' walk every discovered tool via _wb_tools_check_installed:
-#   installed     -> run install-<name> (the actual "upgrade" action)
-#   not-installed -> dropped silently; unremarkable, most of a fresh
-#                     host's discovered tools land here
-#   unresponsive  -> never run; counted and listed once at the end, so a
-#                     module missing/failing its predicate is visible
-#                     instead of either silently ignored or blindly run
-# A single <name> target gets the same three-way check, scoped to one
-# tool — not-installed/unresponsive are reported and treated as a no-op,
-# never an error; only a genuine install-<name> failure is.
+# Bare/'all' walk every discovered tool; two or more names walk exactly
+# those, resolved up front like 'install' (D106). Both go through
+# _wb_tools_upgrade_entries. A single <name> target gets the same
+# three-way check, scoped to one tool — not-installed/unresponsive are
+# reported and treated as a no-op, never an error; only a genuine
+# install-<name> failure is.
 _wb_cmd_tools_upgrade() {
-    local target="${1:-}"
+    local target collected entries
 
-    if [[ -n "${target}" && "${target}" != "all" ]]; then
+    for target in "$@"; do
+        if [[ "${target}" == "all" && $# -gt 1 ]]; then
+            log_error "wb tools upgrade: 'all' can't be combined with tool names — use 'wb tools upgrade all' or name the tools. Nothing was run."
+            return 2
+        fi
+    done
+
+    if [[ $# -eq 1 && "$1" != "all" ]]; then
+        target="$1"
         local hit name abs_path func friendly status
         hit="$(workbench_tools_lookup "${target}")" || {
             log_error "wb tools upgrade: no discovered installer named '${target}' — see 'wb tools list'"
@@ -1322,51 +1487,15 @@ _wb_cmd_tools_upgrade() {
         esac
     fi
 
-    local name abs_path func friendly status any="false"
-    local upgraded_count=0 failed_count=0 unresponsive_count=0 unresponsive_names=""
-    # fd 3, not stdin: an installer that reads stdin (a prompt, a package
-    # manager without -y) must not swallow the rest of the tool list.
-    while IFS='|' read -r name abs_path func friendly <&3; do
-        [[ -z "${friendly}" ]] && continue
-        any="true"
-        status="$(_wb_tools_check_installed "${name}" "${abs_path}" "${func}" "${friendly}")"
-        case "${status}" in
-            installed)
-                if _wb_tools_invoke "upgrade" "${name}" "${abs_path}" "${func}" "${friendly}"; then
-                    upgraded_count=$((upgraded_count + 1))
-                else
-                    log_error "wb tools upgrade: ${friendly} (${name}): failed"
-                    failed_count=$((failed_count + 1))
-                fi
-                ;;
-            not-installed)
-                : # dropped from further consideration — expected, not worth reporting
-                ;;
-            *)
-                unresponsive_count=$((unresponsive_count + 1))
-                unresponsive_names="${unresponsive_names}    ${friendly} (${name})
-"
-                ;;
-        esac
-    done 3< <(workbench_tools_collect)
+    collected="$(workbench_tools_collect)"
 
-    if [[ "${any}" == "false" ]]; then
-        log_info "wb tools upgrade: nothing discovered — nothing to do."
-        return 0
+    if [[ $# -gt 1 ]]; then
+        entries="$(_wb_tools_resolve upgrade "${collected}" "$@")" || return $?
+        _wb_tools_upgrade_entries true "${entries}"
+        return $?
     fi
 
-    echo
-    if [[ "${failed_count}" -gt 0 ]]; then
-        echo "[INFO] wb tools upgrade: ${upgraded_count} tool(s) upgraded, ${failed_count} failed."
-    else
-        echo "[INFO] wb tools upgrade: ${upgraded_count} tool(s) upgraded."
-    fi
-    if [[ "${unresponsive_count}" -gt 0 ]]; then
-        echo "[INFO] wb tools upgrade: ${unresponsive_count} tool(s) skipped as unresponsive (no installed-<name> predicate, or it failed) — no-op:"
-        printf '%s' "${unresponsive_names}"
-    fi
-    echo
-    return "${failed_count}"
+    _wb_tools_upgrade_entries false "${collected}"
 }
 
 _wb_cmd_tools() {
@@ -1377,7 +1506,7 @@ _wb_cmd_tools() {
         install)   _wb_cmd_tools_install "$@" ;;
         upgrade)   _wb_cmd_tools_upgrade "$@" ;;
         *)
-            log_error "wb tools: usage: wb tools [list [--status]] | wb tools install <name>|all | wb tools upgrade [<name>|all]"
+            log_error "wb tools: usage: wb tools [list [--status]] | wb tools install <name>...|all | wb tools upgrade [<name>...|all]"
             return 2
             ;;
     esac
@@ -3476,7 +3605,7 @@ EOF
 
 _wb_help_tools() {
     cat <<'EOF'
-Usage: wb tools [list [--status]]  |  wb tools install <name>|all  |  wb tools upgrade [<name>|all]
+Usage: wb tools [list [--status]]  |  wb tools install <name>...|all  |  wb tools upgrade [<name>...|all]
 
 The tool-updating framework: discovers and invokes install-<name>
 functions any registered, sync-enabled module declared via its manifest's
@@ -3492,19 +3621,25 @@ that's entirely the module author's responsibility
                         installed-<name> predicate (if declared) and shows
                         whether it's already installed. Default with no
                         subcommand.
-  install <name>|all  Runs install-<name>, first-time or not — always
-                        requires an explicit target. 'all' lists every
+  install <name>...|all
+                      Runs install-<name> for each named tool, first-time
+                        or not — always requires an explicit target. Every
+                        name is checked before anything runs; one unknown
+                        name and nothing runs. 'all' lists every
                         discovered tool and requires a y/N confirmation
                         before running any of them; nothing runs on a
-                        bare 'wb tools install'.
-  upgrade [<name>|all] Only touches a tool whose installed-<name>
+                        bare 'wb tools install'. Two or more tools end
+                        with a summary of what installed and what failed.
+  upgrade [<name>...|all]
+                      Only touches a tool whose installed-<name>
                         predicate reports it as already installed.
                         Anything not installed, or with no predicate
                         declared at all (or one that errors), is skipped
                         and never run — 'not installed' is silent,
                         'unresponsive' is reported once at the end.
                         Safe to run bare: it only ever acts on what's
-                        already there.
+                        already there. Named tools that aren't installed
+                        are listed in the summary.
 
 <name> is the friendly name shown in 'wb tools list' (e.g. "direnv"), not
 the underlying install-<name> function — though the install-<name> form

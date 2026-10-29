@@ -186,6 +186,8 @@ _wb_completions() {
                 COMPREPLY=( \$(compgen -W "${tools_subs}" -- "\${cur}") )
             elif [[ \${COMP_CWORD} -eq 3 && ( "\${COMP_WORDS[2]}" == "install" || "\${COMP_WORDS[2]}" == "upgrade" ) ]]; then
                 COMPREPLY=( \$(compgen -W "\$(wb __complete tools 2>/dev/null) all" -- "\${cur}") )
+            elif [[ \${COMP_CWORD} -gt 3 && "\${COMP_WORDS[3]}" != "all" && ( "\${COMP_WORDS[2]}" == "install" || "\${COMP_WORDS[2]}" == "upgrade" ) ]]; then
+                COMPREPLY=( \$(compgen -W "\$(wb __complete tools 2>/dev/null)" -- "\${cur}") )
             fi
             ;;
         module)
@@ -287,6 +289,10 @@ _wb_completions() {
             elif [[ \${CURRENT} -eq 4 && ( "\${words[3]}" == "install" || "\${words[3]}" == "upgrade" ) ]]; then
                 local -a _wb_tools
                 _wb_tools=(\${(f)"\$(wb __complete tools 2>/dev/null)"} all)
+                _describe 'tool' _wb_tools
+            elif [[ \${CURRENT} -gt 4 && "\${words[4]}" != "all" && ( "\${words[3]}" == "install" || "\${words[3]}" == "upgrade" ) ]]; then
+                local -a _wb_tools
+                _wb_tools=(\${(f)"\$(wb __complete tools 2>/dev/null)"})
                 _describe 'tool' _wb_tools
             fi
             ;;
