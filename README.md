@@ -107,6 +107,7 @@ wb dev [<name>]                # guided switch to your own dev branch
 wb tools list                  # list install-* functions modules declared
 wb tools install <name>...     # install the named tools in one run
 wb functions                   # list registered shell functions/getters
+```
 
 Every command has detailed help via `wb help <command>` or
 `wb <command> --help` — including explicit disambiguation for the
