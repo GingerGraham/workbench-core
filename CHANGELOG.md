@@ -4,6 +4,15 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Bug report template asks for OS family and environment separately.**
+  The single "Platform" dropdown is replaced by an "Operating system"
+  dropdown (Fedora/RHEL, Debian/Ubuntu, Arch, SUSE, other Linux, macOS),
+  an optional distribution and version field, and an "Environment"
+  dropdown (directly on the OS, container, or WSL2), so a report says
+  which distro it ran on and whether that was WSL2 or a container.
+
 ## [2.22.0] - 2026-10-27
 
 ### Security
