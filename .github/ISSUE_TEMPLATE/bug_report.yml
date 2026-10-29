@@ -18,14 +18,37 @@ body:
     validations:
       required: true
   - type: dropdown
-    id: platform
+    id: os-family
     attributes:
-      label: Platform
+      label: Operating system
+      description: The OS you ran it on. For WSL2 or a container, pick the distro running inside it.
       options:
-        - Fedora / RHEL-family Linux
+        - Fedora / RHEL family (Fedora, RHEL, CentOS Stream, Rocky, Alma)
+        - Debian / Ubuntu family (Debian, Ubuntu, Linux Mint, Pop!_OS)
+        - Arch family (Arch, Manjaro, EndeavourOS, CachyOS)
+        - SUSE family (openSUSE Tumbleweed or Leap, SLE)
         - Other Linux
         - macOS
+    validations:
+      required: true
+  - type: input
+    id: distro-version
+    attributes:
+      label: Distribution and version
+      description: Exact distro and release, e.g. from `/etc/os-release` (`PRETTY_NAME`) or `sw_vers` on macOS.
+      placeholder: "Fedora Linux 43 (Workstation Edition)"
+    validations:
+      required: false
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Where it was running.
+      options:
+        - Directly on the OS (physical machine or VM)
+        - Container
         - WSL2
+      default: 0
     validations:
       required: true
   - type: textarea
