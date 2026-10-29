@@ -162,10 +162,10 @@ _wb_completions() {
 
     case "\${cmd}" in
         add)
-            if [[ \${COMP_CWORD} -eq 2 ]]; then
-                COMPREPLY=( \$(compgen -W "\$(wb __complete catalog-modules 2>/dev/null)" -- "\${cur}") )
-            elif [[ "\${COMP_WORDS[COMP_CWORD-1]}" == "--skip-layer" ]]; then
+            if [[ "\${COMP_WORDS[COMP_CWORD-1]}" == "--skip-layer" ]]; then
                 COMPREPLY=( \$(compgen -W "\$(wb __complete layer-ids "\${COMP_WORDS[2]}" 2>/dev/null)" -- "\${cur}") )
+            elif [[ "\${cur}" != -* ]]; then
+                COMPREPLY=( \$(compgen -W "\$(wb __complete catalog-modules 2>/dev/null)" -- "\${cur}") )
             fi
             ;;
         remove|track|dev|update)
@@ -248,14 +248,14 @@ _wb_completions() {
 
     case "\${cmd}" in
         add)
-            if [[ \${CURRENT} -eq 3 ]]; then
-                local -a _wb_catalog_mods
-                _wb_catalog_mods=(\${(f)"\$(wb __complete catalog-modules 2>/dev/null)"})
-                _describe 'module' _wb_catalog_mods
-            elif [[ "\${words[CURRENT-1]}" == "--skip-layer" ]]; then
+            if [[ "\${words[CURRENT-1]}" == "--skip-layer" ]]; then
                 local -a _wb_layer_ids
                 _wb_layer_ids=(\${(f)"\$(wb __complete layer-ids "\${words[3]}" 2>/dev/null)"})
                 _describe 'layer' _wb_layer_ids
+            elif [[ "\${words[CURRENT]}" != -* ]]; then
+                local -a _wb_catalog_mods
+                _wb_catalog_mods=(\${(f)"\$(wb __complete catalog-modules 2>/dev/null)"})
+                _describe 'module' _wb_catalog_mods
             fi
             ;;
         remove|track|dev|update)

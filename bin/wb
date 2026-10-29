@@ -140,7 +140,7 @@ SETUP & HOST-LEVEL CONVERGENCE
                                per-module layer underneath it.
 
 MANAGING MODULES
-  add <name> [url] [--private] [--allow-hooks] [--keep-files|--use-files] [--skip-layer <id>]
+  add <name>... | <name> <url> [--private] [--allow-hooks] [--keep-files|--use-files] [--skip-layer <id>]
                                Register + immediately sync a new module.
   remove <name> [--restore]    Deregister (content on disk is left alone,
                                unless --restore puts back what it replaced).
@@ -482,38 +482,22 @@ _wb_cmd_install() {
 
     if [[ -n "${bundle}" ]]; then
         _wb_require modules/catalog.sh modules/add.sh
-        local member install_mode="ask" install_rc=0
-        local -a members=() staged=()
+        local member install_mode="ask"
+        local -a members=()
         while IFS= read -r member; do
             [[ -z "${member}" ]] && continue
             members+=("${member}")
-            if workbench_is_registered "${member}"; then
-                log_info "wb install: '${member}' is already registered"
-                continue
-            fi
-            if workbench_cmd_add "${member}" --stage-only </dev/null; then
-                staged+=("${member}")
-            else
-                failed_members+=("${member}")
-            fi
         done < <(workbench_catalog_bundle_modules "${bundle}")
-        # One plan and one question across the whole bundle, after the
-        # loop (D84). Modules registered before keep D81's --use-files.
         [[ "${keep_files}" == "true" ]] && install_mode="keep"
         [[ "${use_files}" == "true" ]] && install_mode="use"
-        if [[ "${#staged[@]}" -gt 0 ]]; then
-            _wb_install_modules "${install_mode}" "${follow}" "${yes}" add "${staged[@]}" || install_rc=$?
-            [[ "${install_rc}" -ne 0 && "${install_rc}" -ne 3 ]] && \
-                log_warn "wb install: not every file was deployed — see above; 'wb files status' shows where things stand"
-        fi
-        local -a earlier=()
-        for member in ${members[@]+"${members[@]}"}; do
-            case " ${staged[*]:-} " in *" ${member} "*) continue ;; esac
-            earlier+=("${member}")
-        done
-        if [[ "${use_files}" == "true" && "${#earlier[@]}" -gt 0 ]]; then
-            _wb_files_use_at_install "${follow}" "${yes}" "${earlier[@]}" \
-                || log_warn "wb install: --use-files didn't complete for every file — see above; 'wb files status' shows where things stand"
+        # The same path as 'wb add <name> <name>...' (D106). Its own
+        # warnings are printed as it goes; a failed registration is
+        # reported at the end, after the rest of convergence has run.
+        if [[ "${#members[@]}" -gt 0 ]]; then
+            workbench_add_modules "wb install" "${install_mode}" "${follow}" "${yes}" "" "${members[@]}" || true
+            for member in ${_WB_ADD_FAILED}; do
+                failed_members+=("${member}")
+            done
         fi
     fi
 
@@ -3406,10 +3390,17 @@ EOF
 _wb_help_add() {
     cat <<'EOF'
 Usage: wb add <name> [url] [--private] [--allow-hooks] [--keep-files | --use-files [--follow] [--yes]] [--skip-layer <id>]...
+       wb add <name> <name>... [--keep-files | --use-files [--follow] [--yes]] [--skip-layer <id>]...
 
 Registers a new module and syncs it once. <url> is optional if <name>
 resolves against the known-modules catalog. New modules default to
 TRACK_MODE=latest.
+
+Several catalog names at once — 'wb add devtools cloud ai' — registers
+each one and asks the question below once, for all of them, like 'wb
+install --bundle'. Every name is checked first: if any isn't in the
+catalog, nothing is registered. A url, --private and --allow-hooks are
+decisions about one repo, so they only go with a single name.
 
 Before anything is written, if the module would touch config you already
 have — your ~/.gitconfig, a tmux.conf — it lists those files and asks:
@@ -3447,6 +3438,7 @@ whole-host answer (k or u).
                     layer <id> (gitconfig, ssh_config, tmux.conf, vimrc, or
                     <tool>:over). Repeatable. Same as 'wb files policy
                     <name> <id> skip', set before anything is written.
+                    With several names, applies to each of them.
 
 Keeping a config you already have leaves it alone — modules that layer
 into it add one marked block your own settings override (see 'wb help

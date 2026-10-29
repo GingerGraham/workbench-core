@@ -101,12 +101,12 @@ set.
 ```sh
 wb status                      # what's registered, tracked, and in sync
 wb update [<name>]             # fetch + deploy the latest content now
-wb add <name> [url]            # register + immediately sync a new module
+wb add <name>...               # register + immediately sync catalog modules
 wb track <name> --tag v1.2.0   # pin what a module tracks
 wb dev [<name>]                # guided switch to your own dev branch
 wb tools list                  # list install-* functions modules declared
+wb tools install <name>...     # install the named tools in one run
 wb functions                   # list registered shell functions/getters
-```
 
 Every command has detailed help via `wb help <command>` or
 `wb <command> --help` — including explicit disambiguation for the
