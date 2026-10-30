@@ -348,6 +348,74 @@ _wb_rc_stub_rewrite() {
     log_info "wb install: updated the loader stub in ${rc_file}"
 }
 
+# _wb_login_shell
+# Prints the account's login shell as recorded by the system — what chsh
+# changed — not ${SHELL}, which holds the value from when the desktop
+# session started and only changes at the next login. macOS keeps it in
+# Directory Services; Linux in the passwd database (getent covers LDAP/SSSD
+# accounts too, /etc/passwd is the fallback). Returns 1 when it can't tell.
+_wb_login_shell() {
+    local user login_shell=""
+    user="$(id -un)" || return 1
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        login_shell="$(dscl . -read "/Users/${user}" UserShell 2>/dev/null | awk '{ print $2 }')"
+    elif command -v getent &>/dev/null; then
+        login_shell="$(getent passwd "${user}" 2>/dev/null | cut -d: -f7)"
+    else
+        login_shell="$(awk -F: -v u="${user}" '$1 == u { print $7 }' /etc/passwd 2>/dev/null)"
+    fi
+    [[ -n "${login_shell}" ]] || return 1
+    printf '%s\n' "${login_shell}"
+}
+
+# _wb_zsh_stubs_wanted
+# True when this host should carry the zsh loader stubs (~/.zshrc and
+# ~/.zshenv): wb is running under zsh, ~/.zshrc already exists, or the
+# account's login shell is zsh. The last one covers a user who switched to
+# zsh from bash (wb tools install zsh-default-shell, or chsh by hand) and
+# has no ~/.zshrc yet (docs/decisions-log.md D107). Compared by basename:
+# merged-/usr systems list both /bin/zsh and /usr/bin/zsh.
+_wb_zsh_stubs_wanted() {
+    local login_shell
+    [[ -n "${ZSH_VERSION:-}" ]] && return 0
+    [[ -f "${HOME}/.zshrc" ]] && return 0
+    login_shell="$(_wb_login_shell)" || return 1
+    [[ "${login_shell##*/}" == "zsh" ]]
+}
+
+# _wb_write_rc_stubs
+# Every loader stub this host should have: ~/.bashrc always, the zsh pair
+# when _wb_zsh_stubs_wanted. Each write is idempotent, so this is safe to
+# call on every wb apply and after every wb tools run.
+_wb_write_rc_stubs() {
+    local rc=0
+    _wb_write_rc_stub "${HOME}/.bashrc" || rc=1
+    if _wb_zsh_stubs_wanted; then
+        _wb_write_rc_stub "${HOME}/.zshrc" || rc=1
+        _wb_write_rc_stub "${HOME}/.zshenv" zshenv || rc=1
+    fi
+    return "${rc}"
+}
+
+# _wb_tools_refresh_rc_stubs
+# Run after 'wb tools install|upgrade'. An installer can change which
+# shell the account logs into (zsh-default-shell runs chsh), and nothing
+# else would write the zsh stubs until the next wb apply, so the user's
+# first zsh would start without workbench (docs/decisions-log.md D107).
+# Generic on purpose: no tool name is special-cased here (principle 4).
+# Only on a host where wb install has already written a stub — a dev
+# checkout running 'bin/wb tools' never gains rc stubs from it.
+_wb_tools_refresh_rc_stubs() {
+    local marker="# workbench-core loader" rc_file installed="false"
+    for rc_file in "${HOME}/.bashrc" "${HOME}/.zshrc"; do
+        if grep -qF "${marker}" "${rc_file}" 2>/dev/null; then
+            installed="true"
+        fi
+    done
+    [[ "${installed}" == "true" ]] || return 0
+    _wb_write_rc_stubs
+}
+
 _wb_scaffold_local_overrides() {
     # Nothing renders ${XDG_CONFIG_HOME:-~/.config}/workbench/local/ on its
     # own — fix-brief §2. Creates the directory if absent and writes a
@@ -474,11 +542,7 @@ _wb_cmd_install() {
     _wb_converge_module_registrations
     _wb_link_cli_bin
 
-    _wb_write_rc_stub "${HOME}/.bashrc"
-    if [[ -n "${ZSH_VERSION:-}" || -f "${HOME}/.zshrc" ]]; then
-        _wb_write_rc_stub "${HOME}/.zshrc"
-        _wb_write_rc_stub "${HOME}/.zshenv" zshenv
-    fi
+    _wb_write_rc_stubs
 
     if [[ -n "${bundle}" ]]; then
         _wb_require modules/catalog.sh modules/add.sh
@@ -1483,12 +1547,22 @@ _wb_cmd_tools_upgrade() {
 }
 
 _wb_cmd_tools() {
-    local sub="${1:-list}"
+    local sub="${1:-list}" rc
     [[ $# -gt 0 ]] && shift
     case "${sub}" in
         list)      _wb_cmd_tools_list "$@" ;;
-        install)   _wb_cmd_tools_install "$@" ;;
-        upgrade)   _wb_cmd_tools_upgrade "$@" ;;
+        install|upgrade)
+            if [[ "${sub}" == "install" ]]; then
+                _wb_cmd_tools_install "$@"
+            else
+                _wb_cmd_tools_upgrade "$@"
+            fi
+            rc=$?
+            # The tools' own exit status stands; a stub problem is logged
+            # by _wb_write_rc_stub itself (D107).
+            _wb_tools_refresh_rc_stubs
+            return "${rc}"
+            ;;
         *)
             log_error "wb tools: usage: wb tools [list [--status]] | wb tools install <name>...|all | wb tools upgrade [<name>...|all]"
             return 2
@@ -3644,6 +3718,11 @@ always reflects the winner. 'all'/'list'/'install'/'upgrade'/'status' are
 reserved and can never be used as a friendly tool name.
 
 Manual only — never invoked by the background timer/'wb sync run-if-due'.
+
+After install or upgrade, the shell loader stubs are checked again, the
+same way 'wb apply' writes them: an installer that changed your login
+shell to zsh (zsh-default-shell) gets ~/.zshrc and ~/.zshenv stubs
+straight away. Only on a host where 'wb install' has already run.
 
 Confused with 'wb update'? 'wb update' keeps registered MODULES current
 (config text, shell registrations, core's own convergence). 'wb tools'
