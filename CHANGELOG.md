@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.23.1] - 2026-10-30
+
 ### Fixed
 
 - **`~/.zshrc` and `~/.zshenv` get the loader stub when zsh is your login
