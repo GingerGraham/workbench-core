@@ -202,6 +202,7 @@ rc=$?
 installed_home
 set_login_shell /usr/bin/zsh
 rc=0
+# shellcheck disable=SC2317,SC2329  # invoked indirectly, by _wb_cmd_apply (SC2317 on shellcheck < 0.11)
 (
     workbench_missing_shell_prereqs() { :; }
     workbench_install_shell_prereqs() { echo "TEST: prerequisite install attempted" >&2; return 1; }
