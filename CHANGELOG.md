@@ -4,6 +4,19 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`~/.zshrc` and `~/.zshenv` get the loader stub when zsh is your login
+  shell.** `wb install` only wrote them when `wb` ran under zsh or
+  `~/.zshrc` already existed, so a bash user who switched to zsh (`wb tools
+  install zsh-default-shell`, or `chsh` by hand) got zsh's new-user wizard
+  and no workbench in their first zsh. The login shell is read from the
+  system (`getent passwd` on Linux, `dscl` on macOS), not `${SHELL}`, which
+  keeps its old value until the next login. `wb tools install` and
+  `upgrade` now check the stubs again afterwards, and `wb apply` (including
+  the automatic one after a core update) writes them on hosts already left
+  without a `~/.zshrc` (D107).
+
 ## [2.23.0] - 2026-10-30
 
 ### Changed

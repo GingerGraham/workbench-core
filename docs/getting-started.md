@@ -66,8 +66,9 @@ real engine code exists locally to run):
    - Checks and (with your permission) installs any remaining missing
      prerequisites.
    - Writes the version taxonomy file (`~/.config/workbench/core/version`).
-   - Adds a loader stub to `~/.bashrc` (and `~/.zshrc`/`~/.zshenv` if
-     present) — see "Migrating from an existing shell config" below if
+   - Adds a loader stub to `~/.bashrc`, and to `~/.zshrc`/`~/.zshenv`
+     when `~/.zshrc` exists or your login shell is zsh (creating them if
+     needed) — see "Migrating from an existing shell config" below if
      any of those already had real content. The `~/.zshenv` line loads
      workbench only for non-interactive zsh (`zsh -c`, ssh commands,
      scripts); interactive zsh loads it from `~/.zshrc`.
