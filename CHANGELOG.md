@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.23.0] - 2026-10-30
+
 ### Changed
 
 - **Bug report template asks for OS family and environment separately.**
