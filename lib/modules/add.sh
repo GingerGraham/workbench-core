@@ -9,7 +9,7 @@
 # second implementation of "fetch and register a module."
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/add.sh" "0.5.1" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/add.sh" "0.6.0" || true
 
 # workbench_cmd_add <name> [url] [--private] [--allow-hooks] [--keep-files | --use-files [--follow] [--yes]] [--skip-layer <id>]...
 # workbench_cmd_add <name> <name>... [--keep-files | --use-files [--follow] [--yes]] [--skip-layer <id>]...
