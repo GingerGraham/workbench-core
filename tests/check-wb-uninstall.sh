@@ -90,7 +90,8 @@ new_shell() {
 }
 
 # ── Fixture: the user's own config, and a module that touches it ───────────
-printf '# my bashrc\nalias ll="ls -l"\n' > "${HOME}/.bashrc"
+# Two blank lines in a row: stripping the loader line keeps them.
+printf '# my bashrc\n\n\nalias ll="ls -l"\n' > "${HOME}/.bashrc"
 BASHRC_BEFORE="$(cksum < "${HOME}/.bashrc")"
 printf '# my zshrc\n' > "${WORK}/real-zshrc"
 ln -s "${WORK}/real-zshrc" "${HOME}/.zshrc"

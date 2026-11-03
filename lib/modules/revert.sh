@@ -140,6 +140,18 @@ _wb_revert_core_allowed() {
     api="$(awk -F= '$1 == "CORE_API_VERSION" { print $2 }' "${defaults}" 2>/dev/null)"
     schema="$(awk -F= '$1 == "STATE_SCHEMA_VERSION" { print $2 }' "${defaults}" 2>/dev/null)"
     host_schema="$(_workbench_state_schema_version)"
+    # Facts that can't be read can't show the older core is safe, and
+    # going back with core is the one revert that can break wb itself.
+    case "${schema}" in
+        ""|*[!0-9]*)
+            log_error "wb revert: can't read the state schema version from ${defaults}, so there's no way to check that core can read this host's state"
+            return 1
+            ;;
+    esac
+    if [[ -z "${api}" ]]; then
+        log_error "wb revert: can't read the Core API version from ${defaults}, so there's no way to check that core can serve your modules"
+        return 1
+    fi
     case "${schema}:${host_schema}" in
         *[!0-9:]*|:*|*:) ;;
         *)
@@ -246,12 +258,14 @@ workbench_cmd_revert() {
     [[ "${rc}" -eq 2 ]] && return 0
     [[ "${rc}" -ne 0 ]] && return "${rc}"
 
-    local core_sha_before
+    local core_sha_before held_before
     core_sha_before="$(workbench_module_conf_get core RESOLVED_SHA "")"
+    held_before="$(workbench_module_conf_get "${name}" HELD_CORE_API "")"
 
     workbench_module_conf_set "${name}" TRACK_MODE "${new_mode}"
     if ! workbench_sync_module "${name}" "track" "${label}|${sha}"; then
         workbench_module_conf_set "${name}" TRACK_MODE "${old_mode}"
+        workbench_module_conf_set "${name}" HELD_CORE_API "${held_before}"
         log_error "wb revert: '${name}' is unchanged, still tracking ${old_mode} — see above"
         return 1
     fi

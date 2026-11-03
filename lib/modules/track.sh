@@ -128,16 +128,19 @@ workbench_cmd_track() {
     # _wb_maybe_reconverge_core (bin/wb, docs/decisions-log.md D20) already
     # no-ops via its own SHA-diff when core wasn't the module just synced, so
     # no extra name check is needed here.
-    local core_sha_before
+    local core_sha_before held_before
     core_sha_before="$(workbench_module_conf_get core RESOLVED_SHA "")"
+    held_before="$(workbench_module_conf_get "${name}" HELD_CORE_API "")"
 
     workbench_module_conf_set "${name}" TRACK_MODE "${new_mode}"
     log_info "wb track: '${name}' now tracking ${new_mode} (was ${current_mode}) — syncing now..."
     # A failed sync must not leave the new mode recorded: the module would
     # still be on its old version, and a retry would stop at the "already
-    # tracking" no-op above (docs/decisions-log.md D108).
+    # tracking" no-op above (docs/decisions-log.md D108). A Core API hold
+    # recorded for the version it didn't reach doesn't apply either.
     if ! workbench_sync_module "${name}" "track"; then
         workbench_module_conf_set "${name}" TRACK_MODE "${current_mode}"
+        workbench_module_conf_set "${name}" HELD_CORE_API "${held_before}"
         log_error "wb track: '${name}' is unchanged, still tracking ${current_mode} — see above"
         return 1
     fi

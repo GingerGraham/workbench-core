@@ -224,7 +224,20 @@ host_schema="$(awk -F= '$1 == "STATE_SCHEMA_VERSION" { print $2 }' "${REPO_ROOT}
 printf 'CORE_API_VERSION=%s\nSTATE_SCHEMA_VERSION=%s\n' "${host_api}" "${host_schema}" > "${WORK}/core-good/lib/core/version-defaults.conf"
 printf 'CORE_API_VERSION=0.1\nSTATE_SCHEMA_VERSION=%s\n' "${host_schema}" > "${WORK}/core-api/lib/core/version-defaults.conf"
 printf 'CORE_API_VERSION=%s\nSTATE_SCHEMA_VERSION=0\n' "${host_api}" > "${WORK}/core-schema/lib/core/version-defaults.conf"
+mkdir -p "${WORK}/core-unreadable/lib/core"
 bash -c "source '${WB}' >/dev/null 2>&1; _workbench_ensure_version_file; _workbench_sync_version_facts" >/dev/null 2>&1
+
+# ── A Core API hold for a version it didn't reach isn't left behind ────────
+mode_before="$(conf_of demo TRACK_MODE)"
+held_before="$(conf_of demo HELD_CORE_API)"
+sed -i.bak 's/^core_api: .*/core_api: ">=99.0"/' "${SRC}/workbench.yml" && rm -f "${SRC}/workbench.yml.bak"
+release v9.0.0
+wb track demo --tag v9.0.0
+[[ "${rc}" -ne 0 && "$(conf_of demo TRACK_MODE)" == "${mode_before}" && "$(conf_of demo HELD_CORE_API)" == "${held_before}" ]] \
+    && grep -q "needs Core API" "${OUT}" \
+    && ok "'wb track' to a version this core can't serve: fails, mode and Core API hold unchanged" \
+    || { fail "held track (rc ${rc}): mode $(conf_of demo TRACK_MODE), held '$(conf_of demo HELD_CORE_API)'"; cat "${OUT}"; }
+
 core_gate "${WORK}/core-good" \
     && ok "core gate: allows a core every module accepts" \
     || { fail "core gate refused a good core"; cat "${OUT}"; }
@@ -234,6 +247,9 @@ core_gate "${WORK}/core-api" \
 core_gate "${WORK}/core-schema" \
     && { fail "core gate allowed an older state schema"; cat "${OUT}"; } \
     || ok "core gate: refuses a core that can't read this host's state"
+core_gate "${WORK}/core-unreadable" \
+    && { fail "core gate allowed a core whose version facts can't be read"; cat "${OUT}"; } \
+    || { grep -q "can't read the state schema version" "${OUT}" && ok "core gate: refuses a core whose version facts can't be read" || { fail "core gate unreadable message"; cat "${OUT}"; }; }
 
 echo
 if [[ "${FAILED}" -eq 0 ]]; then

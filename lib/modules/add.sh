@@ -375,9 +375,12 @@ _wb_add_returning() {
 
     case "${choice}" in
         latest)
+            local held_before
+            held_before="$(workbench_module_conf_get "${name}" HELD_CORE_API "")"
             workbench_module_conf_set "${name}" TRACK_MODE "latest"
             if ! workbench_sync_module "${name}" "add"; then
                 workbench_module_conf_set "${name}" TRACK_MODE "${mode}"
+                workbench_module_conf_set "${name}" HELD_CORE_API "${held_before}"
                 log_warn "wb add: couldn't reach the latest release, so '${name}' stays on ${label} — 'wb track ${name} --latest' tries again"
             fi
             ;;
