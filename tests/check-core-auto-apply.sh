@@ -254,7 +254,7 @@ done
 export PATH="${PATH#"${FAKE_BIN}:"}"
 
 # Re-install the recording stub for the remaining checks.
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC2329  # re-installed stub, called by the code under test (SC2317 on shellcheck < 0.11)
 _wb_cmd_apply() {
     APPLY_CALLS+=("$*")
     return "${APPLY_EXIT}"
