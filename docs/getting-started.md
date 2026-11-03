@@ -359,7 +359,9 @@ Your modules stay in place, and their config files and blocks keep applying. The
 
 To take a module's config out as well, run `wb remove <name> --restore` before uninstalling. That command isn't available afterwards.
 
-`~/.local/share/workbench/REMOVAL-NOTES.md` then lists what stayed for each module, the commands to remove it, and how to come back. Reinstalling with bootstrap brings back every module still in place, on the same versions.
+Some things are left behind on purpose, so that removing workbench doesn't break anything you still use: your modules' config, backups of your files, your workbench settings, SSH config and installed software. `~/workbench-removal-notes.md` then says what each one is, why it was left, the commands to remove it if you don't want it, and how to come back. It's a link to `~/.local/share/workbench/REMOVAL-NOTES.md`.
+
+Reinstalling with bootstrap brings back every module still in place, on the same versions, and removes the notes.
 
 ## Uninstalling a module cleanly
 

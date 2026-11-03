@@ -21,9 +21,11 @@ All notable changes to `workbench-core` are documented here.
 - **`wb uninstall [--dry-run]` removes workbench itself:** the `wb`
   command, the loader lines in your shell rc files, the sync timer and
   core's own files. Modules and their config stay in place. Before
-  anything changes it writes `~/.local/share/workbench/REMOVAL-NOTES.md`
-  from what's really on the machine: what stayed for each module, the
-  commands to remove it, and how to come back (D108).
+  anything changes it writes notes from what's really on the machine,
+  linked from `~/workbench-removal-notes.md`. They say what was left
+  behind on purpose and why (each module's config, backups, your
+  settings, SSH config, installed software), the commands to remove each
+  one, and how to come back. Reinstalling removes the notes (D108).
 
 ### Changed
 

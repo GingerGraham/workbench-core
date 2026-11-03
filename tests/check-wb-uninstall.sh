@@ -44,6 +44,7 @@ export PATH="${WORK}/fake-bin:${PATH}"
 MODULES="${XDG_DATA_HOME}/workbench/modules"
 BACKUPS="${XDG_DATA_HOME}/workbench/backups"
 NOTES="${XDG_DATA_HOME}/workbench/REMOVAL-NOTES.md"
+NOTES_LINK="${HOME}/workbench-removal-notes.md"
 CORE_SNAP="${MODULES}/core/snapshots/v9.9.9-abcdef0"
 WB="${MODULES}/core/current/bin/wb"
 OUT="${WORK}/out.log"
@@ -97,7 +98,12 @@ printf '# my zshrc\n' > "${WORK}/real-zshrc"
 ln -s "${WORK}/real-zshrc" "${HOME}/.zshrc"
 printf '[user]\n\tname = Mine\n' > "${HOME}/.gitconfig"
 printf 'THEIR CONF\n' > "${HOME}/.demo.conf"
-printf 'Host example\n  User me\n' > "${HOME}/.ssh/config"
+# SSH as lib/ssh/bootstrap.sh leaves it (the bootstrap itself is stubbed), with
+# a file of the user's in config.d and a second private module's entry.
+printf 'Include ~/.ssh/config.d/*.conf\n\nHost example\n  User me\n' > "${HOME}/.ssh/config"
+mkdir -p "${HOME}/.ssh/config.d"
+printf '# workbench-core private-module deploy keys\n\nHost workbench-demo\n    HostName github.com\n    User git\n\nHost workbench-other\n    HostName github.com\n    User git\n' > "${HOME}/.ssh/config.d/10-workbench.conf"
+printf 'Host mine\n  User me\n' > "${HOME}/.ssh/config.d/20-mine.conf"
 SSH_BEFORE="$(cksum < "${HOME}/.ssh/config")"
 mkdir -p "${XDG_CONFIG_HOME}/workbench/local"
 printf 'MY_OVERRIDE=1\n' > "${XDG_CONFIG_HOME}/workbench/local/mine.sh"
@@ -207,7 +213,7 @@ wb uninstall
 
 # ── --dry-run ──────────────────────────────────────────────────────────────
 wb uninstall --dry-run
-[[ "${rc}" -eq 0 && -d "${MODULES}/core" && ! -e "${NOTES}" ]] \
+[[ "${rc}" -eq 0 && -d "${MODULES}/core" && ! -e "${NOTES}" && ! -L "${NOTES_LINK}" ]] \
     && grep -qF '# workbench-core loader' "${HOME}/.bashrc" \
     && grep -q '### demo' "${OUT}" \
     && ok "--dry-run shows the notes and changes nothing" \
@@ -222,9 +228,12 @@ wb uninstall --yes
 [[ "${rc}" -eq 0 ]] && [[ ! -s "${ERR}" ]] \
     && ok "runs to the end with no errors, though it deleted its own script" \
     || { fail "uninstall (rc ${rc})"; cat "${OUT}" "${ERR}"; }
-grep -q 'demo' "${OUT}" && grep -q 'REMOVAL-NOTES.md' "${OUT}" && grep -q 'new terminal' "${OUT}" \
-    && ok "the closing message names the modules, the notes and the next step" \
+grep -q 'demo' "${OUT}" && grep -q 'left behind on purpose' "${OUT}" && grep -qF '~/workbench-removal-notes.md' "${OUT}" && grep -q 'new terminal' "${OUT}" \
+    && ok "the closing message names the modules, says what was left on purpose, points to the notes and the next step" \
     || { fail "closing message"; cat "${OUT}"; }
+[[ -L "${NOTES_LINK}" && "$(readlink "${NOTES_LINK}")" == "${NOTES}" && -f "${NOTES}" ]] \
+    && ok "the notes are one file in workbench's data directory, linked from ~/workbench-removal-notes.md" \
+    || { fail "notes link"; ls -la "${NOTES_LINK}" "${NOTES}" 2>&1; }
 
 [[ ! -e "${MODULES}/core" && ! -e "${HOME}/.local/bin/wb" && ! -e "${XDG_CONFIG_HOME}/workbench/core" && ! -e "${XDG_CACHE_HOME}/workbench" ]] \
     && ok "core's directory, the wb link, core's config and the cache are gone" \
@@ -290,7 +299,17 @@ grep -q 'absent-tool' "${NOTES}" \
     || ok "notes: leave out software that isn't there"
 note_has 'bootstrap.sh' "how to come back"
 note_has 'Removing everything' "how to remove everything"
-note_has '~/.ssh/config' "the SSH config left alone"
+note_has '## Left behind on purpose' "a section for what was left on purpose"
+note_has "**Why it was left:** your tools may be relying on it right now" "why module config was left"
+note_has "**Why it was left:** it holds your own files" "why backups were left"
+note_has "**Why it was left:** it holds your overrides" "why workbench settings were left"
+note_has '### SSH configuration' "the SSH config left behind"
+note_has "**Why it was left:** SSH reads the whole of" "why SSH config was left"
+note_has '`20-mine.conf`' "the user's own file in ~/.ssh/config.d"
+note_has '### Software installed through workbench' "the software left behind"
+note_has 'present-tool (demo)' "which module the software came with"
+note_has "**If you don't want it:**" "how to remove what was left"
+note_has '~/workbench-removal-notes.md' "where the link to the notes is"
 ! grep -q 'curl[^|]*|[[:space:]]*bash' "${NOTES}" \
     && ok "notes: bootstrap is download-then-run" \
     || fail "notes pipe curl into bash"
@@ -299,8 +318,8 @@ note_has '~/.ssh/config' "the SSH config left alone"
 install_core
 converge
 out="$(new_shell 'demo_fn')"
-[[ "${out}" == *demo-fn-ran* ]] && [[ ! -e "${NOTES}" ]] && [[ -L "${HOME}/.local/bin/wb" ]] \
-    && ok "reinstalling brings the module back on the same state, and clears the notes" \
+[[ "${out}" == *demo-fn-ran* ]] && [[ ! -e "${NOTES}" && ! -L "${NOTES_LINK}" ]] && [[ -L "${HOME}/.local/bin/wb" ]] \
+    && ok "reinstalling brings the module back on the same state, and clears the notes and their link" \
     || { fail "reinstall: ${out}"; cat "${WORK}/converge.log" "${WORK}/shell-err.log"; }
 
 # ── The notes' own commands really remove what's left ──────────────────────
@@ -323,20 +342,49 @@ bash -eu "${WORK}/demo-cleanup.sh" >"${WORK}/cleanup.log" 2>&1 \
 [[ ! -e "${HOME}/.config/demo/copied" && ! -L "${HOME}/.config/demo/linked" && ! -e "${MODULES}/demo" && ! -e "${HOME}/.ssh/workbench-demo" ]] \
     && ok "cleanup: the module's files, link, directory and deploy key are gone" \
     || { fail "cleanup leftovers"; ls -la "${HOME}/.config/demo" "${MODULES}" 2>&1; }
+! grep -q 'workbench-demo' "${HOME}/.ssh/config.d/10-workbench.conf" && grep -qx 'Host workbench-other' "${HOME}/.ssh/config.d/10-workbench.conf" \
+    && ok "cleanup: the module's SSH host entry is gone, another module's stays" \
+    || { fail "cleanup: SSH host entry"; cat "${HOME}/.ssh/config.d/10-workbench.conf"; }
+
+# The SSH commands, as a person would run them: once with a file of the user's
+# still in ~/.ssh/config.d, then again after they've moved it.
+awk '/^### SSH configuration/ { in_ssh = 1 } in_ssh && /^```sh/ { in_code = 1; next } in_code && /^```/ { exit } in_code { print }' \
+    "${NOTES}" > "${WORK}/ssh-cleanup.sh"
+bash -eu "${WORK}/ssh-cleanup.sh" >"${WORK}/cleanup.log" 2>&1 \
+    && [[ ! -e "${HOME}/.ssh/config.d/10-workbench.conf" && -f "${HOME}/.ssh/config.d/20-mine.conf" ]] \
+    && grep -qxF 'Include ~/.ssh/config.d/*.conf' "${HOME}/.ssh/config" && grep -q 'still has other files' "${WORK}/cleanup.log" \
+    && ok "SSH cleanup: workbench's file goes; the folder and Include line stay while the user has a file there" \
+    || { fail "SSH cleanup with the user's file present"; cat "${WORK}/ssh-cleanup.sh" "${WORK}/cleanup.log"; ls -la "${HOME}/.ssh/config.d"; cat "${HOME}/.ssh/config"; }
+rm -f "${HOME}/.ssh/config.d/20-mine.conf"
+bash -eu "${WORK}/ssh-cleanup.sh" >"${WORK}/cleanup.log" 2>&1 \
+    && [[ ! -e "${HOME}/.ssh/config.d" ]] && ! grep -q 'config.d' "${HOME}/.ssh/config" \
+    && grep -qx 'Host example' "${HOME}/.ssh/config" \
+    && ok "SSH cleanup: with the folder empty, it and the Include line go, and the rest of ~/.ssh/config stays" \
+    || { fail "SSH cleanup with the folder empty"; cat "${WORK}/cleanup.log"; cat "${HOME}/.ssh/config"; }
 out="$(new_shell 'echo clean')"
 [[ "${out}" == *clean* ]] && ! grep -qi 'workbench\|no such file' "${WORK}/shell-err.log" \
     && ok "cleanup: a new shell still starts clean" \
     || { fail "shell after cleanup"; cat "${WORK}/shell-err.log"; }
 
-# ── Someone else's ~/.local/bin/wb is left alone ───────────────────────────
+# ── Someone else's ~/.local/bin/wb and ~/workbench-removal-notes.md ────────
 install_core
 converge
 rm -f "${HOME}/.local/bin/wb"
 ln -s /bin/true "${HOME}/.local/bin/wb"
+printf 'my own notes\n' > "${NOTES_LINK}"
 wb uninstall --yes
 [[ -L "${HOME}/.local/bin/wb" && "$(readlink "${HOME}/.local/bin/wb")" == "/bin/true" ]] \
     && ok "a ~/.local/bin/wb that isn't core's is left alone" \
     || fail "removed someone else's ~/.local/bin/wb"
+[[ ! -L "${NOTES_LINK}" && "$(cat "${NOTES_LINK}")" == "my own notes" && -f "${NOTES}" ]] \
+    && grep -q 'REMOVAL-NOTES.md' "${OUT}" \
+    && ok "a file of the user's at ~/workbench-removal-notes.md is left alone, and the message points to the notes themselves" \
+    || { fail "user's ~/workbench-removal-notes.md"; cat "${OUT}" "${ERR}"; ls -la "${NOTES_LINK}"; }
+install_core
+converge
+[[ -f "${NOTES_LINK}" && ! -e "${NOTES}" ]] \
+    && ok "reinstalling leaves a file of the user's at that path alone" \
+    || fail "reinstall removed the user's ~/workbench-removal-notes.md"
 
 echo
 if [[ "${FAILED}" -eq 0 ]]; then

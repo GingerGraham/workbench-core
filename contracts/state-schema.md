@@ -365,7 +365,7 @@ revisit only if volume ever actually becomes a problem.
 
 ## `REMOVAL-NOTES.md`
 
-`${XDG_DATA_HOME}/workbench/REMOVAL-NOTES.md`, written by `wb uninstall` before it changes anything, and deleted by the next `wb install` (docs/decisions-log.md D108). For a person to read; nothing parses it. After `wb uninstall`, `modules/<name>/` (except `core`), `backups/` and `adoption.log` remain, so a reinstall picks every remaining module up where it was.
+`${XDG_DATA_HOME}/workbench/REMOVAL-NOTES.md`, written by `wb uninstall` before it changes anything, and deleted by the next `wb install` (docs/decisions-log.md D108). `wb uninstall` links it from `~/workbench-removal-notes.md` unless something else is already at that path; `wb install` removes that link only when it points at the notes. For a person to read; nothing parses it. After `wb uninstall`, `modules/<name>/` (except `core`), `backups/` and `adoption.log` remain, so a reinstall picks every remaining module up where it was.
 
 ## What is deliberately NOT here
 

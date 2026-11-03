@@ -32,6 +32,44 @@ _wb_uninstall_cache_root() { printf '%s/workbench\n' "${XDG_CACHE_HOME:-${HOME}/
 # workbench_removal_notes_path
 workbench_removal_notes_path() { printf '%s/REMOVAL-NOTES.md\n' "$(_wb_uninstall_data_root)"; }
 
+# workbench_removal_notes_link
+# Where the notes are linked from, so they're in plain sight in the home
+# directory. One file, in workbench's data directory; this is only a link.
+workbench_removal_notes_link() { printf '%s/workbench-removal-notes.md\n' "${HOME}"; }
+
+# _wb_uninstall_can_link
+# True when the link can be made: nothing is there yet, or it's already a link
+# to the notes. Anything else there belongs to the user and is left alone.
+_wb_uninstall_can_link() {
+    local link
+    link="$(workbench_removal_notes_link)"
+    [[ ! -e "${link}" && ! -L "${link}" ]] && return 0
+    [[ -L "${link}" && "$(readlink "${link}")" == "$(workbench_removal_notes_path)" ]]
+}
+
+# _wb_uninstall_notes_shown
+# The path to give the user for the notes: the link in the home directory
+# when it can be made, otherwise the file itself.
+_wb_uninstall_notes_shown() {
+    if _wb_uninstall_can_link; then
+        _wb_uninstall_tilde "$(workbench_removal_notes_link)"
+    else
+        _wb_uninstall_tilde "$(workbench_removal_notes_path)"
+    fi
+}
+
+# _wb_uninstall_rewrite_cmd <filter-command> <quoted-path>
+# A command that runs <filter-command> on a file and writes the result back
+# through it, so a symlinked file stays a symlink.
+_wb_uninstall_rewrite_cmd() {
+    local filter="$1" q="$2"
+    printf '%s %s > %s.wb-tmp" && cat %s.wb-tmp" > %s && rm -f %s.wb-tmp"\n' \
+        "${filter}" "${q}" "${q%\"}" "${q%\"}" "${q}" "${q%\"}"
+}
+
+_WB_UNINSTALL_SSH_INCLUDE="Include ~/.ssh/config.d/*.conf"
+_wb_uninstall_ssh_conf() { printf '%s/.ssh/config.d/10-workbench.conf\n' "${HOME}"; }
+
 # _wb_uninstall_kept_modules
 # Every module with state on disk except core, deregistered ones included:
 # 'wb remove' leaves their files behind too.
@@ -219,6 +257,9 @@ sed '\\|${start}|,\\|${end}|d' ${q} > ${q%\"}.wb-tmp\" && cat ${q%\"}.wb-tmp\" >
     tools="$(_wb_uninstall_tools_of "${module}" "${collected}")"
     key_file="${HOME}/.ssh/workbench-${module}"
     [[ "${private}" == "true" && -e "${key_file}" ]] && has_key="true"
+    local has_host="false" ssh_conf
+    ssh_conf="$(_wb_uninstall_ssh_conf)"
+    grep -qx "Host workbench-${module}" "${ssh_conf}" 2>/dev/null && has_host="true"
 
     echo "### ${module}"
     echo
@@ -258,16 +299,91 @@ sed '\\|${start}|,\\|${end}|d' ${q} > ${q%\"}.wb-tmp\" && cat ${q%\"}.wb-tmp\" >
         # shellcheck disable=SC2016  # $HOME is for the reader's shell
         printf 'rm -f "$HOME/.ssh/workbench-%s" "$HOME/.ssh/workbench-%s.pub"  # also revoke this deploy key on the repo\n' "${module}" "${module}"
     fi
+    if [[ "${has_host}" == "true" ]]; then
+        echo "# Delete the Host workbench-${module} entry from ~/.ssh/config.d/10-workbench.conf"
+        _wb_uninstall_rewrite_cmd "awk '/^Host / { skip = (\$2 == \"workbench-${module}\") } !skip'" "$(_wb_uninstall_q "${ssh_conf}")"
+    fi
     echo "rm -rf $(_wb_uninstall_q "${module_dir}")"
+    echo '```'
+    echo
+}
+
+# _wb_uninstall_kept_ssh
+# Prints what workbench put in SSH config that is still there, one word per
+# line: 'include' for the Include line in ~/.ssh/config, 'conf' for
+# ~/.ssh/config.d/10-workbench.conf.
+_wb_uninstall_kept_ssh() {
+    grep -qxF "${_WB_UNINSTALL_SSH_INCLUDE}" "${HOME}/.ssh/config" 2>/dev/null && echo include
+    [[ -f "$(_wb_uninstall_ssh_conf)" ]] && echo conf
+    return 0
+}
+
+# _wb_uninstall_notes_ssh
+# The SSH part of "Left behind on purpose": what is there, why it stayed, and
+# commands that remove it without taking anything of the user's with it.
+_wb_uninstall_notes_ssh() {
+    local kept="$1" dir others="" entry q_conf q_dir q_config
+    dir="${HOME}/.ssh/config.d"
+    for entry in "${dir}"/*; do
+        [[ -e "${entry}" && "${entry}" != "$(_wb_uninstall_ssh_conf)" ]] || continue
+        others="${others:+${others}, }\`$(basename "${entry}")\`"
+    done
+    q_conf="$(_wb_uninstall_q "$(_wb_uninstall_ssh_conf)")"
+    q_dir="$(_wb_uninstall_q "${dir}")"
+    q_config="$(_wb_uninstall_q "${HOME}/.ssh/config")"
+
+    echo "### SSH configuration"
+    echo
+    case "${kept}" in
+        *conf*) echo "- \`~/.ssh/config.d/10-workbench.conf\` holds the SSH settings for private modules' deploy keys." ;;
+    esac
+    case "${kept}" in
+        *include*) echo "- The line \`${_WB_UNINSTALL_SSH_INCLUDE}\` in \`~/.ssh/config\` makes SSH read every file in \`~/.ssh/config.d/\`." ;;
+    esac
+    echo
+    echo "**Why it was left:** SSH reads the whole of \`~/.ssh/config.d/\`, not just workbench's file. Other tools, or you, may keep SSH settings there too, and taking the \`Include\` line out would quietly stop SSH using them, which can break connections you rely on."
+    if [[ -n "${others}" ]]; then
+        echo "Right now that folder also holds: ${others}."
+    fi
+    echo
+    echo "**If you don't want it:**"
+    echo
+    echo '```sh'
+    case "${kept}" in
+        *conf*) echo "rm -f ${q_conf}" ;;
+    esac
+    case "${kept}" in
+        *include*)
+            if [[ -d "${dir}" ]]; then
+                echo "# Removes the folder and the Include line, but only if nothing else is in the folder."
+                echo "if rmdir ${q_dir} 2>/dev/null; then"
+                printf '    %s' "$(_wb_uninstall_rewrite_cmd "sed '\\|^Include ~/\\.ssh/config\\.d/\\*\\.conf\$|d'" "${q_config}")"
+                echo
+                echo "else"
+                echo "    echo \"~/.ssh/config.d still has other files in it, so it and the Include line stay\""
+                echo "fi"
+            else
+                _wb_uninstall_rewrite_cmd "sed '\\|^Include ~/\\.ssh/config\\.d/\\*\\.conf\$|d'" "${q_config}"
+            fi
+            ;;
+    esac
     echo '```'
     echo
 }
 
 # _wb_uninstall_write_notes <file>
 _wb_uninstall_write_notes() {
-    local file="$1" module collected any="false" rc_file core_tools
+    local file="$1" module collected any="false" rc_file tools all_tools="" kept_ssh shown_link
     collected="$(workbench_tools_collect 2>/dev/null)"
-    core_tools="$(_wb_uninstall_tools_of core "${collected}")"
+    tools="$(_wb_uninstall_tools_of core "${collected}")"
+    [[ -n "${tools}" ]] && all_tools="${tools} (core)"
+    while IFS= read -r module; do
+        [[ -z "${module}" ]] && continue
+        tools="$(_wb_uninstall_tools_of "${module}" "${collected}")"
+        [[ -n "${tools}" ]] && all_tools="${all_tools:+${all_tools}; }${tools} (${module})"
+    done < <(_wb_uninstall_kept_modules)
+    kept_ssh="$(_wb_uninstall_kept_ssh | paste -sd' ' -)"
+    shown_link="$(_wb_uninstall_tilde "$(workbench_removal_notes_link)")"
     {
         echo "# Workbench removal notes"
         echo
@@ -293,18 +409,58 @@ _wb_uninstall_write_notes() {
         echo
         echo "Terminals that were already open keep workbench's functions until you close them."
         echo
-        echo "## Coming back"
+        echo "## Left behind on purpose"
+        echo
+        echo "Some things were left where they are on purpose, so that removing workbench didn't break anything you might still be using. Each one below says where it is, why it was left, and how to remove it if you don't want it."
+        echo
+        if [[ "$(_wb_uninstall_kept_modules)" != "" ]]; then
+            echo "### Your modules' config"
+            echo
+            echo "Each module under **Modules left in place** below lists the config files and blocks it put on this machine."
+            echo
+            echo "**Why it was left:** your tools may be relying on it right now: a git identity, an SSH host, an editor or terminal setup. Taking it out without asking could break something you depend on."
+            echo
+            echo "**If you don't want it:** each module's section ends with the commands that take its config out and put back what it replaced."
+            echo
+        fi
+        echo "### Backups of your files"
+        echo
+        echo "\`$(_wb_uninstall_tilde "$(_wb_uninstall_data_root)/backups")\`"
+        echo
+        echo "**Why it was left:** it holds your own files as they were before workbench changed them. The module commands below use it to put them back."
+        echo
+        echo "**If you don't want it:** run the module commands you want first, because they put your files back from here. Then check it for anything you want to keep, and run:"
         echo
         echo '```sh'
-        echo 'curl -fsSLO https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh'
-        echo 'bash bootstrap.sh'
+        echo "rm -rf $(_wb_uninstall_q "$(_wb_uninstall_data_root)/backups")"
         echo '```'
         echo
-        echo "Modules still listed below load again as they were, on the same versions. For one whose directory you deleted, run \`wb add <name>\`. If it wasn't in workbench's catalog, use \`wb add <name> <url>\`, with \`--private\` for a private repo."
-        if workbench_scheduler_enabled; then
+        echo "### Your workbench settings"
+        echo
+        echo "\`$(_wb_uninstall_tilde "$(_wb_uninstall_config_root)")\`"
+        echo
+        echo "**Why it was left:** it holds your overrides and any custom catalog, so reinstalling picks them up as you left them."
+        echo
+        echo "**If you don't want it:**"
+        echo
+        echo '```sh'
+        echo "rm -rf $(_wb_uninstall_q "$(_wb_uninstall_config_root)")"
+        echo '```'
+        echo
+        [[ -n "${kept_ssh}" ]] && _wb_uninstall_notes_ssh "${kept_ssh}"
+        if [[ -n "${all_tools}" ]]; then
+            echo "### Software installed through workbench"
             echo
-            echo "Scheduled sync was on. It stays off after reinstalling until you run \`wb scheduler enable\`."
+            echo "Found on this machine: ${all_tools}."
+            echo
+            echo "**Why it was left:** you may be using it, and some of it may have been here before workbench. Workbench can't tell which it installed, so it left all of it."
+            echo
+            echo "**If you don't want it:** remove it the way you'd remove any other software, for example \`sudo dnf remove <name>\` or \`sudo apt remove <name>\`. Tools installed from an upstream release, not a package, are files in \`~/.local/bin\`: delete the file there."
+            echo
         fi
+        echo "### These notes"
+        echo
+        echo "\`${shown_link}\` is a link to \`$(_wb_uninstall_tilde "$(workbench_removal_notes_path)")\`, so it's easy to find. Reinstalling workbench removes both."
         echo
         echo "## Modules left in place"
         echo
@@ -314,23 +470,29 @@ _wb_uninstall_write_notes() {
             _wb_uninstall_notes_module "${module}" "${collected}"
         done < <(_wb_uninstall_kept_modules)
         [[ "${any}" == "true" ]] || { echo "None: you had no modules installed besides core."; echo; }
-        echo "## Also left in place"
+        echo "## Coming back"
         echo
-        echo "- **Backups of your files:** \`$(_wb_uninstall_tilde "$(_wb_uninstall_data_root)/backups")\`"
-        echo "- **Your workbench settings:** \`$(_wb_uninstall_tilde "$(_wb_uninstall_config_root)")\`, which holds your overrides and any custom catalog."
-        echo "- **SSH:** the \`Include ~/.ssh/config.d/*.conf\` line in \`~/.ssh/config\`, if workbench added it, and \`~/.ssh/config.d/\`. Leave these alone if other config uses them."
-        if [[ -n "${core_tools}" ]]; then
-            echo "- **Software core can install, found on this machine:** ${core_tools}. Some of it may predate workbench."
+        echo '```sh'
+        echo 'curl -fsSLO https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh'
+        echo 'bash bootstrap.sh'
+        echo '```'
+        echo
+        echo "Modules still listed above load again as they were, on the same versions. For one whose directory you deleted, run \`wb add <name>\`. If it wasn't in workbench's catalog, use \`wb add <name> <url>\`, with \`--private\` for a private repo."
+        if workbench_scheduler_enabled; then
+            echo
+            echo "Scheduled sync was on. It stays off after reinstalling until you run \`wb scheduler enable\`."
         fi
         echo
         echo "## Removing everything"
         echo
         echo "1. Run the commands under each module above. Do this first, because they use the backups."
-        echo "2. Check the backups for anything you want to keep, then run:"
+        [[ -n "${kept_ssh}" ]] && echo "1. Run the SSH commands above, if you don't want those either."
+        echo "1. Check the backups for anything you want to keep, then run:"
         echo
         echo '```sh'
-        echo "rm -rf $(_wb_uninstall_q "$(_wb_uninstall_data_root)")  # includes the backups and this file"
+        echo "rm -rf $(_wb_uninstall_q "$(_wb_uninstall_data_root)")  # includes the backups and these notes"
         echo "rm -rf $(_wb_uninstall_q "$(_wb_uninstall_config_root)")"
+        echo "rm -f $(_wb_uninstall_q "$(workbench_removal_notes_link)")"
         echo '```'
     } > "${file}"
 }
@@ -361,8 +523,9 @@ _wb_uninstall_preview() {
         done < <(workbench_list_registered_modules | grep -vx core)
     fi
     echo
-    echo "Afterwards, $(_wb_uninstall_tilde "$(workbench_removal_notes_path)") lists what's left, how to"
-    echo "remove it, and how to come back."
+    echo "Some things are left behind on purpose, so nothing you still use breaks."
+    echo "Afterwards, $(_wb_uninstall_notes_shown) says what they are, why"
+    echo "they were left, how to remove them, and how to come back."
     echo
 }
 
@@ -460,6 +623,17 @@ workbench_cmd_uninstall() {
     fi
     rm -f "${tmp_notes}"
 
+    # One file, linked from the home directory so it's in plain sight. A file
+    # of the user's already at that path is left alone (D108).
+    local shown link
+    link="$(workbench_removal_notes_link)"
+    shown="$(_wb_uninstall_tilde "${notes}")"
+    if _wb_uninstall_can_link; then
+        ln -sfn "${notes}" "${link}" && shown="$(_wb_uninstall_tilde "${link}")"
+    else
+        log_warn "wb uninstall: $(_wb_uninstall_tilde "${link}") already exists and isn't workbench's, so it was left alone — the notes are at ${shown}"
+    fi
+
     cd "${HOME}" || cd / || true
 
     # From here every step runs even if an earlier one fails. Each failure is
@@ -490,8 +664,10 @@ workbench_cmd_uninstall() {
         echo "aliases stop in new shells."
         echo
     fi
-    echo "What's left, how to remove it, and how to come back are in:"
-    echo "  $(_wb_uninstall_tilde "${notes}")"
+    echo "Some things were left behind on purpose, so nothing you still use breaks."
+    echo "What they are, why each one was left, how to remove it, and how to come"
+    echo "back are in:"
+    echo "  ${shown}"
     echo
     echo "Open a new terminal to finish. This one still has workbench loaded."
 

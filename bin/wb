@@ -139,8 +139,9 @@ SETUP & HOST-LEVEL CONVERGENCE
                                'wb sync enable|disable [<name>]' for the
                                per-module layer underneath it.
   uninstall [--dry-run]        Remove workbench and the wb command. Modules
-                               and their config stay; notes explain what's
-                               left, how to remove it, and how to come back.
+                               and their config stay. Notes say what was
+                               left on purpose and why, how to remove it,
+                               and how to come back.
 
 MANAGING MODULES
   add <name>... | <name> <url> [--private] [--allow-hooks] [--keep-files|--use-files] [--skip-layer <id>]
@@ -549,8 +550,13 @@ _wb_cmd_install() {
              "${XDG_DATA_HOME:-${HOME}/.local/share}/workbench" \
              "${XDG_CACHE_HOME:-${HOME}/.cache}/workbench"
 
-    # Back from 'wb uninstall': the notes say workbench is gone (D108).
-    rm -f "${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/REMOVAL-NOTES.md"
+    # Back from 'wb uninstall': the notes say workbench is gone (D108). The
+    # link in the home directory goes only if it points at the notes.
+    local removal_notes="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/REMOVAL-NOTES.md"
+    if [[ -L "${HOME}/workbench-removal-notes.md" && "$(readlink "${HOME}/workbench-removal-notes.md")" == "${removal_notes}" ]]; then
+        rm -f "${HOME}/workbench-removal-notes.md"
+    fi
+    rm -f "${removal_notes}"
 
     _wb_scaffold_local_overrides
     _wb_bootstrap_core_module
@@ -3647,9 +3653,15 @@ loader is part of what's removed. Backups, your overrides under
 To take a module's config out as well, run 'wb remove <name> --restore' first.
 It isn't available afterwards.
 
-~/.local/share/workbench/REMOVAL-NOTES.md is written first, from what's really
-on this machine: what stayed for each module, the commands to remove it, and
-how to reinstall. Modules still in place load again after reinstalling.
+Notes are written first, from what's really on this machine. They say what
+was left behind on purpose and why, with the commands to remove each thing if
+you don't want it: every module's config, backups, your settings, SSH config,
+and software workbench installed. They also say how to reinstall. Modules
+still in place load again after reinstalling.
+
+The notes are ~/.local/share/workbench/REMOVAL-NOTES.md, linked from
+~/workbench-removal-notes.md so they're easy to find. Reinstalling removes
+both.
 
   --dry-run   Show what would happen and the notes, and change nothing.
   --yes       Skip the confirmation.
