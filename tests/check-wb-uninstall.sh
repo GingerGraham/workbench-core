@@ -179,10 +179,19 @@ touch "${HOME}/.ssh/workbench-demo" "${HOME}/.ssh/workbench-demo.pub"
     && ok "fixture: the module's function runs in a new shell" \
     || { fail "fixture: demo_fn not loaded"; cat "${WORK}/shell-err.log"; }
 
-# Timer units, as 'wb scheduler enable' leaves them.
-UNIT_DIR="${XDG_CONFIG_HOME}/systemd/user"
-mkdir -p "${UNIT_DIR}"
-touch "${UNIT_DIR}/workbench-sync.timer" "${UNIT_DIR}/workbench-sync.service"
+# The timer, as 'wb scheduler enable' leaves it on this OS: a launchd agent on
+# macOS, systemd user units elsewhere.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    TIMER_FILES="${HOME}/Library/LaunchAgents/com.workbench.sync.plist"
+    mkdir -p "${HOME}/Library/LaunchAgents"
+else
+    UNIT_DIR="${XDG_CONFIG_HOME}/systemd/user"
+    TIMER_FILES="${UNIT_DIR}/workbench-sync.timer ${UNIT_DIR}/workbench-sync.service"
+    mkdir -p "${UNIT_DIR}"
+fi
+for timer_file in ${TIMER_FILES}; do
+    touch "${timer_file}"
+done
 
 # ── wb remove core refuses ─────────────────────────────────────────────────
 wb remove core
@@ -226,13 +235,21 @@ grep -q 'demo' "${OUT}" && grep -q 'REMOVAL-NOTES.md' "${OUT}" && grep -q 'new t
 [[ -L "${HOME}/.zshrc" ]] && [[ "$(cat "${WORK}/real-zshrc")" == "# my zshrc" ]] \
     && ok "a symlinked ~/.zshrc stays a symlink, with the loader line gone" \
     || { fail "~/.zshrc"; ls -la "${HOME}/.zshrc"; cat "${WORK}/real-zshrc"; }
-[[ ! -e "${UNIT_DIR}/workbench-sync.timer" && ! -e "${UNIT_DIR}/workbench-sync.service" ]] \
-    && ok "the timer units are gone" \
-    || { fail "timer units left"; ls -la "${UNIT_DIR}"; }
+timer_left=""
+for timer_file in ${TIMER_FILES}; do
+    [[ -e "${timer_file}" ]] && timer_left="${timer_left} ${timer_file}"
+done
+[[ -z "${timer_left}" ]] \
+    && ok "the timer is gone" \
+    || { fail "timer files left:${timer_left}"; cat "${SERVICE_LOG}"; }
 if [[ "$(uname -s)" != "Darwin" ]]; then
     grep -q 'stop workbench-sync.service' "${SERVICE_LOG}" \
         && ok "a sync already running is stopped" \
         || { fail "service not stopped"; cat "${SERVICE_LOG}"; }
+else
+    grep -q 'launchctl unload' "${SERVICE_LOG}" \
+        && ok "the launchd agent is unloaded before its file is removed" \
+        || { fail "launchd agent not unloaded"; cat "${SERVICE_LOG}"; }
 fi
 
 # ── What stayed ────────────────────────────────────────────────────────────
