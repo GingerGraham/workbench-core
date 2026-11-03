@@ -210,6 +210,22 @@ wb revert nothing-here
     && ok "an unregistered module: says so" \
     || { fail "unregistered (rc ${rc})"; cat "${OUT}"; }
 
+# ── With no adoption.log row, a commit snapshot still pins as a commit ─────
+facts_mode() {
+    bash -c "
+        source '${WB}' >/dev/null 2>&1
+        _wb_require modules/revert.sh
+        facts=\"\$(_wb_revert_facts no-log-module '$1')\"
+        printf '%s %s\n' \"\${facts}\" \"\$(_wb_revert_mode_for \"\${facts%%|*}\" \"\${facts##*|}\")\"
+    " 2>&1
+}
+full_commit="0123456789abcdef0123456789abcdef01234567"
+[[ "$(facts_mode "${full_commit}-0123456")" == "${full_commit}|${full_commit} commit:${full_commit}" ]] \
+    && [[ "$(facts_mode "0123456789-0123456")" == "0123456789|0123456789 commit:0123456789" ]] \
+    && [[ "$(facts_mode "v1.0.0-0123456")" == "v1.0.0|0123456 tag:v1.0.0" ]] \
+    && ok "no adoption.log row: a commit snapshot keeps its full commit and pins as a commit; a tag still pins as a tag" \
+    || fail "commit snapshot fallback: '$(facts_mode "${full_commit}-0123456")' / '$(facts_mode "0123456789-0123456")' / '$(facts_mode "v1.0.0-0123456")'"
+
 # ── Core gate ──────────────────────────────────────────────────────────────
 core_gate() {
     bash -c "

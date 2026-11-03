@@ -42,8 +42,11 @@ _wb_revert_current() {
 # only a slug and a short sha, so the exact ref label and full sha come from
 # the snapshot's 'adopt' row in adoption.log (D77). With no row — a version
 # bootstrap.sh fetched, or a removed log — a tag-shaped name is still usable:
-# its short sha is corrected by the next sync of that tag. A branch snapshot
-# with no row can't be pinned safely, so this prints nothing.
+# its short sha is corrected by the next sync of that tag. A commit-tracked
+# snapshot is named after the commit as it was given, which starts with its
+# short sha; that commit is the most exact sha on hand, so it's both label and
+# sha and pins as a commit. A branch snapshot with no row can't be pinned
+# safely, so this prints nothing.
 _wb_revert_facts() {
     local module="$1" snapshot="$2" stem="${2%-*}" short="${2##*-}" log row
     log="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/adoption.log"
@@ -59,6 +62,10 @@ _wb_revert_facts() {
     case "${stem}" in
         branch-*) return 0 ;;
     esac
+    if [[ "${stem}" == "${short}"* && -z "$(printf '%s' "${stem}" | tr -d '0-9a-f')" ]]; then
+        printf '%s|%s\n' "${stem}" "${stem}"
+        return 0
+    fi
     printf '%s|%s\n' "${stem}" "${short}"
 }
 
