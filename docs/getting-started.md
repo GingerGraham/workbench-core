@@ -178,7 +178,9 @@ wb update awsconfd                 # sync just one module now
 wb track awsconfd --tag v1.2.0     # pin to an exact tag
 wb track awsconfd --latest         # back to auto-tracking the newest release
 wb dev awsconfd                    # guided switch to your own dev branch
-wb sync disable awsconfd           # pause auto-sync without deregistering
+wb sync disable awsconfd           # stop updates; it keeps working on this version
+wb revert awsconfd                 # go back a version and stay there
+wb load disable awsconfd           # stop its shell code; updates and config stay on
 wb remove awsconfd                 # deregister (deployed content stays)
 wb functions                       # what shell functions/getters are live
 wb tools list                      # what install-* functions are available
@@ -312,6 +314,52 @@ To do this for every module at install:
 Want a module but not one of its files?
 
     wb files policy <module> <file> skip
+
+## Going back to an earlier version
+
+If an update breaks something:
+
+```sh
+wb revert <name> --list    # the versions still on this machine
+wb revert <name>           # go back one version and stay there
+wb track <name> --latest   # when you're ready to follow releases again
+```
+
+This needs no network. Workbench keeps the last 3 versions it fetched for each module. For anything older, use `wb track <name> --tag <tag>`.
+
+To stop updates without changing version, use `wb sync disable <name>`. The module keeps working on the version it has, and `wb update <name>` still updates it when you ask.
+
+## Pausing, removing and coming back to a module
+
+| You want to | Run | Updates | Shell functions | Config files and blocks |
+|---|---|---|---|---|
+| Stay on this version | `wb sync disable <name>` | Only when you run `wb update <name>` | On | On |
+| Go back to an earlier version | `wb revert <name>` | Pinned until `wb track <name> --latest` | On | Earlier version |
+| Check if its shell code is the problem | `wb load disable <name>` | Unchanged | Off | On |
+| Check if one config file is the problem | `wb files restore <name> <file>` | Unchanged | On | That file off |
+| Stop using it, keep its config | `wb remove <name>` | Off | Off | On |
+| Stop using it and take its config out | `wb remove <name> --restore` | Off | Off | Off |
+
+`wb load enable <name>` and `wb sync enable <name>` turn those back on. `wb status` shows each setting.
+
+To come back to a module you removed, run `wb add <name>`. You don't need its URL again. Workbench shows the version you were on and the latest release, and asks which you want, recommending the latest. Your sync and load settings are kept. If you took its config out with `--restore`, it then asks whether to put that back.
+
+Without a terminal it can't ask, so the module returns as you left it: a pinned module stays on its version, one following releases moves to the latest, and config you took out stays out. To decide in advance, use `--latest` or `--keep-version`, and `--use-files` or `--keep-files`.
+
+## Uninstalling workbench
+
+```sh
+wb uninstall --dry-run    # see what would happen, and the notes it would leave
+wb uninstall
+```
+
+This removes the `wb` command, the loader lines in your shell rc files, the sync timer and core's own files.
+
+Your modules stay in place, and their config files and blocks keep applying. Their functions, aliases and prompt setup stop in new shells, because workbench's loader is what ran them. Backups, your overrides and your SSH config and keys are also left alone.
+
+To take a module's config out as well, run `wb remove <name> --restore` before uninstalling. That command isn't available afterwards.
+
+`~/.local/share/workbench/REMOVAL-NOTES.md` then lists what stayed for each module, the commands to remove it, and how to come back. Reinstalling with bootstrap brings back every module still in place, on the same versions.
 
 ## Uninstalling a module cleanly
 

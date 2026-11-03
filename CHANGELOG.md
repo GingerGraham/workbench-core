@@ -4,6 +4,49 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`wb load enable|disable <name>` turns a module's shell code on or
+  off.** New shells stop sourcing its functions, aliases, prompt setup,
+  completions and environment. Updates, config files and `wb tools` carry
+  on, so this answers "is its shell code the problem?" without changing
+  anything else. `wb status` has a LOAD column, and `core` can't be turned
+  off (D108).
+- **`wb revert <name> [<version>] [--list]` goes back to a version still on
+  this machine,** with no network, and pins it there. Repeating it keeps
+  going back. Files the newer version added are taken out unless you've
+  changed them. `wb track <name> --latest` returns to following releases.
+  Going back with core is refused when the older core couldn't serve an
+  installed module or read this host's state (D108).
+- **`wb uninstall [--dry-run]` removes workbench itself:** the `wb`
+  command, the loader lines in your shell rc files, the sync timer and
+  core's own files. Modules and their config stay in place. Before
+  anything changes it writes `~/.local/share/workbench/REMOVAL-NOTES.md`
+  from what's really on the machine: what stayed for each module, the
+  commands to remove it, and how to come back (D108).
+
+### Changed
+
+- **`wb sync disable <name>` stops updates and nothing else.** Previously
+  it also dropped the module's functions from new shells and its tools
+  from `wb tools`. `wb load disable` now does that job. `wb update` with no
+  name says which modules it skipped, and `wb status` warns when a module
+  on a held version needs a Core API this host doesn't have (D108).
+- **`wb add` brings back a module you removed instead of treating it as
+  new.** Its URL, pin, sync, load and hook settings are kept. It shows the
+  version you were on and the latest release, and asks which you want;
+  `--latest` and `--keep-version` answer in advance. After `wb remove
+  --restore`, it asks before putting the config back, defaulting to no
+  (D108).
+- **`wb remove core` now refuses** and points to `wb uninstall`. It used to
+  succeed and leave a broken host (D108).
+
+### Fixed
+
+- **A failed `wb track` no longer records the new mode.** The module stayed
+  on its old version, and a retry stopped at "already tracking". `--branch`
+  now turns sync on, as its help says (D108).
+
 ## [2.23.1] - 2026-10-30
 
 ### Fixed

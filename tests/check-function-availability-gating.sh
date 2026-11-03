@@ -290,14 +290,14 @@ else
     echo "${block_fns}"
 fi
 
-# Sync paused on the module that owns the installer: `wb tools` no longer
-# discovers it, so the hint must go too.
+# Sync paused on the module that owns the installer: `wb tools` still
+# discovers it (D108), so the hint stays.
 bash "${WB}" sync disable toolbox-module >/dev/null 2>&1
 paused_out="$(run_getter FOO=bar)"
-if ! grep -q 'wb tools install mytool-xyz' <<< "${paused_out}" && grep -q 'widget v2 (acme/widget)' <<< "${paused_out}"; then
-    ok "install hint disappears once the installer's module is sync-disabled; the needs text stays"
+if grep -q 'wb tools install mytool-xyz' <<< "${paused_out}" && grep -q 'widget v2 (acme/widget)' <<< "${paused_out}"; then
+    ok "install hint stays when the installer's module has sync disabled; the needs text stays"
 else
-    fail "install hint survived the owning module being sync-disabled"
+    fail "install hint disappeared when the owning module's sync was disabled"
     grep -A3 'widget v2' <<< "${paused_out}"
 fi
 bash "${WB}" sync enable toolbox-module >/dev/null 2>&1

@@ -59,6 +59,8 @@ always written out completely, under its own name, before the swap.
 Retention defaults to the 3 most recent snapshots per module
 (`WORKBENCH_SNAPSHOT_KEEP`); pruning never removes whatever `current`
 currently points at, even if it would otherwise fall outside the window.
+These are the versions `wb revert` can return to with no network
+(docs/decisions-log.md D108).
 
 ## Cadence (§9.4/D8)
 
@@ -128,17 +130,19 @@ Three related but distinct predicates (`lib/sync/state.sh`):
   — idempotent, non-destructive deregistration.
 - **Sync-enabled** (`SYNC_ENABLED=true`, independent of `TRACK_MODE`) —
   whether the timer/bulk `wb update` touches this module at all. Toggled by
-  `wb sync enable|disable <name>`.
-- **Loadable** = registered AND sync-enabled. This is the set
-  `lib/loader.sh` actually sources `register.list` from into a new
-  interactive shell. A module with sync paused is frozen at whatever it
-  last deployed and is **not** re-sourced into new shells until re-enabled
-  — a deliberate reading of docs/architecture.md §3's "every registered,
-  sync-enabled module," not an oversight: pausing a module's sync is a
-  reasonable way to also pause a broken module's shell functions without
-  fully deregistering it. `WORKBENCH_TRACK_<MODULE>` is exported for every
-  *registered* module regardless of this, so `wb status`/scripts can always
-  see what a paused module was last tracking.
+  `wb sync enable|disable <name>`. Together with registered, this is the set
+  `workbench_list_syncable_modules` returns.
+- **Load-enabled** (`LOAD_ENABLED=true`, independent of the others) —
+  whether new shells source this module's shell content. Toggled by
+  `wb load enable|disable <name>`.
+- **Loadable** = registered AND load-enabled. This is the set
+  `lib/loader.sh` sources `register.list` from into a new interactive shell.
+  A module with sync paused stays on the version it last deployed and keeps
+  loading (docs/decisions-log.md D108). To stop a broken module's shell
+  functions, use `wb load disable <name>`. `wb tools`, `wb status` and
+  convergence work from registered modules, so they still see it.
+  `WORKBENCH_TRACK_<MODULE>` is exported for every registered module, so
+  `wb status`/scripts can always see what a paused module was last tracking.
 
 ## Resilience guarantees (§9.6, unchanged from `external-sync.sh`)
 

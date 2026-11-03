@@ -135,11 +135,12 @@ _wb_complete_layer_ids() {
 # keystroke instead (same principle as any dynamic bash completion that
 # shells out to its own binary for live state).
 _wb_completion_generate_bash() {
-    local commands sync_subs tools_subs module_subs files_subs scheduler_subs
+    local commands sync_subs load_subs tools_subs module_subs files_subs scheduler_subs
     # paste -s (not `tr '\n' ' '`) so the joined list has no trailing
     # space — a trailing space would leave compgen -W an empty extra word.
     commands="$(_wb_completion_dispatch_commands | paste -sd' ' -)"
     sync_subs="$(_wb_completion_subdispatch_commands _wb_cmd_sync | paste -sd' ' -)"
+    load_subs="$(_wb_completion_subdispatch_commands _wb_cmd_load | paste -sd' ' -)"
     tools_subs="$(_wb_completion_subdispatch_commands _wb_cmd_tools | paste -sd' ' -)"
     module_subs="$(_wb_completion_subdispatch_commands _wb_cmd_module | paste -sd' ' -)"
     files_subs="$(_wb_completion_subdispatch_commands _wb_cmd_files | paste -sd' ' -)"
@@ -168,11 +169,18 @@ _wb_completions() {
                 COMPREPLY=( \$(compgen -W "\$(wb __complete catalog-modules 2>/dev/null)" -- "\${cur}") )
             fi
             ;;
-        remove|track|dev|update)
+        remove|revert|track|dev|update)
             [[ \${COMP_CWORD} -eq 2 ]] && COMPREPLY=( \$(compgen -W "\$(wb __complete registered-modules 2>/dev/null)" -- "\${cur}") )
             ;;
         install)
             [[ "\${COMP_WORDS[COMP_CWORD-1]}" == "--bundle" ]] && COMPREPLY=( \$(compgen -W "\$(wb __complete catalog-bundles 2>/dev/null)" -- "\${cur}") )
+            ;;
+        load)
+            if [[ \${COMP_CWORD} -eq 2 ]]; then
+                COMPREPLY=( \$(compgen -W "${load_subs}" -- "\${cur}") )
+            elif [[ \${COMP_CWORD} -eq 3 ]]; then
+                COMPREPLY=( \$(compgen -W "\$(wb __complete registered-modules 2>/dev/null)" -- "\${cur}") )
+            fi
             ;;
         sync)
             if [[ \${COMP_CWORD} -eq 2 ]]; then
@@ -224,9 +232,10 @@ EOF
 # not a shared abstraction, since the completion primitives themselves
 # (COMPREPLY/compgen vs _describe/compadd) are irreducibly different.
 _wb_completion_generate_zsh() {
-    local commands sync_subs tools_subs module_subs files_subs scheduler_subs
+    local commands sync_subs load_subs tools_subs module_subs files_subs scheduler_subs
     commands="$(_wb_completion_dispatch_commands | paste -sd' ' -)"
     sync_subs="$(_wb_completion_subdispatch_commands _wb_cmd_sync | paste -sd' ' -)"
+    load_subs="$(_wb_completion_subdispatch_commands _wb_cmd_load | paste -sd' ' -)"
     tools_subs="$(_wb_completion_subdispatch_commands _wb_cmd_tools | paste -sd' ' -)"
     module_subs="$(_wb_completion_subdispatch_commands _wb_cmd_module | paste -sd' ' -)"
     files_subs="$(_wb_completion_subdispatch_commands _wb_cmd_files | paste -sd' ' -)"
@@ -258,7 +267,7 @@ _wb_completions() {
                 _describe 'module' _wb_catalog_mods
             fi
             ;;
-        remove|track|dev|update)
+        remove|revert|track|dev|update)
             if [[ \${CURRENT} -eq 3 ]]; then
                 local -a _wb_reg_mods
                 _wb_reg_mods=(\${(f)"\$(wb __complete registered-modules 2>/dev/null)"})
@@ -270,6 +279,16 @@ _wb_completions() {
                 local -a _wb_catalog_bundles
                 _wb_catalog_bundles=(\${(f)"\$(wb __complete catalog-bundles 2>/dev/null)"})
                 _describe 'bundle' _wb_catalog_bundles
+            fi
+            ;;
+        load)
+            if [[ \${CURRENT} -eq 3 ]]; then
+                local -a load_subs; load_subs=(${load_subs})
+                _describe 'wb load subcommand' load_subs
+            elif [[ \${CURRENT} -eq 4 ]]; then
+                local -a _wb_reg_mods
+                _wb_reg_mods=(\${(f)"\$(wb __complete registered-modules 2>/dev/null)"})
+                _describe 'module' _wb_reg_mods
             fi
             ;;
         sync)

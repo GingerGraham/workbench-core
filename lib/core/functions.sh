@@ -670,8 +670,8 @@ _wb_function_install_tool() {
 # that helper is absent.
 #
 # Mirrors workbench_tools_collect's rules where they are cheap to check: the
-# owning module must be registered and sync-enabled (when state.sh's helpers
-# are loaded), and the reserved wb-tools words are never installers. It does
+# owning module must be registered (when state.sh's helpers are loaded), and
+# the reserved wb-tools words are never installers. It does
 # not re-implement collision resolution — two modules declaring the same
 # friendly name still means "an installer exists".
 _wb_installer_known() {
@@ -692,9 +692,6 @@ _wb_installer_known() {
         _module="$(basename "$(dirname "${_list}")")"
         if command -v workbench_is_registered &>/dev/null; then
             workbench_is_registered "${_module}" || continue
-        fi
-        if command -v workbench_is_sync_enabled &>/dev/null; then
-            workbench_is_sync_enabled "${_module}" || continue
         fi
         return 0
     done
