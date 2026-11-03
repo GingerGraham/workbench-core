@@ -21,7 +21,7 @@
 # shellcheck disable=SC2088
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/uninstall.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/uninstall.sh" "0.2.0" || true
 
 _WB_UNINSTALL_MARKER="# workbench-core loader"
 
