@@ -128,6 +128,11 @@ wb load disable
 [[ "${rc}" -eq 2 ]] \
     && ok "no name is a usage error, not a default to core" \
     || { fail "wb load disable with no name (rc ${rc})"; cat "${OUT}"; }
+rc=0
+bash -c "source '${WB}' >/dev/null 2>&1; _wb_require modules/load-toggle.sh; workbench_cmd_load_toggle bogus demo" >"${OUT}" 2>&1 || rc=$?
+[[ "${rc}" -eq 2 ]] && grep -q 'usage' "${OUT}" && ! grep -q '^LOAD_ENABLED=$' "${MODULES}/demo/sync.conf" \
+    && ok "an unknown action, called directly, is a usage error and writes nothing" \
+    || { fail "workbench_cmd_load_toggle bogus (rc ${rc})"; cat "${OUT}"; grep LOAD_ENABLED "${MODULES}/demo/sync.conf"; }
 wb load disable nothing-here
 [[ "${rc}" -ne 0 ]] && grep -q 'not registered' "${OUT}" \
     && ok "an unregistered module: says so" \

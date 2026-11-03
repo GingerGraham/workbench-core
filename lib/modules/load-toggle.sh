@@ -14,6 +14,10 @@ workbench_cmd_load_toggle() {
     case "${action}" in
         enable)  value="true" ;;
         disable) value="false" ;;
+        *)
+            log_error "wb load: usage: wb load enable|disable <name>"
+            return 2
+            ;;
     esac
     if [[ -z "${name}" ]]; then
         log_error "wb load: usage: wb load enable|disable <name>"

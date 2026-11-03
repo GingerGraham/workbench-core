@@ -222,6 +222,14 @@ grep -q 'wb remove demo --restore' "${OUT}" \
     && ok "the preview offers 'wb remove <name> --restore' while it still exists" \
     || { fail "preview doesn't mention --restore"; cat "${OUT}"; }
 
+# A module the user had already removed with 'wb remove': deregistered, but its
+# state, installers.list and installed tool are still there.
+mkdir -p "${MODULES}/gone/snapshots/v1.0.0-1234567"
+ln -sfn "${MODULES}/gone/snapshots/v1.0.0-1234567" "${MODULES}/gone/current"
+printf 'installed-gone-tool() { return 0; }\n' > "${MODULES}/gone/snapshots/v1.0.0-1234567/installers.sh"
+printf '%s|install-gone-tool|gone-tool\n' "${MODULES}/gone/current/installers.sh" > "${MODULES}/gone/installers.list"
+printf 'REPO_URL=https://example.com/gone.git\nTRACK_MODE=latest\nTRACK_REF=v1.0.0\nREGISTERED=false\n' > "${MODULES}/gone/sync.conf"
+
 # ── The real thing, from inside the snapshot it deletes ────────────────────
 : > "${SERVICE_LOG}"
 wb uninstall --yes
@@ -308,6 +316,8 @@ note_has "**Why it was left:** SSH reads the whole of" "why SSH config was left"
 note_has '`20-mine.conf`' "the user's own file in ~/.ssh/config.d"
 note_has '### Software installed through workbench' "the software left behind"
 note_has 'present-tool (demo)' "which module the software came with"
+note_has 'gone-tool (gone)' "software of a module the user had already removed"
+note_has "You had already deregistered this module with 'wb remove'." "a module the user had already removed"
 note_has "**If you don't want it:**" "how to remove what was left"
 note_has '~/workbench-removal-notes.md' "where the link to the notes is"
 ! grep -q 'curl[^|]*|[[:space:]]*bash' "${NOTES}" \

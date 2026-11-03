@@ -133,15 +133,22 @@ _wb_uninstall_tilde() {
 
 # _wb_uninstall_tools_of <module> <collected>
 # Comma-separated tools of <module> that report installed. <collected> is one
-# workbench_tools_collect run, so a collision warning fires only once.
+# workbench_tools_collect run, so a collision warning fires only once. That run
+# covers registered modules only; a module 'wb remove' deregistered still has
+# its installers.list on disk, so its tools are read from there.
 _wb_uninstall_tools_of() {
-    local module="$1" collected="$2" name abs_path func friendly found=""
+    local module="$1" collected="$2" lines instlist name abs_path func friendly found=""
+    lines="$(printf '%s\n' "${collected}" | grep -F "${module}|" | awk -F'|' -v m="${module}" '$1 == m')"
+    instlist="$(workbench_module_dir "${module}")/installers.list"
+    if [[ -z "${lines}" ]] && ! workbench_is_registered "${module}" && [[ -f "${instlist}" ]]; then
+        lines="$(awk -v m="${module}" 'NF { print m "|" $0 }' "${instlist}")"
+    fi
     while IFS='|' read -r name abs_path func friendly; do
-        [[ "${name}" == "${module}" && -n "${friendly}" ]] || continue
+        [[ -n "${friendly}" ]] || continue
         if [[ "$(_wb_tools_check_installed "${name}" "${abs_path}" "${func}" "${friendly}")" == "installed" ]]; then
             found="${found:+${found}, }${friendly}"
         fi
-    done <<< "${collected}"
+    done <<< "${lines}"
     printf '%s\n' "${found}"
 }
 
