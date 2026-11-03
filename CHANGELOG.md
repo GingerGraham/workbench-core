@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.24.0] - 2026-11-03
+
 ### Added
 
 - **`wb load enable|disable <name>` turns a module's shell code on or

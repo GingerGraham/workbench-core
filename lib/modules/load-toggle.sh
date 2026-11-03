@@ -6,7 +6,7 @@
 # problem?" without changing anything else.
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/load-toggle.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/modules/load-toggle.sh" "0.2.0" || true
 
 # workbench_cmd_load_toggle <enable|disable> <name>
 workbench_cmd_load_toggle() {
