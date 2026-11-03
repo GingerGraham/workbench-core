@@ -116,7 +116,7 @@ config is split across `workbench-core` + `workbench-git` + `workbench-gpg` +
 
 `workbench-core`'s loader must instead:
 
-1. Enumerate every **registered, sync-enabled** module's state directory (§5/§9).
+1. Enumerate every **registered, load-enabled** module's state directory (§5/§9). Sync only decides whether a module updates, not whether it loads (D108).
 2. For each, read that module's `register.list` (flattened from its manifest's `register.shell[]` entries at sync time — same "flatten YAML into a shell-readable list" pattern the current `deploy.list`/`hooks.list` already use).
 3. Source each declared file into the tier its manifest specifies (`env` / `core` / `tools` / `platform` / `distro` / `lazy`), in the same tier order `loader.sh` already enforces today.
 4. Run `WORKBENCH_USER_EXT_DIR` last, as today.
@@ -625,7 +625,10 @@ Wave B. `workbench` is reserved for a separate TUI repo (Wave D) that fronts
 | `wb install [--bundle <n>]` | First-run convergence — prereqs, host state, module registration. `--bundle` expands to a sequence of `wb add` calls before applying. |
 | `wb apply` | Re-run convergence without the interactive prompts (mirrors `install.sh --no-prereqs --skip-ssh` today). |
 | `wb add <n> [url] [--private] [--allow-hooks]` | Hot-path registration (§8's convergence constraint applies). `url` is optional if `<n>` resolves against the known-modules catalog. Defaults new registrations to `TRACK_MODE=latest`. |
-| `wb remove <n>` | Idempotent, non-destructive deregistration — never deletes deployed content the user might have touched. |
+| `wb remove <n>` | Idempotent, non-destructive deregistration — never deletes deployed content the user might have touched. Refuses `core` (D108). |
+| `wb load enable\|disable <n>` | Toggles whether new shells source a module's shell content, independent of sync and registration. Refuses `core` (D108). |
+| `wb revert <n> [<version>] [--list]` | Goes back to a version still under `snapshots/`, with no network, and pins it. Returning to production is `wb track <n> --latest` (D108). |
+| `wb uninstall [--dry-run]` | Removes core: CLI, rc stubs, timer, core's state. Modules stay in place, and `REMOVAL-NOTES.md` (linked from `~/workbench-removal-notes.md`) records what was left on purpose and why, how to remove it, and how to come back (D108). |
 | `wb track <n> --latest \| --branch <b> \| --tag <t> \| --commit <sha>` | Sets a module's tracking mode/ref (§9.2). Mutually exclusive flags. Returning a module to production is `wb track <n> --latest`, not a separate command. |
 | `wb dev [<n>]` | **Guided wrapper over `wb track`**, not a separate mechanism (confirmed). With no argument, walks through every currently-registered module (core included) prompting whether to keep it on its current tracking or switch to `--branch`/`--tag`/`--commit`; with `<n>`, jumps straight to that one module. Implicitly ensures `sync.enabled=true` for anything switched into `branch:` tracking, since dev tracking without active sync defeats the purpose. |
 | `wb sync enable [<n>] \| disable [<n>]` | Toggles a module's `sync.enabled` independent of what it tracks (§9.7). No argument means the module-zero (core) toggle. |

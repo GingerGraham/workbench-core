@@ -78,15 +78,15 @@ ${WIDGET_SRC}/debian.sh|distro
 ${WIDGET_SRC}/rhel.sh|distro
 EOF
 
-# ── "disabled-widget": REGISTERED=true but SYNC_ENABLED=false — must be
-#    skipped entirely. ───────────────────────────────────────────────────
+# ── "disabled-widget": REGISTERED=true but SYNC_ENABLED=false — sync only
+#    decides whether it updates, so it still loads (D108). ───────────────────────────────────────────────────
 mkdir -p "${MODULES_DIR}/disabled-widget"
 cat > "${MODULES_DIR}/disabled-widget/sync.conf" <<EOF
 REGISTERED=true
 SYNC_ENABLED=false
 EOF
 # shellcheck disable=SC2016
-echo 'WB_TEST_LOG="${WB_TEST_LOG}SHOULD-NOT-LOAD "' > "${WORK}/disabled.sh"
+echo 'WB_TEST_LOG="${WB_TEST_LOG}sync-off-still-loads "' > "${WORK}/disabled.sh"
 cat > "${MODULES_DIR}/disabled-widget/register.list" <<EOF
 ${WORK}/disabled.sh|tools
 EOF
@@ -172,11 +172,16 @@ if [[ "${live_os}" == "Linux" ]]; then
     printf '%s\n' "${test_log}" | grep -q 'platform-macos' && fail "platform tier: macos.sh incorrectly fired on Linux" || ok "platform tier: macos.sh correctly did not fire on Linux"
 fi
 
-# 5. disabled/removed modules never contributed anything.
+# 5. A removed module contributes nothing; a sync-disabled one still loads.
 if printf '%s\n' "${test_log}" | grep -q 'SHOULD-NOT-LOAD'; then
-    fail "a SYNC_ENABLED=false or REGISTERED=false module's file was sourced"
+    fail "a REGISTERED=false module's file was sourced"
 else
-    ok "SYNC_ENABLED=false and REGISTERED=false modules were both correctly skipped"
+    ok "a REGISTERED=false module was correctly skipped"
+fi
+if printf '%s\n' "${test_log}" | grep -q 'sync-off-still-loads'; then
+    ok "a SYNC_ENABLED=false module still loaded (D108)"
+else
+    fail "a SYNC_ENABLED=false module wasn't loaded"
 fi
 
 # 6. WORKBENCH_TRACK_<MODULE> exported for every registered module, derived

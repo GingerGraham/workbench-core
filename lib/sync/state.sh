@@ -140,14 +140,29 @@ workbench_list_registered_modules() {
     done < <(workbench_list_all_modules)
 }
 
+# workbench_is_load_enabled <name>
+# Whether new shells source this module's shell content. Defaults to true,
+# and toggled by `wb load enable|disable <name>` (docs/decisions-log.md D108).
+workbench_is_load_enabled() {
+    [[ "$(workbench_module_conf_get "$1" LOAD_ENABLED true)" == "true" ]]
+}
+
 # workbench_list_loadable_modules
-# The set the loader actually sources from: registered AND sync-enabled.
-# (docs/architecture.md §3 — "every registered, sync-enabled module's state
-# directory.") A module with sync paused via `wb sync disable <name>` is
-# frozen at its last-deployed snapshot and its register.list is not
-# re-sourced into new shells until sync is re-enabled; this is a deliberate
-# choice, not an oversight — see contracts/state-schema.md.
+# The set the loader sources from: registered AND load-enabled. Sync doesn't
+# affect this. A module with sync paused via `wb sync disable <name>` stays
+# on its last-deployed snapshot and keeps loading (docs/decisions-log.md D108).
 workbench_list_loadable_modules() {
+    local name
+    while IFS= read -r name; do
+        [[ -z "${name}" ]] && continue
+        workbench_is_load_enabled "${name}" && printf '%s\n' "${name}"
+    done < <(workbench_list_registered_modules)
+}
+
+# workbench_list_syncable_modules
+# The set the timer and a bulk `wb update` touch: registered AND sync-enabled
+# (docs/architecture.md §9.7).
+workbench_list_syncable_modules() {
     local name
     while IFS= read -r name; do
         [[ -z "${name}" ]] && continue

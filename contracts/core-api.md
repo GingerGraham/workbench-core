@@ -233,7 +233,7 @@ startup (D65).
 
 `register.shell[].tier` is one of `env` / `core` / `tools` / `platform` /
 `distro` / `lazy`, sourced in that fixed order across every registered,
-sync-enabled module (`lib/loader.sh`). Within a tier, modules are processed
+load-enabled module (`lib/loader.sh`). Within a tier, modules are processed
 in module-name order, and a module's own files in the order its
 `register.list` lists them (by convention, prefix env-tier filenames
 numerically — `00-`, `10-`, `20-` — the same way workbench-precursor's

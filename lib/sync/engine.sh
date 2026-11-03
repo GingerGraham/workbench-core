@@ -54,7 +54,7 @@ workbench_cadence_seconds() {
         case "${mode}" in
             branch:*) printf '%s\n' "${WORKBENCH_CADENCE_FAST_SECONDS}"; return 0 ;;
         esac
-    done < <(workbench_list_registered_modules)
+    done < <(workbench_list_syncable_modules)
     printf '%s\n' "${WORKBENCH_CADENCE_DEFAULT_SECONDS}"
 }
 
@@ -138,7 +138,9 @@ workbench_track_mode_parts() {
 }
 
 # ── Per-module resolve ────────────────────────────────────────────────────────
-# workbench_resolve_module <name>
+# workbench_resolve_module <name> [<track-mode>]
+# <track-mode> resolves that mode instead of the module's own, so 'wb add' can
+# ask what the latest release is without changing what the module tracks.
 # Prints "<tag-or-ref-label>|<sha>" on success. Uses the GitHub API for a
 # public repo on latest/tag/commit, `git ls-remote` for a private repo (any
 # mode) or ANY branch:-tracked repo — docs/architecture.md §9.1.
@@ -147,7 +149,7 @@ workbench_resolve_module() {
     local url private mode ref_form ref_value
     url="$(workbench_module_conf_get "${name}" REPO_URL "")"
     private="$(workbench_module_conf_get "${name}" PRIVATE false)"
-    mode="$(workbench_module_conf_get "${name}" TRACK_MODE latest)"
+    mode="${2:-$(workbench_module_conf_get "${name}" TRACK_MODE latest)}"
     [[ -z "${url}" ]] && { log_warn "workbench_resolve_module: ${name}: no REPO_URL in sync.conf"; return 1; }
     workbench_valid_repo_url "${url}" || { log_warn "workbench_resolve_module: ${name}: REPO_URL '${url}' fails validation — skipping"; return 1; }
 
@@ -622,10 +624,12 @@ _wb_engine_require_files() {
     done
 }
 
-# workbench_sync_module <name> [reason]
+# workbench_sync_module <name> [reason] [<ref-label>|<sha>]
 # Returns 0 on a successful cycle (whether or not anything actually
 # changed), 1 on a resolution/fetch failure (logged, never fatal to the
-# caller's loop over other modules).
+# caller's loop over other modules). The third argument is a version already
+# known to be on disk, used in place of resolving the tracked ref, so
+# 'wb revert' needs no network (docs/decisions-log.md D108).
 workbench_sync_module() {
     # Lazy-load the distribution primitives here, not at this file's own
     # top (see the comment on the dependency block above) — the instant a
@@ -654,13 +658,17 @@ workbench_sync_module() {
 
     _wb_engine_require_files
 
-    local name="$1" reason="${2:-scheduled}"
+    local name="$1" reason="${2:-scheduled}" known_version="${3:-}"
     local mode resolved current_sha module_dir
 
     module_dir="$(workbench_module_dir "${name}")"
     mode="$(workbench_module_conf_get "${name}" TRACK_MODE latest)"
 
-    resolved="$(workbench_resolve_module "${name}")"
+    if [[ -n "${known_version}" ]]; then
+        resolved="${known_version}"
+    else
+        resolved="$(workbench_resolve_module "${name}")"
+    fi
     if [[ -z "${resolved}" ]]; then
         log_warn "${name}: could not resolve tracked ref this cycle — skipping (will retry)"
         return 1
@@ -868,7 +876,7 @@ workbench_sync_all() {
     while IFS= read -r name; do
         [[ -z "${name}" ]] && continue
         workbench_sync_run_one "${name}" "${reason}" || failures=$((failures + 1))
-    done < <(workbench_list_loadable_modules)
+    done < <(workbench_list_syncable_modules)
     workbench_cadence_mark_ran
     return "${failures}"
 }

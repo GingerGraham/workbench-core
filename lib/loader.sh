@@ -4,7 +4,7 @@
 # The single entry point sourced by a stub in ~/.bashrc and ~/.zshrc
 # (written by `wb install`/`wb apply` — see bin/wb's _wb_write_rc_stub).
 # Rewritten from workbench-precursor's shell/config/loader.sh (which assumed
-# a single SHELL_CONFIG_DIR root) to walk every registered, sync-enabled
+# a single SHELL_CONFIG_DIR root) to walk every registered, load-enabled
 # module's state directory instead (docs/architecture.md §3) — core is "module
 # zero" here and goes through the exact same mechanism as any other module;
 # there is no hardcoded module name or special first pass for core anywhere
@@ -584,6 +584,11 @@ wb() {
         # that a full reload means re-sourcing every tier of every
         # loadable module under this environment's per-file-open cost.
         status|functions|tools|version|completion|__complete|help|-h|--help|"")
+            _wb_should_reload=false
+            ;;
+        # There's nothing left to reload, and a failed source would print an
+        # error straight after the success message (D108).
+        uninstall)
             _wb_should_reload=false
             ;;
         # 'wb module info'/'wb module docs' are read-only (D45/D70) — same

@@ -138,19 +138,32 @@ SETUP & HOST-LEVEL CONVERGENCE
                                for this whole host. OFF by default — see
                                'wb sync enable|disable [<name>]' for the
                                per-module layer underneath it.
+  uninstall [--dry-run]        Remove workbench and the wb command. Modules
+                               and their config stay. Notes say what was
+                               left on purpose and why, how to remove it,
+                               and how to come back.
 
 MANAGING MODULES
   add <name>... | <name> <url> [--private] [--allow-hooks] [--keep-files|--use-files] [--skip-layer <id>]
                                Register + immediately sync a new module.
   remove <name> [--restore]    Deregister (content on disk is left alone,
                                unless --restore puts back what it replaced).
+  revert <name> [<version>] [--list]
+                               Go back to a version still on this machine and
+                               stay there. No network needed.
   track <name> --latest | --branch <b> | --tag <t> | --commit <sha>
                                Pin what a module tracks, then sync it once.
   dev [<name>]                 Guided, interactive prompt wrapping 'track'.
   sync enable|disable [<name>]
-                               Turn a module's background auto-sync on/off —
+                               Turn updates for a module on/off —
                                independent of WHAT it tracks (that's
-                               'track'/'dev'). No name = core.
+                               'track'/'dev'). It keeps working either way.
+                               No name = core.
+  load enable|disable <name>
+                               Turn a module's shell functions and aliases
+                               on/off in new shells. Updates and config stay
+                               on. For finding out if its shell code is the
+                               problem.
   module info <name> | docs <name>
                                What a module publishes about itself — info
                                (repo, tracking, an optional description) or
@@ -245,7 +258,7 @@ _wb_converge_module_registrations() {
         workbench_render_register_list "${name}"
         workbench_render_installers_list "${name}"
         workbench_render_getters_list "${name}"
-    done < <(workbench_list_loadable_modules)
+    done < <(workbench_list_registered_modules)
 }
 
 _wb_link_cli_bin() {
@@ -537,6 +550,14 @@ _wb_cmd_install() {
              "${XDG_DATA_HOME:-${HOME}/.local/share}/workbench" \
              "${XDG_CACHE_HOME:-${HOME}/.cache}/workbench"
 
+    # Back from 'wb uninstall': the notes say workbench is gone (D108). The
+    # link in the home directory goes only if it points at the notes.
+    local removal_notes="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/REMOVAL-NOTES.md"
+    if [[ -L "${HOME}/workbench-removal-notes.md" && "$(readlink "${HOME}/workbench-removal-notes.md")" == "${removal_notes}" ]]; then
+        rm -f "${HOME}/workbench-removal-notes.md"
+    fi
+    rm -f "${removal_notes}"
+
     _wb_scaffold_local_overrides
     _wb_bootstrap_core_module
     _wb_converge_module_registrations
@@ -701,6 +722,20 @@ _wb_cmd_sync_continue() {
 }
 
 # ── sync ───────────────────────────────────────────────────────────────────
+_wb_cmd_load() {
+    local sub="${1:-}"; shift || true
+    case "${sub}" in
+        enable|disable)
+            _wb_require modules/load-toggle.sh
+            workbench_cmd_load_toggle "${sub}" "$@"
+            ;;
+        *)
+            log_error "wb load: usage: wb load enable|disable <name>"
+            return 2
+            ;;
+    esac
+}
+
 _wb_cmd_sync() {
     _wb_require sync/scheduler.sh
     local sub="${1:-}"; shift || true
@@ -731,13 +766,13 @@ _wb_cmd_sync() {
             if workbench_sync_due; then
                 local core_sha_before
                 core_sha_before="$(workbench_module_conf_get core RESOLVED_SHA "")"
-                local -a loadable=()
+                local -a syncable=()
                 local lm
                 while IFS= read -r lm; do
-                    [[ -n "${lm}" ]] && loadable+=("${lm}")
-                done < <(workbench_list_loadable_modules)
-                if [[ "${#loadable[@]}" -gt 0 ]]; then
-                    _wb_sync_modules "scheduled" "${core_sha_before}" "${loadable[@]}"
+                    [[ -n "${lm}" ]] && syncable+=("${lm}")
+                done < <(workbench_list_syncable_modules)
+                if [[ "${#syncable[@]}" -gt 0 ]]; then
+                    _wb_sync_modules "scheduled" "${core_sha_before}" "${syncable[@]}"
                 else
                     workbench_cadence_mark_ran
                 fi
@@ -791,13 +826,18 @@ _wb_cmd_update() {
     if [[ -n "${name}" ]]; then
         [[ "${#quit[@]}" -gt 0 ]] || { _workbench_sync_version_facts; workbench_sync_module "${name}" "manual"; }
     else
-        # Every loadable module, minus what the user just said not to touch.
+        # Every syncable module, minus what the user just said not to touch.
         local -a todo=()
         while IFS= read -r m; do
             [[ -z "${m}" ]] && continue
             case " ${quit[*]:-} " in *" ${m} "*) continue ;; esac
             todo+=("${m}")
-        done < <(workbench_list_loadable_modules)
+        done < <(workbench_list_syncable_modules)
+        while IFS= read -r m; do
+            [[ -z "${m}" ]] && continue
+            workbench_is_sync_enabled "${m}" \
+                || log_info "wb update: skipping ${m} because its sync is off — 'wb update ${m}' updates it anyway"
+        done < <(workbench_list_registered_modules)
         if [[ "${#todo[@]}" -gt 0 ]]; then
             _wb_sync_modules "manual" "${core_sha_before}" "${todo[@]}"
         else
@@ -821,7 +861,7 @@ _wb_cmd_version() {
 # ── status ─────────────────────────────────────────────────────────────────
 # _wb_status_check_rendered_lists
 # Loud, explicit check (fix-brief §1; reworked per the installers-only-module
-# false-positive brief, docs/decisions-log.md D71): a registered, sync-enabled
+# false-positive brief, docs/decisions-log.md D71): a registered
 # module whose manifest declares register.shell[] entries but whose
 # register.list is missing or empty means that module's shell content is
 # silently never reaching a real shell. Declaring register.installers[]
@@ -863,14 +903,14 @@ _wb_status_check_rendered_lists() {
                 log_warn "wb status: '${name}' declares register.installers[] entries but installers.list is missing or empty — its installers are NOT visible to 'wb tools'. Run 'wb apply' to re-render it; if it stays empty, check the declared file defines install-<name> functions."
             fi
         fi
-    done < <(workbench_list_loadable_modules)
+    done < <(workbench_list_registered_modules)
 }
 
 _wb_cmd_status() {
-    local name mode ref sha enabled registered hooks_pending held_core_api fast="no"
+    local name mode ref sha enabled load_enabled registered hooks_pending held_core_api fast="no"
     [[ "$(workbench_cadence_seconds)" -eq "${WORKBENCH_CADENCE_FAST_SECONDS}" ]] && fast="yes"
 
-    printf '%-20s %-10s %-20s %-10s %-10s %-10s %-14s\n' "MODULE" "MODE" "REF" "SHA" "SYNC" "REGISTERED" "HOOKS_PENDING"
+    printf '%-20s %-10s %-20s %-10s %-10s %-6s %-10s %-14s\n' "MODULE" "MODE" "REF" "SHA" "SYNC" "LOAD" "REGISTERED" "HOOKS_PENDING"
     while IFS= read -r name; do
         [[ -z "${name}" ]] && continue
         mode="$(workbench_module_conf_get "${name}" TRACK_MODE latest)"
@@ -879,11 +919,23 @@ _wb_cmd_status() {
         enabled="$(workbench_module_conf_get "${name}" SYNC_ENABLED true)"
         registered="$(workbench_module_conf_get "${name}" REGISTERED true)"
         hooks_pending="$(workbench_module_conf_get "${name}" HOOKS_PENDING false)"
-        printf '%-20s %-10s %-20s %-10s %-10s %-10s %-14s\n' "${name}" "${mode}" "${ref:--}" "${sha:0:10}" "${enabled}" "${registered}" "${hooks_pending}"
+        load_enabled="$(workbench_module_conf_get "${name}" LOAD_ENABLED true)"
+        printf '%-20s %-10s %-20s %-10s %-10s %-6s %-10s %-14s\n' "${name}" "${mode}" "${ref:--}" "${sha:0:10}" "${enabled}" "${load_enabled}" "${registered}" "${hooks_pending}"
         # D91: a newer release this host's Core API can't run yet.
         held_core_api="$(workbench_module_conf_get "${name}" HELD_CORE_API "")"
         if [[ -n "${held_core_api}" ]]; then
             printf "  %s held: needs Core API %s — run 'wb update core'\n" "${name}" "${held_core_api}"
+        fi
+        # D108: a pinned or sync-disabled module stays put while core moves on.
+        if [[ "${registered}" == "true" && "${name}" != "core" ]]; then
+            local status_manifest status_range status_api
+            status_manifest="$(workbench_resolve_manifest_path "$(workbench_module_current_dir "${name}")" 2>/dev/null)"
+            status_range=""
+            [[ -n "${status_manifest}" ]] && status_range="$(workbench_manifest_scalar core_api "${status_manifest}")"
+            status_api="$(_workbench_core_api_version)"
+            if [[ -n "${status_range}" && -n "${status_api}" ]] && ! _wb_version_satisfies "${status_api}" "${status_range}"; then
+                printf "  %s: this version needs Core API %s and this host has %s, so it may not work — 'wb track %s --latest' moves it on\n" "${name}" "${status_range}" "${status_api}" "${name}"
+            fi
         fi
     done < <(workbench_list_all_modules)
 
@@ -3179,7 +3231,7 @@ _wb_install_staged_modules() {
         if [[ -d "$(workbench_module_current_dir "${m}")" && -z "$(workbench_module_conf_get "${m}" RESOLVED_SHA "")" ]]; then
             printf '%s\n' "${m}"
         fi
-    done < <(workbench_list_loadable_modules)
+    done < <(workbench_list_syncable_modules)
 }
 
 # ── --use-files at install time (wb add / wb install --bundle) ──────────────
@@ -3357,8 +3409,10 @@ _wb_help_status() {
 Usage: wb status
 
 Prints one line per registered module: its TRACK_MODE, tracked ref,
-resolved commit SHA, whether that module's own sync is enabled, and
-whether it's registered at all. Also reports whether the fast (5-minute)
+resolved commit SHA, whether that module's own sync is enabled, whether
+its shell content loads, and whether it's registered at all. Also warns when
+a module's version doesn't support this host's core, and reports whether the
+fast (5-minute)
 cadence is currently active (true whenever any module, core included, is
 on branch: tracking).
 
@@ -3465,6 +3519,7 @@ _wb_help_add() {
     cat <<'EOF'
 Usage: wb add <name> [url] [--private] [--allow-hooks] [--keep-files | --use-files [--follow] [--yes]] [--skip-layer <id>]...
        wb add <name> <name>... [--keep-files | --use-files [--follow] [--yes]] [--skip-layer <id>]...
+       wb add <name> [--latest | --keep-version] [--keep-files | --use-files]   (a module you removed earlier)
 
 Registers a new module and syncs it once. <url> is optional if <name>
 resolves against the known-modules catalog. New modules default to
@@ -3493,6 +3548,22 @@ On a fresh machine there's nothing to ask. Without a terminal (cron,
 cloud-init, CI) the answer is always keep. Enter repeats your last
 whole-host answer (k or u).
 
+Coming back to a module you removed with 'wb remove' works differently. Its
+url and settings are still known, so you don't need the url again, and its sync
+and load settings are kept. It shows the version you were on and the latest
+release, and asks:
+
+  1) Move to the latest release and follow updates (recommended)
+  2) Stay on the version you were on, pinned
+
+If you took its config out with 'wb remove --restore', it then asks whether to
+put that back. Without a terminal it can't ask, so the module returns as you
+left it: a pinned module stays on its version, one following releases moves to
+the latest, and config you took out stays out.
+
+  --latest        Returning module: move to the latest release without asking.
+  --keep-version  Returning module: stay on the version it was on, pinned,
+                    without asking.
   --private       The module's repo is private (provisions an SSH deploy
                     key on first sync if one doesn't already exist).
   --allow-hooks   Permit this module's manifest-declared post_deploy hook
@@ -3536,6 +3607,64 @@ exactly as it is; nothing is deleted.
                 'wb files restore <name> all', with the same preview and
                 confirmation. Declining leaves the module registered.
   --yes       Skip the --restore confirmation.
+
+Core can't be removed this way: 'wb uninstall' removes workbench itself.
+EOF
+}
+
+_wb_help_revert() {
+    cat <<'EOF'
+Usage: wb revert <name> [<version>] [--list] [--yes]
+
+Goes back to a version of a module that's still on this machine and pins it
+there, so nothing moves it forward again. Works with no network.
+
+  <version>   A version from --list. Without one, the next one older than
+                the current version, so repeating this keeps going back.
+  --list      Show the versions on this machine and do nothing else.
+  --yes       Skip the confirmation.
+
+Its files and config blocks go back with it, following the same rules as any
+update: anything replaced goes to backups. Files the newer version added are
+removed, unless you've changed them.
+
+Workbench keeps the last 3 versions it fetched per module. For anything older,
+use 'wb track <name> --tag <tag>'.
+
+To go back to following releases: wb track <name> --latest
+
+Going back with core is refused if the older core couldn't serve a module you
+have installed, or couldn't read this host's state.
+EOF
+}
+
+_wb_help_uninstall() {
+    cat <<'EOF'
+Usage: wb uninstall [--dry-run] [--yes]
+
+Removes workbench itself: the wb command, the loader lines in your shell rc
+files, the sync timer, and core's own files.
+
+Modules are left in place. Their config files and blocks keep applying, but
+their functions, aliases and prompt setup stop in new shells, because the
+loader is part of what's removed. Backups, your overrides under
+~/.config/workbench, and SSH config and keys are also left alone.
+
+To take a module's config out as well, run 'wb remove <name> --restore' first.
+It isn't available afterwards.
+
+Notes are written first, from what's really on this machine. They say what
+was left behind on purpose and why, with the commands to remove each thing if
+you don't want it: every module's config, backups, your settings, SSH config,
+and software workbench installed. They also say how to reinstall. Modules
+still in place load again after reinstalling.
+
+The notes are ~/.local/share/workbench/REMOVAL-NOTES.md, linked from
+~/workbench-removal-notes.md so they're easy to find. Reinstalling removes
+both.
+
+  --dry-run   Show what would happen and the notes, and change nothing.
+  --yes       Skip the confirmation.
 EOF
 }
 
@@ -3587,9 +3716,12 @@ _wb_help_sync() {
     cat <<'EOF'
 Usage: wb sync enable|disable [<name>]  |  wb sync run-if-due
 
-  enable|disable [<name>]   Turns a module's background auto-sync on or
-                              off, independent of what it tracks. No name
-                              means core's own toggle.
+  enable|disable [<name>]   Turns updates for a module on or off,
+                              independent of what it tracks. With sync off,
+                              the timer and 'wb update' with no name leave
+                              it alone; it keeps working on the version it
+                              has, and its shell functions still load. No
+                              name means core's own toggle.
   run-if-due                 Invoked by the background timer; a no-op
                               unless the current cadence interval has
                               elapsed. Not normally run by hand.
@@ -3598,6 +3730,33 @@ Confused with 'wb track'? 'wb sync enable|disable' controls WHETHER a
 module is auto-synced at all; 'wb track' controls WHAT it tracks. A
 module can be registered with sync disabled entirely (frozen at its last
 snapshot) regardless of what TRACK_MODE it's set to.
+EOF
+}
+
+_wb_help_load() {
+    cat <<'EOF'
+Usage: wb load enable|disable <name>
+
+Turns a module's shell content on or off in new shells: its functions,
+aliases, prompt setup, completions and environment. Use it to find out whether
+a module's shell code is causing a problem.
+
+Nothing else changes. The module stays registered and keeps updating, its
+config files and blocks keep applying, and 'wb tools' still lists its tools.
+'wb status' shows the setting in the LOAD column.
+
+After 'disable', open a new terminal to see the effect: a shell that's already
+running keeps what it loaded. Core can't be turned off, because every module
+relies on it.
+
+Which command do I want?
+
+  wb load disable <name>     Stop its shell code. Updates and config stay on.
+  wb sync disable <name>     Stop its updates. Everything keeps working.
+  wb files restore <name> <file>
+                             Take out one of its config files.
+  wb remove <name>           Stop using it. Its config stays in place.
+  wb remove <name> --restore Stop using it and take its config out.
 EOF
 }
 
@@ -3674,7 +3833,7 @@ _wb_help_tools() {
 Usage: wb tools [list [--status]]  |  wb tools install <name>...|all  |  wb tools upgrade [<name>...|all]
 
 The tool-updating framework: discovers and invokes install-<name>
-functions any registered, sync-enabled module declared via its manifest's
+functions any registered module declared via its manifest's
 register.installers[] entries. Core only knows a function exists and its
 friendly name (install-<name> with the prefix stripped) — it does not
 know or guess how any tool is installed, checked, or updated unless the
@@ -3913,9 +4072,12 @@ _wb_cmd_help() {
         apply)      _wb_help_apply ;;
         add)        _wb_help_add ;;
         remove)     _wb_help_remove ;;
+        revert)     _wb_help_revert ;;
+        uninstall)  _wb_help_uninstall ;;
         track)      _wb_help_track ;;
         dev)        _wb_help_dev ;;
         sync)       _wb_help_sync ;;
+        load)       _wb_help_load ;;
         scheduler)  _wb_help_scheduler ;;
         version)    _wb_help_version ;;
         completion) _wb_help_completion ;;
@@ -3948,9 +4110,12 @@ case "${_wb_cmd}" in
     apply)      _wb_cmd_apply "$@" ;;
     add)        _wb_require modules/add.sh; workbench_cmd_add "$@" ;;
     remove)     _wb_require modules/remove.sh; workbench_cmd_remove "$@" ;;
+    revert)     _wb_require modules/revert.sh; workbench_cmd_revert "$@" ;;
+    uninstall)  _wb_require modules/uninstall.sh; workbench_cmd_uninstall "$@" ;;
     track)      _wb_require modules/track.sh; workbench_cmd_track "$@" ;;
     dev)        _wb_require modules/dev.sh; workbench_cmd_dev "$@" ;;
     sync)       _wb_cmd_sync "$@" ;;
+    load)       _wb_cmd_load "$@" ;;
     scheduler)  _wb_cmd_scheduler "$@" ;;
     update)     _wb_cmd_update "$@" ;;
     status)     _wb_cmd_status "$@" ;;

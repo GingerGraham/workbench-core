@@ -75,7 +75,8 @@ there rather than just reading key/value pairs (`workbench_module_conf_get`,
 | `TRACK_REF` | The concrete ref last resolved (tag name, branch name, or sha) | — |
 | `RESOLVED_SHA` | The commit sha currently deployed | — |
 | `REGISTERED` | `true`/`false` — `wb remove` sets `false`, never deletes | `true` once the file exists |
-| `SYNC_ENABLED` | `true`/`false` — independent of `TRACK_MODE` (§9.7) | `true` |
+| `SYNC_ENABLED` | `true`/`false` — whether updates reach it, independent of `TRACK_MODE` (§9.7). It loads into shells either way (D108) | `true` |
+| `LOAD_ENABLED` | `true`/`false` — whether new shells source its shell content. Updates, config files and `wb tools` aren't affected (D108) | `true` |
 | `ALLOW_HOOKS` | `true`/`false` — per-machine hook gate, mirrors the manifest's hook declaration | `false` |
 | `HOOKS_APPROVED_SHA` | Commit whose `post_deploy` hook the user last approved (docs/decisions-log.md D76) | — |
 | `HOOKS_PENDING` | `true`/`false` — a hook was deferred by an unattended sync and is owed a run on the next interactive one | `false` |
@@ -130,8 +131,8 @@ One line per registered shell file. `<tier>` is one of
 `contracts/core-api.md`'s loader-tier section for sourcing order and the
 platform/distro filename-selector convention.
 
-`wb status` flags loudly (a warning, not silence) any registered,
-sync-enabled module whose manifest declares `register.shell[]` entries but
+`wb status` flags loudly (a warning, not silence) any registered
+module whose manifest declares `register.shell[]` entries but
 whose `register.list` is missing or empty (docs/decisions-log.md D71: this
 check is against `register.shell[]` alone — an installers-only module
 correctly has an empty `register.list`, since its content never renders
@@ -157,8 +158,8 @@ aggregates this file across every loadable module — see
 rule (first-by-module-name-order wins, warned once) when two modules
 declare the same friendly name.
 
-`wb status` flags loudly (a warning, not silence) any registered,
-sync-enabled module whose manifest declares `register.installers[]`
+`wb status` flags loudly (a warning, not silence) any registered
+module whose manifest declares `register.installers[]`
 entries but whose `installers.list` is missing or empty — checked
 independently of the `register.list` check above (docs/decisions-log.md
 D71).
@@ -361,6 +362,10 @@ content matched.
 
 No retention policy and no scheduled cleanup — deliberate, not deferred;
 revisit only if volume ever actually becomes a problem.
+
+## `REMOVAL-NOTES.md`
+
+`${XDG_DATA_HOME}/workbench/REMOVAL-NOTES.md`, written by `wb uninstall` before it changes anything, and deleted by the next `wb install` (docs/decisions-log.md D108). `wb uninstall` links it from `~/workbench-removal-notes.md` unless something else is already at that path; `wb install` removes that link only when it points at the notes. For a person to read; nothing parses it. After `wb uninstall`, `modules/<name>/` (except `core`), `backups/` and `adoption.log` remain, so a reinstall picks every remaining module up where it was.
 
 ## What is deliberately NOT here
 

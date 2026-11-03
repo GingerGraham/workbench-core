@@ -38,6 +38,13 @@ workbench_cmd_remove() {
         return 2
     fi
 
+    # Deregistering core would leave wb running with no core, and every
+    # module with no loader. Removing it is a different operation.
+    if [[ "${name}" == "core" ]]; then
+        log_error "wb remove: core can't be deregistered — to remove workbench itself, use 'wb uninstall'"
+        return 1
+    fi
+
     if ! workbench_is_registered "${name}"; then
         log_info "wb remove: '${name}' is not registered — no-op"
         return 0
@@ -53,10 +60,10 @@ workbench_cmd_remove() {
             *) log_error "wb remove: '${name}' is still registered — restore didn't complete; see above"; return 1 ;;
         esac
         workbench_module_conf_set "${name}" REGISTERED "false"
-        log_info "wb remove: '${name}' deregistered and its files put back — its snapshots are left in place; re-run 'wb add ${name}' to bring it back"
+        log_info "wb remove: '${name}' deregistered and its files put back — its snapshots are left in place; 'wb add ${name}' brings it back and asks whether to put its config back too"
         return 0
     fi
 
     workbench_module_conf_set "${name}" REGISTERED "false"
-    log_info "wb remove: '${name}' deregistered — its deployed files, and its blocks in your config files (still active), are left in place; re-run 'wb add ${name}' to bring it back — to take them out and put back what it replaced, run 'wb remove ${name} --restore' instead"
+    log_info "wb remove: '${name}' deregistered — its deployed files, and its blocks in your config files (still active), are left in place; 'wb add ${name}' brings it back — to take them out and put back what it replaced, run 'wb remove ${name} --restore' instead"
 }

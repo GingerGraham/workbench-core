@@ -1450,6 +1450,36 @@ workbench_files_restore() {
     return "${rc}"
 }
 
+# workbench_files_settle_orphans <module>
+# After 'wb revert': takes out what a newer version deployed and the version
+# now current doesn't declare. A copied file the user has changed since core
+# wrote it stays, with a warning. Unlike a user's 'wb files restore', the row
+# and skip policy are cleared, so going forward again deploys the entry afresh
+# (docs/decisions-log.md D108).
+workbench_files_settle_orphans() {
+    local module="$1" targets dest kind state sha real tool position
+    targets="$(workbench_files_targets "${module}" | awk -F'|' '{ print $3 }')"
+    while IFS='|' read -r dest kind state sha _; do
+        [[ -z "${dest}" || "${state}" != "active" || "${kind}" == "overrides" ]] && continue
+        printf '%s\n' "${targets}" | grep -qxF "${dest}" && continue
+        real="$(_wb_expand_dest "${dest%/}")"
+        if [[ "${kind}" != "layer" && "${sha}" != link:* && -f "${real}" && ! -L "${real}" ]] \
+            && [[ "$(_wb_sha256 "${real}")" != "${sha}" ]]; then
+            log_warn "  ${dest}: this version doesn't include it, but you've changed it — leaving it in place"
+            continue
+        fi
+        workbench_files_restore "${module}" "${dest}" || continue
+        workbench_files_ledger_delete "${module}" "${dest}"
+        workbench_files_policy_set "${module}" "${dest}" default
+        if [[ "${kind}" == "layer" ]]; then
+            tool="$(_wb_layers_tool_for_target "${dest%#*}")"
+            position="${dest##*#}"
+            workbench_files_policy_set "${module}" "$(workbench_layers_id "${tool}" "${position}")" default
+        fi
+    done < <(workbench_files_ledger_rows "${module}")
+    workbench_files_write_pending "${module}"
+}
+
 # ── Install plan (docs/decisions-log.md D84) ────────────────────────────────
 
 # _wb_files_line_count <path> — lines in a file (through a symlink), '-'

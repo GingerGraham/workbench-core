@@ -20,8 +20,8 @@ _wb_tools_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>
 command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/tools.sh" "1.1.0" || true
 
 # workbench_tools_collect
-# Emits one line per discovered installer, across every loadable
-# (registered AND sync-enabled) module, AFTER de-duplication by friendly
+# Emits one line per discovered installer, across every registered
+# module, AFTER de-duplication by friendly
 # name: module|abs_path|function|friendly.
 #
 # Collisions (two modules declaring the same install-<name> function) are
@@ -70,7 +70,7 @@ workbench_tools_collect() {
 ${friendly}|${name}"
             printf '%s|%s|%s|%s\n' "${name}" "${abs_path}" "${func}" "${friendly}"
         done < "${instlist}"
-    done < <(workbench_list_loadable_modules)
+    done < <(workbench_list_registered_modules)
 }
 
 # workbench_tools_lookup <name>
