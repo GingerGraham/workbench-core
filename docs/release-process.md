@@ -179,8 +179,11 @@ calls core's reusable workflows (`module-ci.yml`, `module-pr-check.yml`,
 release tag — never `@main` (security review H3 tier 1;
 `docs/decisions-log.md` D78). A change to `.github/` here therefore
 doesn't reach any module until the next core release cuts a new tag for
-those callers to update to (Dependabot proposes the bump automatically,
-same as any other pinned action).
+those callers to update to. Dependabot proposes the bump automatically,
+as one PR per module repo: each module's `.github/dependabot.yml` groups
+every `GingerGraham/workbench-core/*` reference together, so the four
+workflow callers move to the new tag in a single merge
+(`docs/decisions-log.md` D109).
 
 Changes under `.github/actions/**` or `.github/workflows/module-*.yml` —
 the files module CI actually consumes from a core release — therefore
