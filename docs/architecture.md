@@ -121,6 +121,8 @@ config is split across `workbench-core` + `workbench-git` + `workbench-gpg` +
 3. Source each declared file into the tier its manifest specifies (`env` / `core` / `tools` / `platform` / `distro` / `lazy`), in the same tier order `loader.sh` already enforces today.
 4. Run `WORKBENCH_USER_EXT_DIR` last, as today.
 
+The loader runs after whatever profile the host already has. What it does and does not change on a host like that is in [`existing-setups.md`](existing-setups.md) (D110).
+
 `get-functions` generalises the same way: instead of one glob root, it walks
 every registered module's declared files, and the getter registry (§5) is
 built from what modules *declare*, not a hardcoded list in `functions.sh`.

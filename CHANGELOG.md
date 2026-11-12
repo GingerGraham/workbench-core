@@ -4,6 +4,33 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A reload no longer wipes the prompt hooks you already had.** Reloading
+  (`source ~/.bashrc`, or the automatic reload after a `wb` command)
+  cleared `PROMPT_COMMAND` outright, which removed hooks workbench never
+  added: a prompt tool's, a terminal-title update, a directory jumper's.
+  Each load now records the hook entries it added and the next one removes
+  only those. Your own entries stay in place and in order, duplicates and
+  empty ones included, for a plain or an array `PROMPT_COMMAND`. zsh gets the
+  same treatment for `precmd_functions` and `preexec_functions` (D110).
+- **An alias or wrapper on `cd`, `ls` and similar no longer changes what
+  workbench's own code does.** An alias is baked into a function body when
+  the function is defined, so a `cd` wrapper made the loader resolve its own
+  directory as `/loader.sh`. Sourced code now uses `builtin cd` and
+  `command` for `find`, `cat`, `cp`, `mv` and `diff`. A new guard,
+  `tests/check-no-bare-cd.sh`, keeps it that way (D110).
+- **The rc-file migration warning can be acknowledged.** For an rc file that
+  is meant to stay as it is, the warning now prints a
+  `touch '<backup>.acknowledged'` line under each backup. Running it silences
+  that backup and keeps it on disk. A new backup warns again (D110).
+
+### Added
+
+- **`docs/existing-setups.md`: using workbench alongside a shell setup that
+  was there first.** What workbench leaves alone, what it still does on
+  purpose, how to diff your shell before and after, and the opt-outs (D110).
+
 ## [2.24.0] - 2026-11-03
 
 ### Added
