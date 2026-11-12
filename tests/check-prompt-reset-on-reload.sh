@@ -326,6 +326,28 @@ else
     echo "SKIP: array PROMPT_COMMAND stages need bash 5.1 or later (this is ${BASH_VERSION})"
 fi
 
+# ── 11. A shell running with set -u: reading a hook variable that is not set
+#    (precmd_functions without bash-preexec, PROMPT_COMMAND on a bare host)
+#    must not raise "unbound variable". ──────────────────────────────────────
+# shellcheck disable=SC2016  # the scenario body is meant to expand inside the inner shell
+OUT="$(scenario '
+set -u
+unset PROMPT_COMMAND precmd_functions preexec_functions
+FAKE_ENGINE_OVERRIDE=none; export FAKE_ENGINE_OVERRIDE
+source "'"${REPO_ROOT}"'/lib/loader.sh" >/dev/null
+echo "LOADED=${WORKBENCH_LOADER_PATH:-none}"
+source "'"${REPO_ROOT}"'/lib/loader.sh" >/dev/null
+echo "RELOADED=${WORKBENCH_LOADER_PATH:-none}"')"
+if printf '%s\n' "${OUT}" | grep -qi 'unbound variable'; then
+    fail "set -u: the loader raised an unbound variable error:"
+    printf '%s\n' "${OUT}" | grep -i 'unbound'
+else
+    ok "set -u: no unbound variable error when the hook variables are not set"
+fi
+expect "set -u: the loader still loads and reloads" \
+    "LOADED=${REPO_ROOT}/lib/loader.sh RELOADED=${REPO_ROOT}/lib/loader.sh" \
+    "$(printf '%s\n' "${OUT}" | grep -E '^(LOADED|RELOADED)=' | tr '\n' ' ' | sed 's/ $//')"
+
 # ── 10. zsh: the same rule for precmd_functions (separate from bash so it
 #    can be reviewed or reverted on its own). SKIPs when zsh is absent. ────
 ZSH_BIN="$(command -v zsh 2>/dev/null || true)"

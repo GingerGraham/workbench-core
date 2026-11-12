@@ -435,6 +435,10 @@ _wb_loader_hook_form() {
 _wb_loader_hook_read() {
     local _count=0
     _wb_loader_items=()
+    # An unset hook variable (precmd_functions without bash-preexec,
+    # PROMPT_COMMAND on a bare host) has no entries. Asking for its length
+    # directly is an "unbound variable" error under set -u.
+    declare -p "$1" >/dev/null 2>&1 || return 0
     eval "_count=\${#${1}[@]}"
     [[ "${_count}" -gt 0 ]] || return 0
     eval "_wb_loader_items=(\"\${${1}[@]}\")"
