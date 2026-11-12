@@ -824,6 +824,15 @@ command -v dedupe-path &>/dev/null && dedupe-path 2>/dev/null
 # Fires while any rc-stub-tagged backup remains under the shared backup
 # root (docs/decisions-log.md D53/D64) — cheap on-disk check, no
 # subprocess beyond find. Clears itself once the user removes the file(s).
+#
+# D110 adds a second way to clear it. A rc file that legitimately stays as
+# it is (one that sources a distribution's own profile, say) has nothing to
+# migrate, and the only other way to silence the warning was deleting the
+# safety backup. Creating "<backup>.acknowledged" next to a backup silences
+# it for that backup and keeps the backup. The marker belongs to one backup:
+# a later stub rewrite that creates a new backup has no marker and warns
+# again. The warning prints the exact command.
+#
 # Gated on an interactive shell, same as the "Interactive startup" block
 # just below — this PR also adds the loader stub to .zshenv, which zsh
 # sources for every invocation including non-interactive ones (ssh
@@ -834,13 +843,16 @@ if [[ $- == *i* ]]; then
     _wb_migration_found=false
     while IFS= read -r _wb_bak; do
         [[ -z "${_wb_bak}" ]] && continue
+        [[ -e "${_wb_bak}.acknowledged" ]] && continue
         if [[ "${_wb_migration_found}" == "false" ]]; then
             log_warn "Shell rc migration pending: workbench backed up pre-existing rc content before adding its loader stub."
             log_warn "  Review the backup(s) below and copy anything you want to keep into a new file under \${XDG_CONFIG_HOME:-\${HOME}/.config}/workbench/local/, then remove the backup to clear this warning."
+            log_warn "  If the rc file is meant to stay as it is, run the touch line under a backup to silence it and keep the backup."
             _wb_migration_found=true
         fi
         log_warn "  ${_wb_bak}"
-    done < <(command find "${_wb_migration_dir}" -maxdepth 3 -name 'rc-stub-*' -type f 2>/dev/null)
+        log_warn "    touch '${_wb_bak}.acknowledged'"
+    done < <(command find "${_wb_migration_dir}" -maxdepth 3 -name 'rc-stub-*' ! -name '*.acknowledged' -type f 2>/dev/null)
     unset _wb_migration_dir _wb_migration_found _wb_bak
 fi
 

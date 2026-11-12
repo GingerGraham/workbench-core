@@ -256,6 +256,13 @@ backup, copy anything you want to keep into a new file under
 backup file. There's no auto-merge — same discipline this project already
 applies to `starship.toml`/`direnv.toml`-style opinionated defaults.
 
+If your rc file is meant to stay exactly as it is — a distribution's profile
+that it sources, say — there is nothing to migrate and nothing to delete. The
+warning prints a `touch '<backup>.acknowledged'` line under each backup; run
+it and that backup stops warning while staying on disk. It applies to that one
+backup: if a later stub rewrite makes a new backup, the warning comes back for
+the new one.
+
 Separately: if your rc file already ran its own prompt tool (starship,
 oh-my-posh, oh-my-zsh, powerlevel10k) before workbench's stub line, the
 loader detects that (via `PROMPT_COMMAND`/`precmd_functions` already being

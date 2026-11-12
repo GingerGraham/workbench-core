@@ -224,6 +224,59 @@ else
     fail "the migration warning fired in a non-interactive shell — this leaks onto stderr for scripts/ssh/zsh -c"
 fi
 
+# ── 6c. D110: acknowledging a backup silences the warning for it, and the
+#    backup stays on disk. The warning prints the exact command. ───────────
+if printf '%s\n' "${WARN_OUT}" | grep -qF "touch '${BACKUP_ROOT}/2026-01-01/0900/rc-stub-.bashrc.090000.acknowledged'"; then
+    ok "the warning prints the exact command that acknowledges the backup"
+else
+    fail "the warning did not print the touch command for the backup:"
+    printf '%s\n' "${WARN_OUT}"
+fi
+touch "${BACKUP_ROOT}/2026-01-01/0900/rc-stub-.bashrc.090000.acknowledged"
+WARN_OUT_ACK="$(
+    env -i \
+        HOME="${HOME}" \
+        XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" \
+        XDG_DATA_HOME="${XDG_DATA_HOME}" \
+        XDG_CACHE_HOME="${XDG_CACHE_HOME}" \
+        PATH="${PATH}" \
+        bash -i -c "source '${REPO_ROOT}/lib/loader.sh'" 2>&1
+)"
+if ! printf '%s\n' "${WARN_OUT_ACK}" | grep -q "Shell rc migration pending"; then
+    ok "an acknowledged backup no longer triggers the migration warning"
+else
+    fail "the warning still fired for an acknowledged backup:"
+    printf '%s\n' "${WARN_OUT_ACK}"
+fi
+if [[ -f "${BACKUP_ROOT}/2026-01-01/0900/rc-stub-.bashrc.090000" ]] \
+    && [[ "$(cat "${BACKUP_ROOT}/2026-01-01/0900/rc-stub-.bashrc.090000")" == "old content" ]]; then
+    ok "acknowledging keeps the backup on disk, content unchanged"
+else
+    fail "the acknowledged backup was removed or changed"
+fi
+
+# ── 6d. A later stub rewrite that creates a NEW backup warns again, and
+#    names only the new one. ────────────────────────────────────────────
+mkdir -p "${BACKUP_ROOT}/2026-02-01/0900"
+echo "newer content" > "${BACKUP_ROOT}/2026-02-01/0900/rc-stub-.zshrc.090000"
+WARN_OUT_NEW="$(
+    env -i \
+        HOME="${HOME}" \
+        XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" \
+        XDG_DATA_HOME="${XDG_DATA_HOME}" \
+        XDG_CACHE_HOME="${XDG_CACHE_HOME}" \
+        PATH="${PATH}" \
+        bash -i -c "source '${REPO_ROOT}/lib/loader.sh'" 2>&1
+)"
+if printf '%s\n' "${WARN_OUT_NEW}" | grep -q "Shell rc migration pending" \
+    && printf '%s\n' "${WARN_OUT_NEW}" | grep -q "rc-stub-.zshrc.090000" \
+    && ! printf '%s\n' "${WARN_OUT_NEW}" | grep -q "rc-stub-.bashrc.090000"; then
+    ok "a new backup warns again, naming only the new one"
+else
+    fail "expected a warning for the new backup only, got:"
+    printf '%s\n' "${WARN_OUT_NEW}"
+fi
+
 rm -rf "${BACKUP_ROOT}"
 WARN_OUT2="$(
     env -i \
