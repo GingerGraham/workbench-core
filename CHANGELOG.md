@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.24.1] - 2026-11-12
+
 ### Fixed
 
 - **A reload no longer wipes the prompt hooks you already had.** Reloading
