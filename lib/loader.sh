@@ -82,7 +82,7 @@ if ! command -v log_debug &>/dev/null; then
 fi
 
 # ── Locate our own lib/ root (this file's directory) ─────────────────────────
-_wb_loader_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
+_wb_loader_lib_dir="$(builtin cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 
 # WORKBENCH_LOADER_PATH (docs/decisions-log.md D39) — this file's own full
 # path, exported so the `wb` shell-function wrapper defined near the
@@ -648,7 +648,7 @@ if [[ $- == *i* ]]; then
             _wb_migration_found=true
         fi
         log_warn "  ${_wb_bak}"
-    done < <(find "${_wb_migration_dir}" -maxdepth 3 -name 'rc-stub-*' -type f 2>/dev/null)
+    done < <(command find "${_wb_migration_dir}" -maxdepth 3 -name 'rc-stub-*' -type f 2>/dev/null)
     unset _wb_migration_dir _wb_migration_found _wb_bak
 fi
 

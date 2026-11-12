@@ -9,7 +9,7 @@
 # this file at all, just grep the plain KEY=VALUE file directly. These
 # functions exist for convenience, not as the only supported access path.
 
-_wb_version_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
+_wb_version_lib_dir="$(builtin cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 
 _workbench_version_file_path() {
     printf '%s\n' "${XDG_CONFIG_HOME:-${HOME}/.config}/workbench/core/version"
@@ -27,9 +27,9 @@ _workbench_ensure_version_file() {
 
     mkdir -p "$(dirname "${file}")"
     if [[ -f "${_wb_version_lib_dir}/version-defaults.conf" ]]; then
-        cp "${_wb_version_lib_dir}/version-defaults.conf" "${file}"
+        command cp "${_wb_version_lib_dir}/version-defaults.conf" "${file}"
     else
-        cat > "${file}" <<'EOF'
+        command cat > "${file}" <<'EOF'
 CORE_API_VERSION=1.8
 STATE_SCHEMA_VERSION=2
 WORKBENCH_CORE_SEMVER=0.1.0
@@ -75,7 +75,7 @@ _workbench_version_set_var() {
             index($0, key) == 1 { print var "=" val; next }
             { print }
         ' "${file}" > "${tmp}"
-        mv "${tmp}" "${file}"
+        command mv "${tmp}" "${file}"
     else
         printf '%s=%s\n' "${name}" "${value}" >> "${file}"
     fi
@@ -105,7 +105,7 @@ _workbench_version_remove_var() {
         log_warn "workbench: could not remove ${name} from ${file} (grep exited ${rc}) — left the file untouched"
         return 1
     fi
-    mv "${tmp}" "${file}"
+    command mv "${tmp}" "${file}"
 }
 
 # ── CORE_API_VERSION: unconditional sync (docs/decisions-log.md D36) ─────────

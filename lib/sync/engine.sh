@@ -20,7 +20,7 @@
 # to remove. workbench_sync_module (the only place in this file that
 # actually needs them) sources them itself, lazily, the moment a real
 # sync runs — see its own comment.
-_wb_engine_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
+_wb_engine_lib_dir="$(builtin cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 for _wb_engine_dep in \
     "${_wb_engine_lib_dir}/../core/log.sh" \
     "${_wb_engine_lib_dir}/../core/functions.sh" \
@@ -584,7 +584,7 @@ workbench_run_post_deploy_hook() {
 
     log_info "${name}: running post_deploy hook (reason: ${reason})"
     (
-        cd "${current_dir}" || exit 1
+        builtin cd "${current_dir}" || exit 1
         export WORKBENCH_MODULE_NAME="${name}"
         export WORKBENCH_MODULE_DIR="${current_dir}"
         export WORKBENCH_SYNC_REASON="${reason}"

@@ -43,7 +43,7 @@ workbench_fetch_git_snapshot() {
     scratch="$(mktemp -d "${TMPDIR:-/tmp}/workbench-fetch.XXXXXX")"
 
     (
-        cd "${scratch}" || exit 1
+        builtin cd "${scratch}" || exit 1
         git init -q .
         git remote add origin "${url}"
 
@@ -68,7 +68,7 @@ workbench_fetch_git_snapshot() {
     }
 
     (
-        cd "${scratch}" || exit 1
+        builtin cd "${scratch}" || exit 1
         case "${ref_form}" in
             commit) git checkout -q "${ref_value}" ;;
             *)      git checkout -q FETCH_HEAD ;;

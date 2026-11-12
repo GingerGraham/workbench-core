@@ -641,7 +641,7 @@ workbench_cmd_uninstall() {
         log_warn "wb uninstall: $(_wb_uninstall_tilde "${link}") already exists and isn't workbench's, so it was left alone — the notes are at ${shown}"
     fi
 
-    cd "${HOME}" || cd / || true
+    builtin cd "${HOME}" || builtin cd / || true
 
     # From here every step runs even if an earlier one fails. Each failure is
     # recorded in the notes, and a leftover is harmless: the loader line
