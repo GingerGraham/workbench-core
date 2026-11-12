@@ -39,6 +39,7 @@ fi
 # exists to serve. Known limitation: a bare custom PS1 with no prompt
 # manager behind it is not caught by this — see docs/decisions-log.md D64.
 _WB_LOADER_PROMPT_PRECLAIMED=false
+# shellcheck disable=SC2154  # precmd_functions is zsh's own array
 if [[ -n "${BASH_VERSION:-}" && -n "${PROMPT_COMMAND:-}" ]]; then
     _WB_LOADER_PROMPT_PRECLAIMED=true
 elif [[ -n "${ZSH_VERSION:-}" && ${#precmd_functions[@]} -gt 0 ]]; then
@@ -357,8 +358,8 @@ fi
 # Re-sourcing this file in an already-running shell — 'source ~/.bashrc',
 # or the wb() wrapper's own auto-reload after a state-changing command —
 # is not a new process, so anything a previously-elected prompt engine
-# hooked into the shell to render itself (bash's PROMPT_COMMAND) is still
-# live from the last run. A module switching which engine it elects
+# hooked into the shell to render itself (bash's PROMPT_COMMAND, zsh's
+# precmd_functions) is still live from the last run. A module switching which engine it elects
 # (workbench-shell's WORKBENCH_OVERRIDE_PROMPT_ENGINE, D48, is the
 # motivating case) correctly re-runs its own init, but nothing tears down
 # the *previous* engine's hook first — well-behaved prompt tools preserve
@@ -407,11 +408,10 @@ _wb_loader_rs=$'\036'
 # _wb_loader_hook_vars — the hook variables tracked in this shell.
 _wb_loader_hook_vars() {
     if [[ -n "${ZSH_VERSION:-}" ]]; then
-        # The zsh arrays are handled by their own change; until then zsh
-        # keeps D50's reset (below).
-        return 0
+        printf '%s' "precmd_functions preexec_functions"
+    else
+        printf '%s' "PROMPT_COMMAND precmd_functions preexec_functions"
     fi
-    printf '%s' "PROMPT_COMMAND precmd_functions preexec_functions"
 }
 
 # _wb_loader_hook_form <var> — scalar, array or unset. Only bash's
@@ -591,11 +591,6 @@ for _wb_hook_var in $(_wb_loader_hook_vars); do
 done
 unset _wb_hook_var
 
-# zsh: D50's reset, until the zsh arrays are tracked the same way.
-if [[ -n "${ZSH_VERSION:-}" && -n "${WORKBENCH_PROMPT_SET:-}" ]]; then
-    # shellcheck disable=SC2034
-    precmd_functions=()
-fi
 unset WORKBENCH_PROMPT_SET WORKBENCH_PROMPT_ENGINE
 
 if command -v workbench_list_loadable_modules &>/dev/null; then

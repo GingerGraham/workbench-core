@@ -66,10 +66,14 @@ for letter in c d; do
     cat > "${WORK}/src-${letter}/tool.sh" <<EOF
 [[ "\${FAKE_ENGINE_OVERRIDE:-}" == "${letter}" ]] || return 0
 engine_${letter}_hook() { :; }
-case "\$(declare -p PROMPT_COMMAND 2>/dev/null)" in
-    "declare -a"*) PROMPT_COMMAND[\${#PROMPT_COMMAND[@]}]="engine_${letter}_hook" ;;
-    *)             PROMPT_COMMAND="\${PROMPT_COMMAND:+\${PROMPT_COMMAND}; }engine_${letter}_hook" ;;
-esac
+if [[ -n "\${ZSH_VERSION:-}" ]]; then
+    precmd_functions+=(engine_${letter}_hook)
+else
+    case "\$(declare -p PROMPT_COMMAND 2>/dev/null)" in
+        "declare -a"*) PROMPT_COMMAND[\${#PROMPT_COMMAND[@]}]="engine_${letter}_hook" ;;
+        *)             PROMPT_COMMAND="\${PROMPT_COMMAND:+\${PROMPT_COMMAND}; }engine_${letter}_hook" ;;
+    esac
+fi
 export WORKBENCH_PROMPT_ENGINE="engine-${letter}"
 export WORKBENCH_PROMPT_SET=true
 EOF
@@ -320,6 +324,57 @@ load; load; echo \"LOGIN=\$(declare -p PROMPT_COMMAND 2>&1)\"")"
         "$(printf '%s\n' "${OUT}" | grep '^LOGIN=')"
 else
     echo "SKIP: array PROMPT_COMMAND stages need bash 5.1 or later (this is ${BASH_VERSION})"
+fi
+
+# ── 10. zsh: the same rule for precmd_functions (separate from bash so it
+#    can be reviewed or reverted on its own). SKIPs when zsh is absent. ────
+ZSH_BIN="$(command -v zsh 2>/dev/null || true)"
+if [[ -z "${ZSH_BIN}" ]]; then
+    echo "SKIP: zsh is not installed — the precmd_functions stages need it"
+else
+    # zsh_scenario <body> — a clean non-interactive zsh (no rc files) with a
+    # `load` helper. `show` prints precmd_functions on one line.
+    # shellcheck disable=SC2016  # the show() helper is zsh code, expanded by zsh
+    zsh_scenario() {
+        printf '%s\n' \
+            "load() { source \"${REPO_ROOT}/lib/loader.sh\" >/dev/null 2>&1; }" \
+            'show() { print -r -- "$1=${(j:|:)precmd_functions}"; }' \
+            "$1" > "${WORK}/scenario.zsh"
+        env -i \
+            HOME="${HOME}" \
+            XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" \
+            XDG_DATA_HOME="${XDG_DATA_HOME}" \
+            XDG_CACHE_HOME="${XDG_CACHE_HOME}" \
+            WORKBENCH_MODULES_DIR="${WORKBENCH_MODULES_DIR}" \
+            PATH="${PATH}" \
+            "${ZSH_BIN}" -f "${WORK}/scenario.zsh" 2>&1
+    }
+
+    # shellcheck disable=SC2016  # the scenario body is meant to expand inside zsh
+    OUT="$(zsh_scenario '
+precmd_functions=(host_a host_b host_b)
+FAKE_ENGINE_OVERRIDE=c; export FAKE_ENGINE_OVERRIDE
+load; show FIRST
+load; load; show TWICE
+FAKE_ENGINE_OVERRIDE=d; export FAKE_ENGINE_OVERRIDE
+load; show SWAPPED
+precmd_functions+=(foreign_late)
+load; show FOREIGN')"
+    expect "zsh: first load keeps the host entries (duplicate included) and adds the engine hook" \
+        'FIRST=host_a|host_b|host_b|engine_c_hook' "$(printf '%s\n' "${OUT}" | grep '^FIRST=')"
+    expect "zsh: two reloads do not grow precmd_functions" \
+        'TWICE=host_a|host_b|host_b|engine_c_hook' "$(printf '%s\n' "${OUT}" | grep '^TWICE=')"
+    expect "zsh: switching engine swaps only the engine hook" \
+        'SWAPPED=host_a|host_b|host_b|engine_d_hook' "$(printf '%s\n' "${OUT}" | grep '^SWAPPED=')"
+    expect "zsh: a foreign hook added after the first load survives a reload" \
+        'FOREIGN=host_a|host_b|host_b|foreign_late|engine_d_hook' "$(printf '%s\n' "${OUT}" | grep '^FOREIGN=')"
+
+    # shellcheck disable=SC2016  # the scenario body is meant to expand inside zsh
+    OUT="$(zsh_scenario '
+FAKE_ENGINE_OVERRIDE=c; export FAKE_ENGINE_OVERRIDE
+load; load; show UNSET')"
+    expect "zsh: with nothing there before, reloads leave only the engine hook" \
+        'UNSET=engine_c_hook' "$(printf '%s\n' "${OUT}" | grep '^UNSET=')"
 fi
 
 echo
