@@ -32,6 +32,11 @@ SCAN_PATHS="${CHECK_NO_BARE_PATHS:-bin lib bootstrap.sh shell hooks}"
 # opening paren or brace, a command substitution, or a shell keyword.
 COMMAND_START='(^|[;&|(){`]|\$\(|(^|[[:space:]])(then|do|else|if|while|until))[[:space:]]*'
 
+# What may follow the command word: whitespace, the end of the line, or a
+# character that ends a command or closes a group, so `cd;`, `(cd)`,
+# `cd&&pwd`, `ls|head` and `$(ls)` are seen too.
+COMMAND_END='([[:space:]]|$|[;&|)<>])'
+
 # bare_hits <command-name> — print "file:line:text" for every command-word
 # use of <command-name> that is not an allowed form, skipping comment-only
 # lines and lines carrying the escape hatch.
@@ -40,7 +45,7 @@ bare_hits() {
     for path in ${SCAN_PATHS}; do
         [[ -e "${REPO_ROOT}/${path}" ]] || continue
         ( builtin cd -- "${REPO_ROOT}" && \
-            grep -rnE "${COMMAND_START}${name}([[:space:]]|\$)" "${path}" 2>/dev/null )
+            grep -rnE "${COMMAND_START}${name}${COMMAND_END}" "${path}" 2>/dev/null )
     done | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' | grep -v '# wb-allow-bare'
 }
 
@@ -63,7 +68,7 @@ fi
 # ── The guard has to see what it claims to see. ─────────────────────────────
 # A scanner that matches nothing passes forever, so prove it matches a bare
 # call and accepts the allowed forms and the escape hatch.
-SELF_DIR="$(mktemp -d)"
+SELF_DIR="$(mktemp -d "${TMPDIR:-/tmp}/wb-no-bare-cd.XXXXXX")"
 trap 'rm -rf "${SELF_DIR}"' EXIT
 mkdir -p "${SELF_DIR}/lib"
 cat > "${SELF_DIR}/lib/sample.sh" <<'SAMPLE_EOF'
@@ -73,15 +78,19 @@ list() { ls "$1"; }
 ok_cd="$(builtin cd -- /tmp && pwd)"
 ok_ls() { command ls "$1"; }
 allowed() { cd /tmp; }  # wb-allow-bare
+joined() { cd;pwd; }
+grouped() { (cd); }
+piped() { ls|head -1; }
+captured() { local x; x=$(ls); }
 # cd in a comment is ignored
 SAMPLE_EOF
 REPO_ROOT="${SELF_DIR}" SCAN_PATHS="lib"
 self_cd="$(bare_hits cd | wc -l | tr -d ' ')"
 self_ls="$(bare_hits ls | wc -l | tr -d ' ')"
-if [[ "${self_cd}" -eq 2 && "${self_ls}" -eq 1 ]]; then
+if [[ "${self_cd}" -eq 4 && "${self_ls}" -eq 3 ]]; then
     ok "self-test: the scanner flags bare cd/ls, and accepts builtin cd, command ls, comments and the escape hatch"
 else
-    fail "self-test: expected 2 bare cd and 1 bare ls in the sample, got cd=${self_cd} ls=${self_ls}"
+    fail "self-test: expected 4 bare cd and 3 bare ls in the sample, got cd=${self_cd} ls=${self_ls}"
 fi
 
 echo

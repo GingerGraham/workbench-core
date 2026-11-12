@@ -9,7 +9,6 @@
 ## exported env
 HOME=@WORK@/plain/home
 PATH=/usr/local/bin:/usr/bin:/bin
-PWD=@WORK@/plain/home
 SHLVL=1
 TERM=dumb
 XDG_CACHE_HOME=@WORK@/plain/cache
@@ -49,11 +48,9 @@ workbench_valid_repo_url
 ## exported env
 HOME=@WORK@/plain/home
 PATH=@WORK@/plain/home/.local/bin:/usr/local/bin:/usr/bin:/bin
-PWD=@WORK@/plain/home
 SHLVL=1
 TERM=dumb
 WORKBENCH_LOADER_PATH=@WORK@/plain/data/workbench/modules/core/current/lib/loader.sh
-WORKBENCH_OS=Linux
 WORKBENCH_PLATFORM_DETECTED=true
 WORKBENCH_PROMPT_ENGINE=fallback
 WORKBENCH_SHELL=bash

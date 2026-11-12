@@ -57,7 +57,9 @@ SNAPSHOT_EOF
 # Also drops what the machine running the test contributes on its own and
 # that has nothing to do with workbench: variables a system profile exports
 # (Nix, XDG_DATA_DIRS), the platform facts the loader reads from the host
-# (WORKBENCH_DISTRO, WORKBENCH_ARCH), and what a distro-default system bashrc
+# (WORKBENCH_OS, WORKBENCH_DISTRO, WORKBENCH_ARCH), where the test ran (PWD,
+# which macOS reports as /private/var/… rather than /var/…), bash's own
+# default PS1, and what a distro-default system bashrc
 # sets (its PS1, a command_not_found_handle function), which bash reads even
 # when --rcfile is given.
 normalise() {
@@ -69,7 +71,10 @@ normalise() {
         -e '/^WORKBENCH_ARCH=/d' \
         -e '/^declare -- PS1=.*debian_chroot/d' \
         -e '/^command_not_found_handle$/d' \
-        -e '/^PATH=/s#[^:=]*nix[^:]*:##g'
+        -e '/^PWD=/d' \
+        -e '/^WORKBENCH_OS=/d' \
+        -e '/^PATH=/s#[^:=]*nix[^:]*:##g' \
+        | grep -vFx 'declare -- PS1="\\s-\\v\\\$ "'
 }
 
 # new_host <name> — fresh HOME / XDG dirs under ${WORK}/<name>, with the
