@@ -57,8 +57,9 @@ SNAPSHOT_EOF
 # Also drops what the machine running the test contributes on its own and
 # that has nothing to do with workbench: variables a system profile exports
 # (Nix, XDG_DATA_DIRS), the platform facts the loader reads from the host
-# (WORKBENCH_DISTRO, WORKBENCH_ARCH), and a distro-default PS1 set by the
-# system bashrc, which bash reads even when --rcfile is given.
+# (WORKBENCH_DISTRO, WORKBENCH_ARCH), and what a distro-default system bashrc
+# sets (its PS1, a command_not_found_handle function), which bash reads even
+# when --rcfile is given.
 normalise() {
     sed -e "s#${WORK}#@WORK@#g" -e "s#${REPO_ROOT}#@REPO@#g" \
         -e '/^NIX_/d' \
@@ -67,6 +68,7 @@ normalise() {
         -e '/^WORKBENCH_DISTRO=/d' \
         -e '/^WORKBENCH_ARCH=/d' \
         -e '/^declare -- PS1=.*debian_chroot/d' \
+        -e '/^command_not_found_handle$/d' \
         -e '/^PATH=/s#[^:=]*nix[^:]*:##g'
 }
 
