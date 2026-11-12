@@ -151,6 +151,156 @@ else
     cat "${WORK}/plain.diff"
 fi
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Distro-style profile
+# ═══════════════════════════════════════════════════════════════════════════
+# What a host with its own complete bash profile looks like, written by hand:
+# a ~/.bashrc that sources a profile file, which sets EDITOR (with an
+# argument), LANG, aliases (one of them `ls`), a `cd` wrapper in both
+# function and alias form, an array PROMPT_COMMAND shaped like a measured
+# real host (including its duplicate), and a PATH that has one repeated entry
+# and ~/.local/bin late.
+new_host distro
+cat > "${HOST_HOME}/.distro-profile" <<'PROFILE_EOF'
+export EDITOR='fake-editor --inline'
+export LANG=en_US.UTF-8
+alias lsa='ls -a'
+alias ls='printf "ALIAS-LS-RAN\n"; command ls'
+cd() { printf 'WRAPPER-CALLED\n' >&2; return 1; }
+alias cd='printf "ALIAS-CD-RAN\n" >&2; false; :'
+PROMPT_COMMAND=(starship_precmd 'printf "\033]0;title\007"' __zoxide_hook __zoxide_hook)
+PATH="/usr/local/bin:/usr/bin:/bin:/usr/bin:${HOME}/.local/bin"
+PROFILE_EOF
+cat > "${HOST_HOME}/.bashrc" <<'BASHRC_EOF'
+# distro-style profile
+[ -f "$HOME/.distro-profile" ] && . "$HOME/.distro-profile"
+BASHRC_EOF
+cp "${HOST_HOME}/.bashrc" "${HOST_HOME}/.bashrc.prestub"
+
+# A profile that sets PROMPT_COMMAND as an array needs a shell new enough
+# to treat it as one (bash 5.1+); the other checks do not.
+run_shell "${HOST_HOME}/.bashrc.prestub" ". '${WORK}/snapshot.sh'; snapshot_shell_state '${WORK}/distro-before.txt'" >/dev/null
+stub_rc "${HOST_HOME}/.bashrc"
+
+# 1. The stub sits after the line that sources the profile.
+profile_line="$(grep -n 'distro-profile' "${HOST_HOME}/.bashrc" | head -1 | cut -d: -f1)"
+stub_line="$(grep -n 'workbench-core loader' "${HOST_HOME}/.bashrc" | head -1 | cut -d: -f1)"
+if [[ -n "${profile_line}" && -n "${stub_line}" && "${stub_line}" -gt "${profile_line}" ]]; then
+    ok "distro-style: the loader stub is appended after the line that sources the host profile"
+else
+    fail "distro-style: stub line (${stub_line:-none}) is not after the profile line (${profile_line:-none})"
+fi
+
+# 2. Start a shell through the stub; the migration warning (the rc file had
+#    content, so a backup was made) is expected until it is acknowledged.
+STARTUP_OUT="$(run_shell "${HOST_HOME}/.bashrc" ". '${WORK}/snapshot.sh'; snapshot_shell_state '${WORK}/distro-after.txt'; wb reload >/dev/null 2>&1; snapshot_shell_state '${WORK}/distro-reload.txt'")"
+if printf '%s\n' "${STARTUP_OUT}" | grep -q "Shell rc migration pending"; then
+    ok "distro-style: an unacknowledged rc-stub backup still warns"
+else
+    fail "distro-style: expected the migration warning before acknowledging the backup"
+fi
+
+# 3. The host's wrappers never ran inside workbench code, and the loader
+#    still found its own directory.
+if printf '%s\n' "${STARTUP_OUT}" | grep -Eq 'ALIAS-LS-RAN|ALIAS-CD-RAN|WRAPPER-CALLED'; then
+    fail "distro-style: a host alias or wrapper ran inside workbench code:"
+    printf '%s\n' "${STARTUP_OUT}" | grep -E 'ALIAS-LS-RAN|ALIAS-CD-RAN|WRAPPER-CALLED' | sort | uniq -c
+else
+    ok "distro-style: no host alias or cd wrapper ran inside workbench code"
+fi
+if grep -q "^WORKBENCH_LOADER_PATH=${HOST_DATA}/workbench/modules/core/current/lib/loader.sh$" "${WORK}/distro-after.txt"; then
+    ok "distro-style: the loader resolved its own path despite the cd wrapper"
+else
+    fail "distro-style: WORKBENCH_LOADER_PATH is wrong or missing: $(grep '^WORKBENCH_LOADER_PATH=' "${WORK}/distro-after.txt")"
+fi
+
+# 4. Nothing the host had is changed or removed. A line only in "before"
+#    (diff's "<") would mean workbench altered existing state.
+diff "${WORK}/distro-before.txt" "${WORK}/distro-after.txt" > "${WORK}/distro.diff"
+removed="$(grep '^<' "${WORK}/distro.diff" || true)"
+if [[ -z "${removed}" ]]; then
+    ok "distro-style: nothing in the host's shell state was changed or removed by the loader pass"
+else
+    fail "distro-style: the loader pass changed or removed existing state:"
+    printf '%s\n' "${removed}"
+fi
+if grep '^>' "${WORK}/distro.diff" | grep -q '^> alias '; then
+    fail "distro-style: core added an alias"
+else
+    ok "distro-style: core adds no alias of its own"
+fi
+for var in EDITOR LANG; do
+    if [[ "$(grep "^${var}=" "${WORK}/distro-before.txt")" == "$(grep "^${var}=" "${WORK}/distro-after.txt")" ]]; then
+        ok "distro-style: ${var} is unchanged"
+    else
+        fail "distro-style: ${var} changed"
+    fi
+done
+if grep -q '^LC_ALL=' "${WORK}/distro-after.txt"; then
+    fail "distro-style: LC_ALL was set"
+else
+    ok "distro-style: LC_ALL is not set"
+fi
+
+# 5. PROMPT_COMMAND: the host's four entries, the duplicate included, are
+#    exactly as they were, after the load and after a wb reload.
+BEFORE_PC="$(sed -n '/^## PROMPT_COMMAND$/,/^## traps$/p' "${WORK}/distro-before.txt")"
+if [[ "${BASH_VERSINFO[0]}" -gt 5 ]] || { [[ "${BASH_VERSINFO[0]}" -eq 5 ]] && [[ "${BASH_VERSINFO[1]}" -ge 1 ]]; }; then
+    if [[ "${BEFORE_PC}" == *'[2]="__zoxide_hook" [3]="__zoxide_hook"'* ]]; then
+        ok "distro-style: the fixture really has the duplicate __zoxide_hook (so the next two checks mean something)"
+    else
+        fail "distro-style: fixture PROMPT_COMMAND is not the expected shape: ${BEFORE_PC}"
+    fi
+    for stage in after reload; do
+        if [[ "$(sed -n '/^## PROMPT_COMMAND$/,/^## traps$/p' "${WORK}/distro-${stage}.txt")" == "${BEFORE_PC}" ]]; then
+            ok "distro-style: PROMPT_COMMAND is identical ${stage} (both __zoxide_hook entries, same positions)"
+        else
+            fail "distro-style: PROMPT_COMMAND changed ${stage}:"
+            sed -n '/^## PROMPT_COMMAND$/,/^## traps$/p' "${WORK}/distro-${stage}.txt"
+        fi
+    done
+else
+    echo "SKIP: PROMPT_COMMAND array checks need bash 5.1 or later (this is ${BASH_VERSION})"
+fi
+
+# 6. PATH: nothing reordered, ~/.local/bin stays where the host put it and
+#    is not added a second time. (The loader's documented dedupe-path call
+#    drops repeats once core's shell functions are registered, so compare
+#    first occurrences.)
+first_occurrences() { tr ':' '\n' | awk '!seen[$0]++' | paste -sd: -; }
+BEFORE_PATH="$(grep '^PATH=' "${WORK}/distro-before.txt" | head -1 | sed 's/^PATH=//' | first_occurrences)"
+AFTER_PATH="$(grep '^PATH=' "${WORK}/distro-after.txt" | head -1 | sed 's/^PATH=//' | first_occurrences)"
+if [[ "${BEFORE_PATH}" == "${AFTER_PATH}" ]]; then
+    ok "distro-style: PATH order is unchanged, ~/.local/bin stays where the host put it"
+else
+    fail "distro-style: PATH was reordered or extended:"
+    printf '  before: %s\n  after:  %s\n' "${BEFORE_PATH}" "${AFTER_PATH}"
+fi
+if [[ "$(grep '^PATH=' "${WORK}/distro-after.txt" | head -1 | tr ':' '\n' | grep -c '/\.local/bin$')" -eq 1 ]]; then
+    ok "distro-style: ~/.local/bin is on PATH exactly once"
+else
+    fail "distro-style: ~/.local/bin is on PATH more than once or not at all"
+fi
+
+# 7. Once the backup is acknowledged the warning stops, and the backup stays.
+BACKUPS="$(find "${HOST_DATA}/workbench/backups" -type f -name 'rc-stub-*' ! -name '*.acknowledged' 2>/dev/null)"
+if [[ -n "${BACKUPS}" ]]; then
+    printf '%s\n' "${BACKUPS}" | while IFS= read -r backup; do touch "${backup}.acknowledged"; done
+    QUIET_OUT="$(run_shell "${HOST_HOME}/.bashrc" "true")"
+    if printf '%s\n' "${QUIET_OUT}" | grep -q "Shell rc migration pending"; then
+        fail "distro-style: the migration warning still fires after acknowledging"
+    else
+        ok "distro-style: no migration warning once the backup is acknowledged"
+    fi
+    if printf '%s\n' "${BACKUPS}" | while IFS= read -r backup; do [[ -f "${backup}" ]] || exit 1; done; then
+        ok "distro-style: the acknowledged backup is still on disk"
+    else
+        fail "distro-style: an acknowledged backup was removed"
+    fi
+else
+    fail "distro-style: writing the stub made no rc-stub backup of the non-empty rc file"
+fi
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."
