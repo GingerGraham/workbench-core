@@ -39,6 +39,7 @@ fi
 # exists to serve. Known limitation: a bare custom PS1 with no prompt
 # manager behind it is not caught by this — see docs/decisions-log.md D64.
 _WB_LOADER_PROMPT_PRECLAIMED=false
+# shellcheck disable=SC2154  # precmd_functions is zsh's own array
 if [[ -n "${BASH_VERSION:-}" && -n "${PROMPT_COMMAND:-}" ]]; then
     _WB_LOADER_PROMPT_PRECLAIMED=true
 elif [[ -n "${ZSH_VERSION:-}" && ${#precmd_functions[@]} -gt 0 ]]; then
@@ -82,7 +83,7 @@ if ! command -v log_debug &>/dev/null; then
 fi
 
 # ── Locate our own lib/ root (this file's directory) ─────────────────────────
-_wb_loader_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
+_wb_loader_lib_dir="$(builtin cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 
 # WORKBENCH_LOADER_PATH (docs/decisions-log.md D39) — this file's own full
 # path, exported so the `wb` shell-function wrapper defined near the
@@ -353,52 +354,247 @@ if command -v workbench_list_registered_modules &>/dev/null; then
 fi
 
 # ── Prompt-engine reset, before the tier loop runs (docs/decisions-log.md
-#    D50) ────────────────────────────────────────────────────────────────
+#    D50, narrowed by D110) ───────────────────────────────────────────────
 # Re-sourcing this file in an already-running shell — 'source ~/.bashrc',
 # or the wb() wrapper's own auto-reload after a state-changing command —
 # is not a new process, so anything a previously-elected prompt engine
 # hooked into the shell to render itself (bash's PROMPT_COMMAND, zsh's
-# precmd_functions) is still live from the last run. A module switching
-# which engine it elects (workbench-shell's WORKBENCH_OVERRIDE_PROMPT_ENGINE,
-# docs/decisions-log.md D48, is the motivating case) correctly re-runs its own init, but
-# nothing tears down the *previous* engine's hook first — well-behaved
-# prompt tools preserve whatever PROMPT_COMMAND already contains rather
-# than overwriting it (so they can coexist with unrelated tools), which
-# is exactly wrong the moment one is meant to replace another. Confirmed
-# live: the election recomputes correctly (WORKBENCH_PROMPT_ENGINE
-# flips), but the visible prompt does not, until a genuinely new shell
-# process starts.
+# precmd_functions) is still live from the last run. A module switching which engine it elects
+# (workbench-shell's WORKBENCH_OVERRIDE_PROMPT_ENGINE, D48, is the
+# motivating case) correctly re-runs its own init, but nothing tears down
+# the *previous* engine's hook first — well-behaved prompt tools preserve
+# whatever PROMPT_COMMAND already contains rather than overwriting it, which
+# is exactly wrong the moment one is meant to replace another.
 #
-# Cleared here, before any tier content (including a prompt-owning
-# module's) runs, so every reload gives whichever engine wins a clean
-# slate — the same state a brand-new shell would have. Only fires when
-# WORKBENCH_PROMPT_SET was already true, i.e. only on an actual reload
-# where we know for certain this loader itself is what last touched
-# PROMPT_COMMAND/precmd_functions — never on a genuinely first load,
-# where either could hold a user's own pre-stub customisation that has
-# nothing to do with prompt-engine election and must not be wiped.
-# bash's PROMPT_COMMAND is unset outright, not just blanked
-# (PROMPT_COMMAND="") — bash 5.1+ treats it as an array internally, and
-# an empty-string assignment does not reliably clear every element.
-# zsh's precmd_functions is reset the same way.
+# D50 fixed that by clearing PROMPT_COMMAND outright on every reload. That
+# also deleted hooks workbench never added — a prompt tool's own, a
+# terminal-title update, a directory-jumper's — and nothing re-ran the code
+# that had installed them. D110: workbench changes only state it created.
 #
-# Trade-off, deliberate: if a module appends to PROMPT_COMMAND/
-# precmd_functions for its own unrelated purposes from within its tier
-# content on run N, and WORKBENCH_PROMPT_SET happens to be set at that
-# point, run N+1's reset clears that too — but the same tier content
-# re-runs on every reload regardless, so it's re-added, not lost.
-# Genuinely external customisation (raw shell rc content *above* this
-# loader's own stub line) is only at risk if it predates the first ever
-# WORKBENCH_PROMPT_SET=true in this shell's lifetime, which this
-# condition already protects.
-if [[ -n "${WORKBENCH_PROMPT_SET:-}" ]]; then
+# So each pass records the hook entries it added: whatever is in the hook
+# variables at the end of the pass that was not there at the start. The
+# next pass removes exactly those, first, and leaves every other entry in
+# place and in order — duplicates and empty entries of the host's included.
+# Nothing is ever de-duplicated and nothing is removed by name alone.
+#
+# The record lives in _WB_PROMPT_HOOKS_ADDED, a plain shell variable (not
+# exported: it describes this shell's own hook state). Records are
+# separated by RS (0x1e) and fields by US (0x1f), so a hook containing a
+# newline or a tab cannot break the format.
+#
+#   array variable (PROMPT_COMMAND in array form, precmd_functions,
+#   preexec_functions) — one record per added entry:
+#       <var> US array US <position> US <entry> RS
+#   scalar PROMPT_COMMAND — one record; the host's own text sits between
+#   the two parts (engines prepend, append, or both, so both are kept):
+#       PROMPT_COMMAND US scalar US <text before> US <text after> RS
+#
+# Known limits, left as they were under D50 or flagged rather than guessed:
+#  - bash-preexec adds __bp_precmd_invoke_cmd to PROMPT_COMMAND and keeps
+#    its import guard in a variable of its own. Its entries are recorded and
+#    removed like any other, but sourcing bash-preexec a second time is a
+#    no-op, so a reload does not put them back. D50's wholesale reset had
+#    the same effect.
+#  - PROMPT_COMMAND changing between scalar and array form inside one pass
+#    is not recorded (there is nothing sensible to compare); logged at debug.
+#  - An entry textually identical to one already present is told apart by
+#    its position. If a foreign tool reshuffles the array between passes, a
+#    record that no longer matches at its position is removed only when
+#    exactly one equal entry is left; otherwise it stays, rather than risk
+#    removing the host's.
+_wb_loader_us=$'\037'
+_wb_loader_rs=$'\036'
+
+# _wb_loader_hook_vars — the hook variables tracked in this shell.
+_wb_loader_hook_vars() {
     if [[ -n "${ZSH_VERSION:-}" ]]; then
-        # shellcheck disable=SC2034
-        precmd_functions=()
+        printf '%s' "precmd_functions preexec_functions"
     else
-        unset PROMPT_COMMAND
+        printf '%s' "PROMPT_COMMAND precmd_functions preexec_functions"
     fi
-fi
+}
+
+# _wb_loader_hook_form <var> — scalar, array or unset. Only bash's
+# PROMPT_COMMAND can be either shape; every other hook variable is an array.
+_wb_loader_hook_form() {
+    local _declared
+    if [[ "$1" != "PROMPT_COMMAND" ]]; then
+        printf 'array'
+        return 0
+    fi
+    _declared="$(declare -p PROMPT_COMMAND 2>/dev/null)"
+    case "${_declared}" in
+        "declare -a"*) printf 'array' ;;
+        "declare -"*)  printf 'scalar' ;;
+        *)             printf 'unset' ;;
+    esac
+}
+
+# _wb_loader_hook_read <var> — load the entries of <var> into the array
+# _wb_loader_items. A scalar reads as one entry.
+_wb_loader_hook_read() {
+    local _count=0
+    _wb_loader_items=()
+    # An unset hook variable (precmd_functions without bash-preexec,
+    # PROMPT_COMMAND on a bare host) has no entries. Asking for its length
+    # directly is an "unbound variable" error under set -u.
+    declare -p "$1" >/dev/null 2>&1 || return 0
+    eval "_count=\${#${1}[@]}"
+    [[ "${_count}" -gt 0 ]] || return 0
+    eval "_wb_loader_items=(\"\${${1}[@]}\")"
+}
+
+# _wb_loader_hook_snapshot <var> — print "<form> RS <entry> US <entry> US …".
+_wb_loader_hook_snapshot() {
+    local _form _item
+    _form="$(_wb_loader_hook_form "$1")"
+    _wb_loader_hook_read "$1"
+    printf '%s%s' "${_form}" "${_wb_loader_rs}"
+    for _item in ${_wb_loader_items[@]+"${_wb_loader_items[@]}"}; do
+        printf '%s%s' "${_item}" "${_wb_loader_us}"
+    done
+}
+
+# _wb_loader_hook_added <var> <start-snapshot> — print the records for what
+# <var> gained since <start-snapshot> was taken.
+_wb_loader_hook_added() {
+    local _var="$1" _start="$2" _end _start_form _end_form _start_list _end_list
+    local _remaining _entry _position=0
+    _end="$(_wb_loader_hook_snapshot "${_var}")"
+    _start_form="${_start%%"${_wb_loader_rs}"*}"
+    _end_form="${_end%%"${_wb_loader_rs}"*}"
+    _start_list="${_start#*"${_wb_loader_rs}"}"
+    _end_list="${_end#*"${_wb_loader_rs}"}"
+    [[ "${_start_list}" == "${_end_list}" ]] && return 0
+
+    if [[ "${_start_form}" != "${_end_form}" && "${_start_form}" != "unset" && "${_end_form}" != "unset" ]]; then
+        log_debug "loader: ${_var} changed shape during the pass; not recorded"
+        return 0
+    fi
+
+    if [[ "${_start_form}" == "scalar" || "${_end_form}" == "scalar" ]]; then
+        # One string each side (an unset side reads as empty). Find the
+        # host's text inside the new value and keep what surrounds it.
+        _start_list="${_start_list%"${_wb_loader_us}"}"
+        _end_list="${_end_list%"${_wb_loader_us}"}"
+        if [[ "${_end_list}" == *"${_start_list}"* ]]; then
+            printf '%s' "${_var}${_wb_loader_us}scalar${_wb_loader_us}${_end_list%%"${_start_list}"*}${_wb_loader_us}${_end_list#*"${_start_list}"}${_wb_loader_rs}"
+        else
+            # The host's text is gone: an engine overwrote it. The whole
+            # new value is workbench's, as D50 treated it.
+            printf '%s' "${_var}${_wb_loader_us}scalar${_wb_loader_us}${_wb_loader_us}${_end_list}${_wb_loader_rs}"
+        fi
+        return 0
+    fi
+
+    # Array: walk the new entries in order, matching the start entries
+    # greedily; whatever does not match is workbench's.
+    _remaining="${_start_list}"
+    _wb_loader_hook_read "${_var}"
+    for _entry in ${_wb_loader_items[@]+"${_wb_loader_items[@]}"}; do
+        if [[ "${_remaining}" == "${_entry}${_wb_loader_us}"* ]]; then
+            _remaining="${_remaining#"${_entry}${_wb_loader_us}"}"
+        else
+            printf '%s' "${_var}${_wb_loader_us}array${_wb_loader_us}${_position}${_wb_loader_us}${_entry}${_wb_loader_rs}"
+        fi
+        _position=$((_position + 1))
+    done
+}
+
+# _wb_loader_hook_remove <var> — remove from <var> what an earlier pass
+# recorded in _WB_PROMPT_HOOKS_ADDED, and nothing else.
+_wb_loader_hook_remove() {
+    local _var="$1" _rest="${_WB_PROMPT_HOOKS_ADDED:-}"
+    local _record _name _kind _field_a _field_b
+    local _wanted="${_wb_loader_rs}" _pre="" _post="" _scalar=false
+    while [[ -n "${_rest}" ]]; do
+        _record="${_rest%%"${_wb_loader_rs}"*}"
+        if [[ "${_rest}" == "${_record}" ]]; then _rest=""; else _rest="${_rest#"${_record}${_wb_loader_rs}"}"; fi
+        _name="${_record%%"${_wb_loader_us}"*}";   _record="${_record#*"${_wb_loader_us}"}"
+        [[ "${_name}" == "${_var}" ]] || continue
+        _kind="${_record%%"${_wb_loader_us}"*}";   _record="${_record#*"${_wb_loader_us}"}"
+        _field_a="${_record%%"${_wb_loader_us}"*}"; _field_b="${_record#*"${_wb_loader_us}"}"
+        case "${_kind}" in
+            # _wanted holds "RS position US entry RS position US entry … RS".
+            array)  _wanted="${_wanted}${_field_a}${_wb_loader_us}${_field_b}${_wb_loader_rs}" ;;
+            scalar) _pre="${_field_a}"; _post="${_field_b}"; _scalar=true ;;
+        esac
+    done
+
+    if [[ "${_scalar}" == "true" ]]; then
+        [[ "$(_wb_loader_hook_form "${_var}")" == "scalar" ]] || return 0
+        local _current="${PROMPT_COMMAND}"
+        if [[ -n "${_pre}" ]]; then
+            if [[ "${_current}" == "${_pre}"* ]]; then _current="${_current#"${_pre}"}"
+            elif [[ "${_current}" == *"${_pre}"* ]]; then _current="${_current/"${_pre}"/}"; fi
+        fi
+        if [[ -n "${_post}" ]]; then
+            if [[ "${_current}" == *"${_post}" ]]; then _current="${_current%"${_post}"}"
+            elif [[ "${_current}" == *"${_post}"* ]]; then _current="${_current/"${_post}"/}"; fi
+        fi
+        if [[ -n "${_current}" ]]; then PROMPT_COMMAND="${_current}"; else unset PROMPT_COMMAND; fi
+        return 0
+    fi
+
+    [[ "${_wanted}" == "${_wb_loader_rs}" ]] && return 0
+    [[ "$(_wb_loader_hook_form "${_var}")" == "scalar" ]] && return 0
+
+    # Pass 1: drop each entry that sits at the position it was recorded at.
+    local -a _kept
+    local _item _position=0 _key _text _equal _spent
+    _kept=()
+    _wb_loader_hook_read "${_var}"
+    for _item in ${_wb_loader_items[@]+"${_wb_loader_items[@]}"}; do
+        _key="${_wb_loader_rs}${_position}${_wb_loader_us}${_item}${_wb_loader_rs}"
+        if [[ "${_wanted}" == *"${_key}"* ]]; then
+            _wanted="${_wanted/"${_key}"/${_wb_loader_rs}}"
+        else
+            _kept+=("${_item}")
+        fi
+        _position=$((_position + 1))
+    done
+
+    # Pass 2: a record that matched at no position is removed only if
+    # exactly one equal entry is left; otherwise it stays.
+    while [[ "${_wanted}" != "${_wb_loader_rs}" && -n "${_wanted}" ]]; do
+        _wanted="${_wanted#"${_wb_loader_rs}"}"
+        _key="${_wanted%%"${_wb_loader_rs}"*}"
+        _wanted="${_wanted#"${_key}"}"
+        _text="${_key#*"${_wb_loader_us}"}"
+        _equal=0
+        for _item in ${_kept[@]+"${_kept[@]}"}; do
+            [[ "${_item}" == "${_text}" ]] && _equal=$((_equal + 1))
+        done
+        if [[ "${_equal}" -eq 1 ]]; then
+            _wb_loader_items=()
+            _spent=false
+            for _item in "${_kept[@]}"; do
+                if [[ "${_spent}" == "false" && "${_item}" == "${_text}" ]]; then _spent=true; continue; fi
+                _wb_loader_items+=("${_item}")
+            done
+            _kept=()
+            for _item in ${_wb_loader_items[@]+"${_wb_loader_items[@]}"}; do _kept+=("${_item}"); done
+        else
+            log_debug "loader: left a recorded ${_var} entry in place; it no longer matches exactly one entry"
+        fi
+    done
+
+    if [[ ${#_kept[@]} -gt 0 ]]; then
+        eval "${_var}=(\"\${_kept[@]}\")"
+    elif [[ "${_var}" == "PROMPT_COMMAND" ]]; then
+        unset PROMPT_COMMAND
+    else
+        eval "${_var}=()"
+    fi
+}
+
+# Remove last pass's entries, then note what is left as this pass's start.
+for _wb_hook_var in $(_wb_loader_hook_vars); do
+    _wb_loader_hook_remove "${_wb_hook_var}"
+    eval "_wb_loader_start_${_wb_hook_var}=\"\$(_wb_loader_hook_snapshot \"\${_wb_hook_var}\")\""
+done
+unset _wb_hook_var
+
 unset WORKBENCH_PROMPT_SET WORKBENCH_PROMPT_ENGINE
 
 if command -v workbench_list_loadable_modules &>/dev/null; then
@@ -632,6 +828,15 @@ command -v dedupe-path &>/dev/null && dedupe-path 2>/dev/null
 # Fires while any rc-stub-tagged backup remains under the shared backup
 # root (docs/decisions-log.md D53/D64) — cheap on-disk check, no
 # subprocess beyond find. Clears itself once the user removes the file(s).
+#
+# D110 adds a second way to clear it. A rc file that legitimately stays as
+# it is (one that sources a distribution's own profile, say) has nothing to
+# migrate, and the only other way to silence the warning was deleting the
+# safety backup. Creating "<backup>.acknowledged" next to a backup silences
+# it for that backup and keeps the backup. The marker belongs to one backup:
+# a later stub rewrite that creates a new backup has no marker and warns
+# again. The warning prints the exact command.
+#
 # Gated on an interactive shell, same as the "Interactive startup" block
 # just below — this PR also adds the loader stub to .zshenv, which zsh
 # sources for every invocation including non-interactive ones (ssh
@@ -642,13 +847,16 @@ if [[ $- == *i* ]]; then
     _wb_migration_found=false
     while IFS= read -r _wb_bak; do
         [[ -z "${_wb_bak}" ]] && continue
+        [[ -e "${_wb_bak}.acknowledged" ]] && continue
         if [[ "${_wb_migration_found}" == "false" ]]; then
             log_warn "Shell rc migration pending: workbench backed up pre-existing rc content before adding its loader stub."
             log_warn "  Review the backup(s) below and copy anything you want to keep into a new file under \${XDG_CONFIG_HOME:-\${HOME}/.config}/workbench/local/, then remove the backup to clear this warning."
+            log_warn "  If the rc file is meant to stay as it is, run the touch line under a backup to silence it and keep the backup."
             _wb_migration_found=true
         fi
         log_warn "  ${_wb_bak}"
-    done < <(find "${_wb_migration_dir}" -maxdepth 3 -name 'rc-stub-*' -type f 2>/dev/null)
+        log_warn "    touch '${_wb_bak}.acknowledged'"
+    done < <(command find "${_wb_migration_dir}" -maxdepth 3 -name 'rc-stub-*' ! -name '*.acknowledged' -type f 2>/dev/null)
     unset _wb_migration_dir _wb_migration_found _wb_bak
 fi
 
@@ -694,5 +902,25 @@ fi
 if [[ $- == *i* ]] && [[ "${WORKBENCH_SHOW_FUNCTIONS}" == "true" ]] && command -v get-functions &>/dev/null; then
     get-functions --no-pager --no-aliases --compact
 fi
+
+# ── Prompt-hook record, for the next reload (D110) ────────────────────────
+# Everything added to the hook variables since the reset above is
+# workbench's (or a module's, or the user's own settings.sh) and re-runs on
+# every pass, so the next pass removes exactly these entries first.
+_WB_PROMPT_HOOKS_ADDED_NEW=""
+for _wb_hook_var in $(_wb_loader_hook_vars); do
+    eval "_wb_hook_start=\"\${_wb_loader_start_${_wb_hook_var}}\""
+    # shellcheck disable=SC2154  # assigned by the eval above
+    _WB_PROMPT_HOOKS_ADDED_NEW="${_WB_PROMPT_HOOKS_ADDED_NEW}$(_wb_loader_hook_added "${_wb_hook_var}" "${_wb_hook_start}")"
+    unset "_wb_loader_start_${_wb_hook_var}"
+done
+if [[ -n "${_WB_PROMPT_HOOKS_ADDED_NEW}" ]]; then
+    _WB_PROMPT_HOOKS_ADDED="${_WB_PROMPT_HOOKS_ADDED_NEW}"
+else
+    unset _WB_PROMPT_HOOKS_ADDED
+fi
+unset _WB_PROMPT_HOOKS_ADDED_NEW _wb_hook_var _wb_hook_start _wb_loader_items _wb_loader_us _wb_loader_rs
+unset -f _wb_loader_hook_vars _wb_loader_hook_form _wb_loader_hook_read _wb_loader_hook_snapshot \
+    _wb_loader_hook_added _wb_loader_hook_remove
 
 unset _wb_loader_lib_dir

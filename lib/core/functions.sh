@@ -14,7 +14,7 @@
 # for every module, not just core.
 
 # shellcheck source=lib/core/log.sh
-_wb_functions_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
+_wb_functions_dir="$(builtin cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 [[ -f "${_wb_functions_dir}/log.sh" ]] && source "${_wb_functions_dir}/log.sh"
 unset _wb_functions_dir
 
@@ -364,7 +364,7 @@ _wb_cache_bool() {
     _sanitized="$(printf '%s' "${_key}" | tr -c 'A-Za-z0-9_' '_')"
     _cache_file="${_wb_cache_bool_dir}/${_sanitized}"
     _rc=""
-    [[ -f "${_cache_file}" ]] && _rc="$(cat "${_cache_file}" 2>/dev/null)"
+    [[ -f "${_cache_file}" ]] && _rc="$(command cat "${_cache_file}" 2>/dev/null)"
     if [[ -z "${_rc}" ]]; then
         "$@" &>/dev/null
         _rc=$?

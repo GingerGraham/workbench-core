@@ -1,0 +1,64 @@
+# plain-host state: before the loader stub, then after it.
+# Generated from main before D110 work began. See the header of
+# tests/check-existing-setup-coexistence.sh before regenerating.
+######## BEFORE
+## login_shell=no
+## aliases
+## function names
+## cd/zd/z bodies
+## exported env
+HOME=@WORK@/plain/home
+PATH=/usr/local/bin:/usr/bin:/bin
+SHLVL=1
+TERM=dumb
+XDG_CACHE_HOME=@WORK@/plain/cache
+XDG_CONFIG_HOME=@WORK@/plain/config
+XDG_DATA_HOME=@WORK@/plain/data
+## shell-local vars
+## PROMPT_COMMAND
+## traps
+######## AFTER
+## login_shell=no
+## aliases
+## function names
+_wb_loader_should_source_by_name
+_wb_loader_source_sh_files_once
+_wb_loader_source_tier
+log_debug
+log_error
+log_info
+log_warn
+wb
+workbench_is_load_enabled
+workbench_is_registered
+workbench_is_sync_enabled
+workbench_list_all_modules
+workbench_list_loadable_modules
+workbench_list_registered_modules
+workbench_list_syncable_modules
+workbench_module_conf_get
+workbench_module_conf_path
+workbench_module_conf_set
+workbench_module_current_dir
+workbench_module_dir
+workbench_modules_dir
+workbench_valid_module_name
+workbench_valid_repo_url
+## cd/zd/z bodies
+## exported env
+HOME=@WORK@/plain/home
+PATH=@WORK@/plain/home/.local/bin:/usr/local/bin:/usr/bin:/bin
+SHLVL=1
+TERM=dumb
+WORKBENCH_LOADER_PATH=@WORK@/plain/data/workbench/modules/core/current/lib/loader.sh
+WORKBENCH_PLATFORM_DETECTED=true
+WORKBENCH_PROMPT_ENGINE=fallback
+WORKBENCH_SHELL=bash
+WORKBENCH_WSL=false
+XDG_CACHE_HOME=@WORK@/plain/cache
+XDG_CONFIG_HOME=@WORK@/plain/config
+XDG_DATA_HOME=@WORK@/plain/data
+## shell-local vars
+declare -- PS1="\\u@\\h:\\w\\\$ "
+## PROMPT_COMMAND
+## traps

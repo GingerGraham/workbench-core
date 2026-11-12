@@ -19,7 +19,7 @@ set -uo pipefail
 # lib/distribution/snapshot.sh.
 _wb_self="${BASH_SOURCE[0]}"
 while [[ -L "${_wb_self}" ]]; do
-    _wb_self_dir="$(cd -- "$(dirname -- "${_wb_self}")" >/dev/null 2>&1 && pwd)"
+    _wb_self_dir="$(builtin cd -- "$(dirname -- "${_wb_self}")" >/dev/null 2>&1 && pwd)"
     _wb_self="$(readlink "${_wb_self}")"
     case "${_wb_self}" in
         /*) ;;
@@ -28,9 +28,9 @@ while [[ -L "${_wb_self}" ]]; do
 done
 unset _wb_self_dir
 
-WB_BIN_DIR="$(cd -- "$(dirname -- "${_wb_self}")" >/dev/null 2>&1 && pwd)"
+WB_BIN_DIR="$(builtin cd -- "$(dirname -- "${_wb_self}")" >/dev/null 2>&1 && pwd)"
 unset _wb_self
-WB_ROOT="$(cd -- "${WB_BIN_DIR}/.." >/dev/null 2>&1 && pwd)"
+WB_ROOT="$(builtin cd -- "${WB_BIN_DIR}/.." >/dev/null 2>&1 && pwd)"
 LIB="${WB_ROOT}/lib"
 export WORKBENCH_CORE_INSTALL_DIR="${WB_ROOT}"
 
@@ -669,7 +669,7 @@ _wb_core_next_wb() {
     workbench_is_registered core || return 0
     next="$(workbench_module_current_dir core)/bin/wb"
     [[ -x "${next}" ]] || return 0
-    [[ "$(cd -- "$(dirname -- "${next}")/.." >/dev/null 2>&1 && pwd -P)" == "$(cd -- "${WB_ROOT}" >/dev/null 2>&1 && pwd -P)" ]] && return 0
+    [[ "$(builtin cd -- "$(dirname -- "${next}")/.." >/dev/null 2>&1 && pwd -P)" == "$(builtin cd -- "${WB_ROOT}" >/dev/null 2>&1 && pwd -P)" ]] && return 0
     grep -q '__sync-continue)' "${next}" 2>/dev/null || return 0
     printf '%s\n' "${next}"
 }
@@ -2228,7 +2228,7 @@ _wb_files_diff_line() {
     echo
     echo "== Yours vs the module now ('use' would replace this) =="
     echo "   ${left} = ${module} now, ${right} = yours"
-    ( cd "$(workbench_module_dir "${module}")" && diff -ru "${left}" "${right}" )
+    ( builtin cd "$(workbench_module_dir "${module}")" && command diff -ru "${left}" "${right}" )
     return 0
 }
 

@@ -156,7 +156,7 @@ _wb_files_move_aside() {
 # entered the same way on GNU and BSD find; .git is never included.
 _wb_files_list_tree() {
     local dir="$1" phys file
-    phys="$(cd -- "${dir}" >/dev/null 2>&1 && pwd -P)" || return 1
+    phys="$(builtin cd -- "${dir}" >/dev/null 2>&1 && pwd -P)" || return 1
     while IFS= read -r -d '' file; do
         printf '%s\0' "${file#"${phys}"/}"
     done < <(find "${phys}" -name .git -prune -o -type f -print0)
@@ -420,7 +420,7 @@ _wb_files_sum_tree() {
     else
         cmd=(shasum -a 256)
     fi
-    ( cd "${dir}" 2>/dev/null && [[ -e "${rel}" ]] && find "${rel}" -type f -exec "${cmd[@]}" {} + ) \
+    ( builtin cd "${dir}" 2>/dev/null && [[ -e "${rel}" ]] && find "${rel}" -type f -exec "${cmd[@]}" {} + ) \
         | sed 's#^\([0-9a-f]\{64\}\)  \./#\1  #'
 }
 
