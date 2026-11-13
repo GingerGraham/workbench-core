@@ -4,6 +4,28 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **`wb functions` now uses a built-in pager, and its output stays on
+  screen after the command finishes.** The old default was `less`, which on a
+  host with `workbench-shell` ran on the alternate screen: the listing
+  vanished when you pressed `q`, and `less` opened even for short output.
+  The built-in pager prints a screenful at a time (space/PgDn page,
+  enter/`j`/down-arrow line, `a` rest, `q` stop), never leaves the normal
+  screen, and prints with no prompt when the output fits. The mouse wheel
+  scrolls everything it printed (D111).
+- **Behaviour change: `PAGER` is no longer used by `wb`.** It is the
+  system-wide viewer for man pages and `git`, and `workbench-shell` sets it
+  to `less`, so it said nothing about how you want `wb`'s output handled. Set
+  `WORKBENCH_PAGER` to use an external pager, for example
+  `WORKBENCH_PAGER="less -FRX"`. `WORKBENCH_PAGER=none` (or `cat`, or empty)
+  still turns paging off (D111).
+- **The diff shown by "show differences" when installing over existing files
+  now stays on screen while you answer the keep/use question.** The
+  install question's `[d]` view and the per-file `[d] diff` under `[c]` use
+  the same built-in pager, so the diff is no longer wiped when you quit it
+  (D111).
+
 ## [2.24.1] - 2026-11-12
 
 ### Fixed
