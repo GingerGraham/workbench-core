@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.26.0] - 2026-11-13
+
 ### Added
 
 - **`wb functions <filter>` finds one function without paging through the
