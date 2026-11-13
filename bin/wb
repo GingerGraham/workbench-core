@@ -3819,10 +3819,11 @@ empty/"cat"/"none" disables paging outright, and any other value runs as
 that command line (for example WORKBENCH_PAGER="less -FRX"). PAGER is not
 used. Never pages when stdout is redirected or captured (a file, a pipe,
 $(...)) — only affects what you see interactively. --no-pager skips this
-for one call regardless of WORKBENCH_PAGER. --no-aliases omits the "Loaded aliases" section,
-listing only loaded functions and getters — this is what the automatic
-WORKBENCH_SHOW_FUNCTIONS startup banner uses (unpaged, no aliases) so it
-stays a quick summary rather than a full listing every new shell.
+for one call regardless of WORKBENCH_PAGER. --no-aliases omits the "Loaded
+aliases" section, listing only loaded functions and getters — this is what
+the automatic WORKBENCH_SHOW_FUNCTIONS startup banner uses (unpaged, no
+aliases) so it stays a quick summary rather than a full listing every new
+shell.
 --compact replaces each "available once tooling is installed" block with
 one line (a count per missing tool); the startup banner uses it too, and
 module getters never do.
