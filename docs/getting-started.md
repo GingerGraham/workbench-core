@@ -183,6 +183,7 @@ wb revert awsconfd                 # go back a version and stay there
 wb load disable awsconfd           # stop its shell code; updates and config stay on
 wb remove awsconfd                 # deregister (deployed content stays)
 wb functions                       # what shell functions/getters are live
+wb functions git                   # only names containing "git" (or a module's name for all of it)
 wb tools list                      # what install-* functions are available
 wb version                         # release version + every loaded file's version
 ```

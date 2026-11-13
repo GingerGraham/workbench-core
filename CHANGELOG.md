@@ -4,6 +4,20 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`wb functions <filter>` finds one function without paging through the
+  whole listing.** Any argument that doesn't start with `--` is a filter
+  term. A term that is exactly a module's name (as `wb status` shows it)
+  lists everything that module provides; any other term lists the functions,
+  aliases and getters whose name contains it (case-sensitive). Several terms
+  add up, a section with nothing left in it is left out, and a filter that
+  matches nothing prints `No functions, aliases or getters match: <terms>`
+  to stderr and exits 1, like `grep`. `--all`, `--no-aliases` and
+  `--compact` work with a filter, and terms and flags can come in any order.
+  `get-functions <filter>` forwards the same way. Without a filter the
+  output is unchanged (D112).
+
 ## [2.25.0] - 2026-11-13
 
 ### Changed
