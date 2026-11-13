@@ -952,7 +952,7 @@ _wb_cmd_status() {
 }
 
 # ── functions ──────────────────────────────────────────────────────────────
-# _wb_cmd_functions [--all] [--no-pager] [--no-aliases] [--compact]
+# _wb_cmd_functions [<filter>...] [--all] [--no-pager] [--no-aliases] [--compact]
 # Thin wrapper around _wb_cmd_functions_impl (the actual listing logic,
 # unchanged below): scans all of $@ for --all/--no-pager — order-
 # independent, unlike a bare "${1:-}" == "--all" check — then pipes the
@@ -1003,6 +1003,34 @@ _wb_cmd_functions() {
     fi
 }
 
+# _wb_functions_name_matches <name> <term>...
+# True if <name> contains any <term> as a case-sensitive substring.
+# Private helper for the filter terms of `wb functions` (D112).
+_wb_functions_name_matches() {
+    local _name="$1" _term
+    shift
+    for _term in "$@"; do
+        [[ "${_name}" == *"${_term}"* ]] && return 0
+    done
+    return 1
+}
+
+# _wb_functions_select <names> <owned-names> [<term>...]
+# Reads a newline-separated <names> list and prints, one per line, the
+# names that are either in <owned-names> (the content of a module the user
+# named outright) or contain one of the <term>s. Order is kept.
+_wb_functions_select() {
+    local _names="$1" _owned="$2" _n
+    shift 2
+    local _owned_nl=$'\n'"${_owned}"$'\n'
+    while IFS= read -r _n; do
+        [[ -z "${_n}" ]] && continue
+        if [[ "${_owned_nl}" == *$'\n'"${_n}"$'\n'* ]] || _wb_functions_name_matches "${_n}" "$@"; then
+            printf '%s\n' "${_n}"
+        fi
+    done <<< "${_names}"
+}
+
 # Generalised get-functions (docs/architecture.md §3/§4): walks every
 # registered module's declared files and extracts what's actually
 # defined in them. One exclusion keeps this an accurate "what's
@@ -1039,12 +1067,28 @@ _wb_cmd_functions() {
 # tooling is installed" block with a one-line count, so that same banner
 # stays short even on a host missing several tools. It applies to this
 # top-level listing only: a module's own getter never sets it.
+#
+# Filter terms (docs/decisions-log.md D112): any argument that doesn't start
+# with "--" narrows the listing. A term that exactly equals the name of a
+# loadable module selects that module's functions, aliases and getters
+# outright, whatever they are called. Any other term selects every
+# function, alias or getter whose name contains it (case-sensitive).
+# Several terms are OR'd. A section left with nothing in it is not printed;
+# if nothing is left at all, a message goes to stderr and the status is 1.
+# The listing is flat (one "Loaded functions" list across all modules), so
+# a module's names come from that module's own register.list files rather
+# than from a per-module section. With no terms nothing below changes.
 _wb_cmd_functions_impl() {
     local name reglist filepath tier base manifest
     local -a eager_files=()
     local any_getters="false"
     local -a _getter_lines=()
     local _wb_fn_arg _wb_fn_no_aliases="false"
+    local -a _wb_fn_terms=()
+    local _wb_fn_filtering="false"
+    local _wb_fn_matched_modules=$'\n'
+    local -a _wb_fn_matched_files=()
+    local -a _getter_fns=() _getter_modules=()
     # Read by _wb_print_unavailable_block (lib/core/functions.sh) through
     # bash's dynamic scoping: a local here is visible to every function this
     # one calls, and gone when it returns.
@@ -1054,11 +1098,30 @@ _wb_cmd_functions_impl() {
         case "${_wb_fn_arg}" in
             --no-aliases) _wb_fn_no_aliases="true" ;;
             --compact) _wb_functions_compact="true" ;;
+            --*) ;;
+            "") ;;
+            *) _wb_fn_terms+=("${_wb_fn_arg}") ;;
         esac
     done
+    if [[ ${#_wb_fn_terms[@]} -gt 0 ]]; then
+        _wb_fn_filtering="true"
+    fi
 
+    local _wb_fn_term _wb_fn_is_module
     while IFS= read -r name; do
         [[ -z "${name}" ]] && continue
+
+        # A term equal to this module's name selects the whole module.
+        _wb_fn_is_module="false"
+        if [[ "${_wb_fn_filtering}" == "true" ]]; then
+            for _wb_fn_term in "${_wb_fn_terms[@]}"; do
+                if [[ "${_wb_fn_term}" == "${name}" ]]; then
+                    _wb_fn_is_module="true"
+                    _wb_fn_matched_modules="${_wb_fn_matched_modules}${name}"$'\n'
+                    break
+                fi
+            done
+        fi
 
         reglist="$(workbench_module_dir "${name}")/register.list"
         if [[ -f "${reglist}" ]]; then
@@ -1069,6 +1132,9 @@ _wb_cmd_functions_impl() {
                     _wb_loader_should_source_by_name "${tier}" "${base}" || continue
                 fi
                 eager_files+=("${filepath}")
+                if [[ "${_wb_fn_is_module}" == "true" ]]; then
+                    _wb_fn_matched_files+=("${filepath}")
+                fi
             done < "${reglist}"
         fi
 
@@ -1079,6 +1145,8 @@ _wb_cmd_functions_impl() {
             [[ -z "${getter_name}" ]] && continue
             any_getters="true"
             _getter_lines+=("$(printf '  %-22s %s' "${getter_fn}" "${getter_label}")")
+            _getter_fns+=("${getter_fn}")
+            _getter_modules+=("${name}")
         done < <(workbench_manifest_register_getter_entries "${manifest}")
     done < <(workbench_list_loadable_modules)
 
@@ -1133,32 +1201,88 @@ _wb_cmd_functions_impl() {
         set -u
     fi
 
-    if [[ ${#eager_files[@]} -eq 0 ]]; then
+    # Work out every list before printing any of it, so a filter that
+    # matches nothing can fail with nothing on stdout.
+    local _new_functions="" _new_aliases=""
+    if [[ ${#eager_files[@]} -gt 0 ]]; then
+        local _after_functions
+        _after_functions="$(declare -F | sed 's/^declare -f //')"
+        _new_functions="$(comm -13 <(sort <<< "${_before_functions}") <(sort <<< "${_after_functions}") | grep -v '^_')"
+
+        if [[ "${_wb_fn_no_aliases}" == "false" ]]; then
+            local _after_aliases
+            _after_aliases="$(alias -p 2>/dev/null | sed -E 's/^alias ([a-zA-Z0-9_-]+)=.*/\1/')"
+            _new_aliases="$(comm -13 <(sort <<< "${_before_aliases}") <(sort <<< "${_after_aliases}"))"
+        fi
+    fi
+
+    local -a _shown_getter_lines=()
+    if [[ "${_wb_fn_filtering}" == "true" ]]; then
+        # Terms that name a module select it outright; the rest are
+        # substrings matched against names.
+        local -a _wb_fn_name_terms=()
+        for _wb_fn_term in "${_wb_fn_terms[@]}"; do
+            [[ "${_wb_fn_matched_modules}" == *$'\n'"${_wb_fn_term}"$'\n'* ]] && continue
+            _wb_fn_name_terms+=("${_wb_fn_term}")
+        done
+
+        # What the named modules define, read from their own files. Only
+        # names that really loaded survive _wb_functions_select, which walks
+        # the live lists above. Skipped with no files: grep would read stdin.
+        local _owned_functions="" _owned_aliases=""
+        if [[ ${#_wb_fn_matched_files[@]} -gt 0 ]]; then
+            _owned_functions="$(_extract_function_names "${_wb_fn_matched_files[@]}")"
+            _owned_aliases="$(_extract_alias_names "${_wb_fn_matched_files[@]}")"
+        fi
+
+        _new_functions="$(_wb_functions_select "${_new_functions}" "${_owned_functions}" ${_wb_fn_name_terms[@]+"${_wb_fn_name_terms[@]}"})"
+        _new_aliases="$(_wb_functions_select "${_new_aliases}" "${_owned_aliases}" ${_wb_fn_name_terms[@]+"${_wb_fn_name_terms[@]}"})"
+
+        local _g=0
+        while [[ "${_g}" -lt ${#_getter_lines[@]} ]]; do
+            if [[ "${_wb_fn_matched_modules}" == *$'\n'"${_getter_modules[_g]}"$'\n'* ]] \
+                || _wb_functions_name_matches "${_getter_fns[_g]}" ${_wb_fn_name_terms[@]+"${_wb_fn_name_terms[@]}"}; then
+                _shown_getter_lines+=("${_getter_lines[_g]}")
+            fi
+            _g=$((_g + 1))
+        done
+
+        if [[ -z "${_new_functions}" ]] && [[ -z "${_new_aliases}" ]] && [[ ${#_shown_getter_lines[@]} -eq 0 ]]; then
+            echo "No functions, aliases or getters match: ${_wb_fn_terms[*]}" >&2
+            return 1
+        fi
+    fi
+
+    if [[ "${_wb_fn_filtering}" == "false" ]] && [[ ${#eager_files[@]} -eq 0 ]]; then
         echo
         echo "[INFO] Loaded functions:"
         echo "  (none — no module has rendered register.list yet; run 'wb apply')"
     else
-        local _after_functions _new_functions
-        _after_functions="$(declare -F | sed 's/^declare -f //')"
-        _new_functions="$(comm -13 <(sort <<< "${_before_functions}") <(sort <<< "${_after_functions}") | grep -v '^_')"
-        _wb_print_live_names "Loaded functions" "${_new_functions}"
-
+        if [[ "${_wb_fn_filtering}" == "false" ]] || [[ -n "${_new_functions}" ]]; then
+            _wb_print_live_names "Loaded functions" "${_new_functions}"
+        fi
         if [[ "${_wb_fn_no_aliases}" == "false" ]]; then
-            local _after_aliases _new_aliases
-            _after_aliases="$(alias -p 2>/dev/null | sed -E 's/^alias ([a-zA-Z0-9_-]+)=.*/\1/')"
-            _new_aliases="$(comm -13 <(sort <<< "${_before_aliases}") <(sort <<< "${_after_aliases}"))"
-            _wb_print_live_names "Loaded aliases" "${_new_aliases}"
+            if [[ "${_wb_fn_filtering}" == "false" ]] || [[ -n "${_new_aliases}" ]]; then
+                _wb_print_live_names "Loaded aliases" "${_new_aliases}"
+            fi
         fi
     fi
 
-    echo
-    echo "[INFO] Getters — run any of these for full detail on that area:"
-    if [[ "${any_getters}" == "true" ]]; then
-        printf '%s\n' "${_getter_lines[@]}"
-    else
-        echo "  (none registered yet)"
+    if [[ "${_wb_fn_filtering}" == "false" ]]; then
+        echo
+        echo "[INFO] Getters — run any of these for full detail on that area:"
+        if [[ "${any_getters}" == "true" ]]; then
+            printf '%s\n' "${_getter_lines[@]}"
+        else
+            echo "  (none registered yet)"
+        fi
+        echo
+    elif [[ ${#_shown_getter_lines[@]} -gt 0 ]]; then
+        echo
+        echo "[INFO] Getters — run any of these for full detail on that area:"
+        printf '%s\n' "${_shown_getter_lines[@]}"
+        echo
     fi
-    echo
     _wb_print_timeout_warning
 }
 
@@ -3791,11 +3915,26 @@ EOF
 
 _wb_help_functions() {
     cat <<'EOF'
-Usage: wb functions [--all] [--no-pager] [--no-aliases] [--compact]
+Usage: wb functions [<filter>...] [--all] [--no-pager] [--no-aliases] [--compact]
 
 Lists every registered shell function/getter/installer, grouped by the
 module that declared it (via that module's manifest register: block).
 Read-only.
+
+Give one or more filter terms (any argument that doesn't start with "--")
+to list only part of it. A term that is exactly a module's name (as 'wb
+status' shows it) lists everything that module provides. Any other term
+lists every function, alias or getter whose name contains it (case-
+sensitive). Several terms add up: a name is listed if any term matches.
+A section with nothing left in it is left out. If nothing matches, it
+prints "No functions, aliases or getters match: <terms>" on stderr and
+exits 1, like grep. Flags and terms can come in any order, and --all,
+--no-aliases and --compact work with a filter. Without a filter the
+listing is unchanged.
+
+  wb functions git                 names containing "git"
+  wb functions workbench-git       everything the workbench-git module gives
+  wb functions ssh gpg --compact   names containing "ssh" or "gpg"
 
 A function whose declared "_<name>-available" predicate reports it can't
 actually be used on this host (a required CLI is missing, say) is left out

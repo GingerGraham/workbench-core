@@ -1,0 +1,17 @@
+
+[INFO] Loaded functions:
+gadget-run get-gadget-functions get-widget-functions widget-do-a-thing
+
+[INFO] Loaded functions — available once tooling is installed:
+ tool-absent-gadget-xyz
+ gadget-stop
+
+
+[INFO] Loaded aliases:
+gdg widget-alias
+
+
+[INFO] Getters — run any of these for full detail on that area:
+ get-gadget-functions Gadget helpers
+ get-widget-functions Widget helpers
+
