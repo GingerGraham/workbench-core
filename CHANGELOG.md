@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.25.0] - 2026-11-13
+
 ### Changed
 
 - **`wb functions` now uses a built-in pager, and its output stays on
