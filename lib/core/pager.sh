@@ -11,7 +11,7 @@
 # normal. External pagers are opt-in via WORKBENCH_PAGER.
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/pager.sh" "0.2.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/pager.sh" "0.3.0" || true
 
 # _wb_resolve_pager
 # Prints the pager to use, or nothing when output should not be paged.

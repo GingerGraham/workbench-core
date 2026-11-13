@@ -18,6 +18,8 @@ All notable changes to `workbench-core` are documented here.
   `get-functions <filter>` forwards the same way. Without a filter the
   output is unchanged (D112).
 
+## [2.25.0] - 2026-11-13
+
 ### Changed
 
 - **`wb functions` now uses a built-in pager, and its output stays on
