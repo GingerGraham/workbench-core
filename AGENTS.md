@@ -71,7 +71,13 @@ than silently reinterpreting one of these away:
   procedure.
 - A `CHANGELOG.md` `[Unreleased]` entry, in the same change, for
   anything user-facing — `release.yml` gates a real version bump on
-  this being non-empty.
+  this being non-empty. A clean merge doesn't prove the entry landed
+  under `[Unreleased]`: if a release landed on `main` after you
+  branched, git can put it inside the already-released section (D115).
+  Before opening a PR, and again before any further push, run the
+  stale-base check in `docs/release-process.md`
+  ("The CHANGELOG discipline"). After the PR merges, look at the
+  Release run on `main`; a red one is yours to fix.
 - `tests/check-*.sh` (plain bash, numbered `OK:`/`FAIL:` checks, no
   framework) — match this style for new suites rather than introducing
   one. Run locally via `.github/scripts/ci/run-tests.sh`.

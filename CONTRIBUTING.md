@@ -103,7 +103,10 @@ change. This isn't optional for anything user-facing: `release.yml`
 refuses to cut a release if a real version bump is pending but
 `[Unreleased]` is still empty — deliberately, since that emptiness is
 the signal someone forgot the entry, not something the pipeline should
-paper over. See [`docs/release-process.md`](docs/release-process.md#the-changelog-discipline).
+paper over. If a release landed on `main` after you branched, check
+that your entry still sits under `[Unreleased]` before you push; a clean
+merge doesn't prove it. See
+[`docs/release-process.md`](docs/release-process.md#the-changelog-discipline).
 
 ### Tests
 

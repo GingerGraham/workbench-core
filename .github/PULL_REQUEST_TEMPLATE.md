@@ -22,7 +22,10 @@
       fails the PR otherwise. See [`docs/release-process.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/release-process.md).
 - [ ] If this is user-facing, `CHANGELOG.md`'s `## [Unreleased]` has a
       new entry under the right heading — `release.yml` refuses to cut
-      a release with an empty `[Unreleased]` section.
+      a release with an empty `[Unreleased]` section. If a release
+      landed on `main` after you branched, the entry still sits under
+      `[Unreleased]` once `main` is merged in (see "Stale-base check" in
+      [`docs/release-process.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/release-process.md#the-changelog-discipline)).
 - [ ] `tests/check-*.sh` pass locally (`.github/scripts/ci/run-tests.sh`),
       and a new/updated suite exists if behaviour changed.
 - [ ] `shellcheck bin/wb bootstrap.sh lib/**/*.sh tests/*.sh .github/scripts/**/*.sh` is clean.
