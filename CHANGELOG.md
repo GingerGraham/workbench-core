@@ -16,6 +16,14 @@ All notable changes to `workbench-core` are documented here.
   `--bundle workstation`, keeps core-only as the second option, and says
   how to add a bundle to an existing install. (D113)
 
+### Fixed
+
+- **`wb update core`, `wb track` and `wb revert` name the right rc file when
+  core's code changes.** Run from a terminal without the `wb` shell function
+  (a developer checkout, `command wb`), the convergence step that follows ran
+  as a child process and named `~/.bashrc` even for zsh. It now names the
+  shell you ran the command from. Plain `wb update` was not affected. (D114)
+
 ## [2.26.0] - 2026-11-13
 
 ### Added

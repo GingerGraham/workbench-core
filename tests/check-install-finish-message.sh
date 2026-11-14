@@ -115,7 +115,21 @@ SHELL=/bin/bash run_message "ps 'sudo', SHELL=bash names ~/.bashrc" "source ~/.b
 FAKE_PS_COMM="fish"
 SHELL="" run_message "ps 'fish', SHELL empty defaults to ~/.bashrc" "source ~/.bashrc" "-"
 
-# ── 9. The old fixed message is gone ───────────────────────────────────────
+# ── 9–11. A parent wb process hands its answer down (D114) ─────────────────
+# In a child 'wb apply' $PPID is the parent wb process, so ps would name
+# bash for a zsh user. _WB_CALLING_SHELL_RC carries the parent's answer.
+FAKE_PS_COMM="bash"
+# shellcheck disable=SC2088  # a literal '~': the rc name is display text
+_WB_CALLING_SHELL_RC="~/.zshrc" run_message "handed-down ~/.zshrc beats ps 'bash'" "source ~/.zshrc" "-"
+
+FAKE_PS_COMM="zsh"
+# shellcheck disable=SC2088  # a literal '~': the rc name is display text
+_WB_CALLING_SHELL_RC="~/.bashrc" run_message "handed-down ~/.bashrc beats ps 'zsh'" "source ~/.bashrc" "-"
+
+FAKE_PS_COMM="zsh"
+_WB_CALLING_SHELL_RC="/etc/passwd" run_message "an unrecognised handed-down value is ignored" "source ~/.zshrc" "/etc/passwd"
+
+# ── 12. The old fixed message is gone ───────────────────────────────────────
 old_count="$(grep -c 'Start a new shell' "${WB}")"
 if [[ "${old_count}" -eq 0 ]]; then
     ok "bin/wb no longer contains the old 'Start a new shell' text"
