@@ -33,6 +33,14 @@ mkdir -p "${HOME}"
 CALLS="${WORK}/stub-calls"
 export CALLS
 
+# A stub 'ps' first on PATH, so the shell that "ran" wb is known: the real
+# one depends on whatever started this suite.
+STUB_BIN="${WORK}/stub-bin"
+mkdir -p "${STUB_BIN}"
+printf '#!/bin/sh\necho zsh\n' > "${STUB_BIN}/ps"
+chmod +x "${STUB_BIN}/ps"
+export PATH="${STUB_BIN}:${PATH}"
+
 set --
 # shellcheck source=bin/wb
 source "${WB}" >"${WORK}/source.log" 2>&1
@@ -53,6 +61,7 @@ stub_wb() {
         cat > bin/wb <<'EOF'
 #!/usr/bin/env bash
 echo "$*" >> "${CALLS}"
+echo "${_WB_CALLING_SHELL_RC:-unset} $*" >> "${CALLS}.env"
 case "${1:-}" in
     __sync-continue) exit 0 ;;
 esac
@@ -165,6 +174,15 @@ _wb_cmd_update core >"${WORK}/4.log" 2>&1
     || { fail "convergence call: '$(cat "${CALLS}")'"; cat "${WORK}/4.log"; }
 [[ "${#APPLY_CALLS[@]}" -eq 0 ]] \
     && ok "...and not this process's own apply" || fail "in-process apply ran: ${APPLY_CALLS[*]}"
+
+# ── 4b. The child's $PPID is this process, so the shell is named here (D114).
+# shellcheck disable=SC2088  # a literal '~': the rc name is display text
+[[ "$(tail -n 1 "${CALLS}.env")" == "~/.zshrc apply" ]] \
+    && ok "the child 'wb apply' is told which shell ran the command, as a prefix assignment" \
+    || fail "child environment: '$(tail -n 1 "${CALLS}.env")'"
+[[ -z "${_WB_CALLING_SHELL_RC+x}" ]] \
+    && ok "...and the variable doesn't leak into this shell" \
+    || fail "_WB_CALLING_SHELL_RC leaked: '${_WB_CALLING_SHELL_RC}'"
 
 # ── 5. A new release without '__sync-continue': old behaviour. ─────────────
 : > "${CALLS}"; APPLY_CALLS=()

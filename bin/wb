@@ -490,7 +490,19 @@ EOF
 # and the same for 'bash bootstrap.sh' and './bin/wb install'. Falls back
 # to $SHELL when ps is missing or the parent isn't a shell (sudo, a CI
 # runner), and to bash after that. Display text, not a path to use.
+#
+# A wb process that runs 'wb apply' as a child (_wb_maybe_reconverge_core)
+# hands its own answer down as _WB_CALLING_SHELL_RC, because in the child
+# $PPID is that wb process, not the user's shell (D114). A value other than
+# the two rc names this function prints is ignored.
 _wb_calling_shell_rc() {
+    # shellcheck disable=SC2088
+    case "${_WB_CALLING_SHELL_RC:-}" in
+        "~/.zshrc"|"~/.bashrc")
+            printf '%s\n' "${_WB_CALLING_SHELL_RC}"
+            return 0
+            ;;
+    esac
     local parent=""
     if command -v ps >/dev/null 2>&1; then
         parent="$(ps -o comm= -p "${PPID}" 2>/dev/null)"
@@ -688,7 +700,11 @@ _wb_maybe_reconverge_core() {
     if [[ -n "${next}" && "${unattended}" == "true" ]]; then
         "${next}" apply --skip-ansible || apply_rc=$?
     elif [[ -n "${next}" ]]; then
-        "${next}" apply || apply_rc=$?
+        # The child's $PPID is this process, so name the shell here, where
+        # $PPID is still the user's (D114). A prefix assignment: it reaches
+        # the child only. The marker from the wb() wrapper needs no such
+        # hand-off, since the environment already carries it.
+        _WB_CALLING_SHELL_RC="$(_wb_calling_shell_rc)" "${next}" apply || apply_rc=$?
     elif [[ "${unattended}" == "true" ]]; then
         _wb_cmd_apply --skip-ansible || apply_rc=$?
     else
