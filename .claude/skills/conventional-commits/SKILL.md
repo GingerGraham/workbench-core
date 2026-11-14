@@ -85,6 +85,12 @@ unparseable (docs/decisions-log.md D47).
 - [ ] `CHANGELOG.md`'s `[Unreleased]` section has an entry for anything
       user-facing — `release.yml` refuses to cut a release with an empty
       one.
+- [ ] `git fetch origin main && git log --oneline HEAD..origin/main --
+      CHANGELOG.md` shows no `chore(release)` commit you haven't merged
+      in. If it does, merge `origin/main` and re-read the top of
+      `CHANGELOG.md`: a clean merge can leave your entry inside the
+      version that was just released (D115, "Stale-base check" in
+      `docs/release-process.md`).
 
 Full rationale and the release pipeline's mechanics:
 `docs/release-process.md`. Decision history: `docs/decisions-log.md` (D27,

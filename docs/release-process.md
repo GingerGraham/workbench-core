@@ -207,6 +207,40 @@ bump but `[Unreleased]` is still empty, the release fails loudly, before
 touching anything — that emptiness is the signal that someone forgot to
 write the changelog entry, not something the pipeline can paper over.
 
+### Stale-base check (docs/decisions-log.md D115)
+
+Writing the entry isn't enough. The release PR (`chore(release): vX.Y.Z`)
+renames `[Unreleased]` to the new version heading and inserts a fresh
+empty one, so a branch cut before that PR merged has a CHANGELOG hunk
+written against a file that no longer has that shape. Git merges such a
+hunk without a conflict and can place it under the version that was just
+released. `[Unreleased]` is then empty, the entry claims a change that
+release doesn't contain, and the next release fails the gate above. This
+happened with #194 (a `fix:` branched before v2.26.1, merged after).
+
+Run this before opening the PR, and again before any later push:
+
+```sh
+git fetch origin main
+git log --oneline HEAD..origin/main -- CHANGELOG.md
+```
+
+A `chore(release)` line in that output means a release landed after you
+branched. Merge `origin/main` into your branch (rebase only if the branch
+is yours alone), then check the result, not the diff:
+
+```sh
+sed -n '/^## \[Unreleased\]/,/^## \[[0-9]/p' CHANGELOG.md
+```
+
+Your entry must sit between the `## [Unreleased]` heading and the first
+version heading. If `git log` printed nothing, the same `sed` command is
+still a cheap last look.
+
+After the PR merges, open the `Release` run for the merge commit on
+`main`. If it failed on the CHANGELOG gate, fix it as described under "If
+a release fails" below; don't leave it for the next merge to find.
+
 ## If a release fails
 
 - **`ci` job red**: this is a real problem with the code on `main`, not the
