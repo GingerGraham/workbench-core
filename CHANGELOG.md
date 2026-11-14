@@ -4,6 +4,18 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **`wb install` only asks you to load workbench when you have to.** Run
+  from a shell that already has workbench loaded, it ends with `done.`,
+  and the shell reloads as before. After a first install through
+  bootstrap, it names the rc file of the shell you ran it from
+  (`source ~/.zshrc` for zsh), not always `~/.bashrc`. Without a terminal
+  it prints only `done.` (D113)
+- **The README quick start installs a bundle.** It leads with
+  `--bundle workstation`, keeps core-only as the second option, and says
+  how to add a bundle to an existing install. (D113)
+
 ## [2.26.0] - 2026-11-13
 
 ### Added

@@ -483,6 +483,47 @@ EOF
     log_info "wb install: wrote default local-overrides file to ${settings}"
 }
 
+# _wb_calling_shell_rc
+# Prints the rc file of the shell that ran this process, for the finish
+# message (docs/decisions-log.md D113). Under 'curl … | bash' the parent is
+# the user's interactive shell (bootstrap execs bin/wb, keeping its PID),
+# and the same for 'bash bootstrap.sh' and './bin/wb install'. Falls back
+# to $SHELL when ps is missing or the parent isn't a shell (sudo, a CI
+# runner), and to bash after that. Display text, not a path to use.
+_wb_calling_shell_rc() {
+    local parent=""
+    if command -v ps >/dev/null 2>&1; then
+        parent="$(ps -o comm= -p "${PPID}" 2>/dev/null)"
+        parent="${parent##*/}"
+        parent="${parent#-}"
+    fi
+    case "${parent}" in
+        zsh|bash) ;;
+        *) parent="${SHELL##*/}" ;;
+    esac
+    # shellcheck disable=SC2088
+    case "${parent}" in
+        zsh) printf '%s\n' "~/.zshrc" ;;
+        *)   printf '%s\n' "~/.bashrc" ;;
+    esac
+}
+
+# _wb_install_finish_message
+# The last line of a successful 'wb install'/'wb apply' (D113). Through
+# the loader's wb() wrapper, the wrapper re-sources the loader straight
+# after and says so, so there's nothing for the user to do. With no
+# terminal (cloud-init, CI, the scheduled sync's core convergence) there's
+# no interactive shell to load into. Otherwise (bootstrap, a developer
+# checkout, 'command wb apply') this process can't change the shell that
+# ran it (D39), so say how to load workbench there.
+_wb_install_finish_message() {
+    if [[ "${_WB_WRAPPER_RELOADS:-}" == "true" ]] || ! _wb_have_tty; then
+        log_info "wb install: done."
+        return 0
+    fi
+    log_info "wb install: done. Open a new terminal, or load workbench into this one with: source $(_wb_calling_shell_rc)"
+}
+
 _wb_cmd_install() {
     local bundle="" use_files="false" keep_files="false" follow="false" yes="false"
     local -a failed_members=()
@@ -591,7 +632,7 @@ _wb_cmd_install() {
     _wb_require sync/scheduler.sh
     workbench_scheduler_install
 
-    log_info "wb install: done. Start a new shell (or 'source ~/.bashrc') to load workbench-core."
+    _wb_install_finish_message
 
     if [[ "${#failed_members[@]}" -gt 0 ]]; then
         log_error "wb install: these bundle modules were not registered: ${failed_members[*]} — run 'wb add <name>' for each to see why"

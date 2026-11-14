@@ -765,9 +765,6 @@ wb() {
         fi
     fi
 
-    local _wb_wrapper_rc=0
-    command wb "$@" || _wb_wrapper_rc=$?
-
     local _wb_should_reload=true
     case "${1:-}" in
         # __complete is the hidden dispatcher the generated bash/zsh
@@ -808,6 +805,18 @@ wb() {
             esac
             ;;
     esac
+
+    # The real binary can't see that this function will reload the shell
+    # after it returns. Tell it, so 'wb install'/'wb apply' don't ask the
+    # user to do what the next few lines do anyway (docs/decisions-log.md
+    # D113). A prefix assignment: it reaches only this call and its
+    # children, never this shell.
+    local _wb_wrapper_rc=0
+    if [[ "${_wb_should_reload}" == "true" ]]; then
+        _WB_WRAPPER_RELOADS=true command wb "$@" || _wb_wrapper_rc=$?
+    else
+        command wb "$@" || _wb_wrapper_rc=$?
+    fi
 
     if [[ "${_wb_should_reload}" == "true" ]]; then
         # shellcheck disable=SC1090

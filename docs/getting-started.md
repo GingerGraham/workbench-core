@@ -45,17 +45,20 @@ completely alone), `d` shows each file of yours against workbench's, and
 scheduled sync — the answer is always keep; workbench never replaces a
 file unasked.
 
+Core on its own, with no modules:
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh | bash
 ```
 
-This is the production path — no `git` involved anywhere. `bootstrap.sh`
+Either form is the production path — no `git` involved anywhere. `bootstrap.sh`
 is deliberately tiny (it's the one thing that has to work before any of the
 real engine code exists locally to run):
 
 1. If core is already bootstrapped, skips straight to re-running
    convergence — safe to run more than once.
-2. Checks for `curl` and `tar` (the only prerequisites it needs itself).
+2. Checks for `curl`, `tar`, `awk`, `sed`, `tr` and `grep` (the only
+   prerequisites it needs itself).
 3. Resolves the latest `vX.Y.Z` release tag via GitHub's API (falling back
    to `main` with a warning if no release has been tagged yet).
 4. Fetches that release as a tarball and extracts it straight into its
@@ -72,12 +75,18 @@ real engine code exists locally to run):
      any of those already had real content. The `~/.zshenv` line loads
      workbench only for non-interactive zsh (`zsh -c`, ssh commands,
      scripts); interactive zsh loads it from `~/.zshrc`.
+   - With `--bundle`, registers every module in the bundle, asking about
+     config you already have first (see above).
    - Sets up SSH deploy keys for any private module you've already
      registered (none, on a fresh install).
 
-Start a new shell (or `source ~/.bashrc`) and you're done. Nothing else is
-required — `workbench-core` works standalone, with zero other modules
-registered.
+When it finishes, open a new terminal, or run the `source` line it prints
+(`~/.bashrc` or `~/.zshrc`, whichever shell you ran it from) to load
+workbench into the current one. This is a one-time step: from then on,
+`wb` commands that change what's installed reload the shell they ran in
+(`docs/decisions-log.md` D39). Nothing else is required — `workbench-core`
+works standalone, with zero other modules registered. Already have core?
+`wb install --bundle <name>` adds a bundle later.
 
 More cautious about piping straight into `bash`? Download it first and take
 a look:
