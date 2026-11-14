@@ -103,7 +103,7 @@ No `git` required. Bootstrap resolves the latest release tag, fetches it
 as a tarball straight into its permanent snapshot location, and hands off
 to `wb install`. `wb install` checks for its prerequisites and offers to
 install them, symlinks `wb` onto `PATH`, adds a loader stub to your shell
-rc file, and registers the bundle's modules.
+rc file and, with `--bundle`, registers that bundle's modules.
 
 If a module would touch config you already have (a `~/.gitconfig`, a
 `tmux.conf`), you're asked first, and pressing Enter keeps yours. On a
