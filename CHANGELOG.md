@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.26.2] - 2026-11-14
+
 ### Fixed
 
 - **`wb update core`, `wb track` and `wb revert` name the right rc file when
