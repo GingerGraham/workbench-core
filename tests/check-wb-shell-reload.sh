@@ -32,13 +32,15 @@ mkdir -p "${HOME}"
 # The stub records every invocation (proving `command wb` reaches it, and
 # reaches it exactly once per call — no wrapper recursion) and its exit
 # code is driven by $1 so the wrapper's own exit-status passthrough is
-# checkable.
+# checkable. A second log records whether the wrapper passed the D113
+# reload marker (_WB_WRAPPER_RELOADS) to that call.
 CORE_DIR="${XDG_DATA_HOME}/workbench/modules/core"
 mkdir -p "${CORE_DIR}/snapshots/fixture-0000000/bin"
 INVOKE_LOG="${WORK}/wb-stub-invocations.log"
 cat > "${CORE_DIR}/snapshots/fixture-0000000/bin/wb" <<EOF
 #!/usr/bin/env bash
 echo "\$*" >> "${INVOKE_LOG}"
+echo "\${_WB_WRAPPER_RELOADS:-unset} \$*" >> "${WORK}/wb-stub-env.log"
 case "\${1:-}" in
     update) exit 3 ;;
     reload)
@@ -183,6 +185,46 @@ if [[ "${DIRECT_RC}" -ne 0 ]] && echo "${DIRECT_OUT}" | grep -qi "shell function
 else
     fail "'bin/wb reload' did not explain itself as expected"
     echo "${DIRECT_OUT}"
+fi
+
+# ── 6. The wrapper tells the real binary whether it will reload (D113) ─────
+# 'wb install'/'wb apply' use this to print a plain "done." instead of asking
+# the user to load a shell the wrapper reloads straight after.
+ENV_LOG="${WORK}/wb-stub-env.log"
+last_env_line() { tail -n 1 "${ENV_LOG}"; }
+
+wb apply >/dev/null 2>&1
+if [[ "$(last_env_line)" == "true apply" ]]; then
+    ok "'wb apply' through the wrapper passes _WB_WRAPPER_RELOADS=true"
+else
+    fail "'wb apply' did not pass the reload marker: '$(last_env_line)'"
+fi
+
+if [[ -z "${_WB_WRAPPER_RELOADS+x}" ]]; then
+    ok "_WB_WRAPPER_RELOADS does not leak into the calling shell"
+else
+    fail "_WB_WRAPPER_RELOADS leaked into the calling shell: '${_WB_WRAPPER_RELOADS}'"
+fi
+
+wb status >/dev/null 2>&1
+if [[ "$(last_env_line)" == "unset status" ]]; then
+    ok "'wb status' (no reload) passes no reload marker"
+else
+    fail "'wb status' passed a reload marker: '$(last_env_line)'"
+fi
+
+wb uninstall >/dev/null 2>&1
+if [[ "$(last_env_line)" == "unset uninstall" ]]; then
+    ok "'wb uninstall' (no reload) passes no reload marker"
+else
+    fail "'wb uninstall' passed a reload marker: '$(last_env_line)'"
+fi
+
+wb module info x >/dev/null 2>&1
+if [[ "$(last_env_line)" == "unset module info x" ]]; then
+    ok "'wb module info x' (no reload) passes no reload marker"
+else
+    fail "'wb module info x' passed a reload marker: '$(last_env_line)'"
 fi
 
 echo

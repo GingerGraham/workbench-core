@@ -80,21 +80,44 @@ module works with only core installed.
 
 ## Quick start
 
+Most new machines want a bundle: core plus a planned set of modules.
+`workstation` is git, gpg, ssh and shell:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh | bash -s -- --bundle workstation
+```
+
+Swap `workstation` for any bundle in the [table above](#modules-and-bundles).
+`bash -s --` passes what follows it to the script instead of to `bash`.
+
+Core on its own, adding modules later with `wb add <name>...`:
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh | bash
 ```
 
-No `git` required. This resolves the latest release tag, fetches it as
-a tarball straight into its real, permanent snapshot location, and
-hands off to `wb install` — which
-checks and offers to install its own prerequisites, symlinks `wb` onto
-`PATH`, and adds a loader stub to your shell rc file.
+Already have core installed? `wb install --bundle workstation` adds a
+bundle at any time.
 
-Start a new shell and you're done. See
-[`docs/getting-started.md`](docs/getting-started.md) for the full
+No `git` required. Bootstrap resolves the latest release tag, fetches it
+as a tarball straight into its permanent snapshot location, and hands off
+to `wb install`. `wb install` checks for its prerequisites and offers to
+install them, symlinks `wb` onto `PATH`, adds a loader stub to your shell
+rc file and, with `--bundle`, registers that bundle's modules.
+
+If a module would touch config you already have (a `~/.gitconfig`, a
+`tmux.conf`), you're asked first, and pressing Enter keeps yours. On a
+fresh machine nothing is asked. See
+[Install](docs/getting-started.md#install) for the choices, including the
+scripted `--use-files --yes` form.
+
+When it finishes, open a new terminal, or run the `source` line it prints
+to load workbench into the current one. After that, `wb` commands that
+change what's installed reload the shell they ran in.
+
+See [`docs/getting-started.md`](docs/getting-started.md) for the full
 walkthrough, including the developer setup path (a real `git clone`, for
-working on `workbench-core` itself) and how to keep your own module
-set.
+working on `workbench-core` itself) and how to keep your own module set.
 
 ## Everyday use
 
