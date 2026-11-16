@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         For a new `workbench-*` module (git, gpg, ssh, shell, or a new
-        tracked tool) — see `docs/module-authoring.md` for the manifest
+        tracked tool) — see `docs/guide/module-authoring.md` for the manifest
         contract this needs to satisfy.
   - type: input
     id: name

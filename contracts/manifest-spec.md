@@ -180,7 +180,7 @@ info:
 ```
 
 Free-text, author-supplied metadata surfaced by `wb module info <name>`
-(see `docs/module-authoring.md`). Unlike `register:`, `info:` has no
+(see `docs/guide/module-authoring.md`). Unlike `register:`, `info:` has no
 functional effect on sync, deploy, or the loader — it's display-only, so
 it's read regardless of whether `core_api` is declared. `description` is
 optional; a module that omits it still gets a full `wb module info`
@@ -230,7 +230,7 @@ Loaded early — before every module's own tier content, and before
 sets is visible to a module's own `${VAR:-default}`-style tier code, and
 a user's own `settings.sh` always wins if both set the same variable. See
 `lib/loader.sh`'s "Module-shipped overrides" section and
-`docs/module-authoring.md`'s "Shipping overridable defaults" section for
+`docs/guide/module-authoring.md`'s "Shipping overridable defaults" section for
 the full load-order picture and the `WORKBENCH_OVERRIDE_<SCOPE>` naming
 convention this field exists to support.
 
@@ -284,7 +284,7 @@ register:
 Files scanned for `install-<name>`-shaped functions, folded into the
 generalised tool-updating registry `wb tools` walks (docs/decisions-log.md
 D23). Same `src` validation as `register.shell[]`. See
-`docs/module-authoring.md#declaring-installers-wb-tools` for the naming
+`docs/guide/module-authoring.md#declaring-installers-wb-tools` for the naming
 convention (a hard requirement, not a suggestion) and the collision rule
 when two modules declare the same friendly name.
 
@@ -500,7 +500,7 @@ machine-side state) — an ungated hook declaration is a no-op, not an error.
   `run_on: changed` hook can wait for the next interactive `wb update`
   after an unattended adoption — a deliberate trade-off, not a bug.
 
-See `docs/module-authoring.md` for the full hook environment (env vars
+See `docs/guide/module-authoring.md` for the full hook environment (env vars
 exposed to a running hook) and a reference hook skeleton.
 
 ## The compatibility boundary

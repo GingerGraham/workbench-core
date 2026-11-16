@@ -165,4 +165,4 @@ snapshot under `snapshots/`, fetched fresh every cycle the same way any
 module has two copies of the same files on disk at once: their own editing
 clone, and workbench's fetched snapshot. This is expected, low-impact
 (small text files, not large binaries), and not a bug or drift — see
-`docs/module-authoring.md`'s note on this.
+`docs/guide/module-authoring.md`'s note on this.

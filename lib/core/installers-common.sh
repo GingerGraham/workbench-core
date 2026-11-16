@@ -2,7 +2,7 @@
 # lib/core/installers-common.sh — shared install-helper primitives, promoted
 # to Core API surface (docs/decisions-log.md D34) rather than left to be
 # duplicated per module. Every ecosystem module's `install-*` functions
-# (declared via `register.installers[]`, docs/module-authoring.md) can rely
+# (declared via `register.installers[]`, docs/guide/module-authoring.md) can rely
 # on these being sourced already — this file is registered in core's own
 # `.dotfiles-sync.yml` at `tier: core`, the same tier `functions.sh`/
 # `version.sh` already use, so it loads before any module's own `lazy`-tier

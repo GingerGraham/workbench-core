@@ -65,8 +65,10 @@ cd workbench-core
 
 `wb install` detects the `.git` checkout and registers core with
 `TRACK_MODE=branch:<your current branch>` — the same dev-tracking path
-`wb dev`/`wb track --branch` gives every other module. Full detail:
-[`docs/getting-started.md`](docs/getting-started.md#developer-setup).
+`wb dev`/`wb track --branch` gives every other module. Your clone is
+where you edit; workbench fetches its own copy of the branch you're on,
+so the files appear twice on disk. That's expected, not a bug
+(`docs/architecture.md` §9.6).
 
 ## Making a change
 
@@ -139,6 +141,40 @@ Covered above under "Before you start" — repeated here because it's
 the single most common way a PR fails after otherwise looking fine.
 `tests/check-bash32-compat.sh` catches some violations mechanically but
 isn't exhaustive.
+
+## Documentation
+
+`docs/guide/` is the user guide. It's written for people using
+workbench, and it's also published on
+[shelltools.pro](https://shelltools.pro/products/shell-scripting/workbench/).
+Everything else under `docs/`, and `contracts/`, is for people working
+on workbench or writing modules.
+
+When you change the guide:
+
+- Write for someone using workbench, not someone working on it. Say what
+  a command does for them, not how it's built.
+- No decision numbers (`D…`), no internal function or file names, and no
+  links to `docs/architecture.md`, `docs/decisions-log.md`,
+  `docs/release-process.md`, `contracts/`, `tests/` or source files. The
+  pointers to the module authoring guide and this file in
+  `docs/guide/README.md` are the only exceptions.
+- Link between guide pages with relative links. Link to anything outside
+  `docs/guide/` with an absolute
+  `https://github.com/GingerGraham/workbench-core/...` URL, so links
+  still work where the guide is published.
+- Plain, literal language, short sentences and short paragraphs. Address
+  the reader as "you".
+- A change that adds or changes a `wb` command or a user-facing flag
+  updates `docs/guide/commands.md` in the same PR.
+
+`docs/guide/module-authoring.md` is for people writing modules, so it
+can name Core API functions and variables, manifest fields, and the
+scripts and workflows module authors use, and it links to `contracts/`
+(by absolute URL) as the full reference. The other rules still apply.
+
+Why something was built the way it was belongs in `docs/architecture.md`
+and `docs/decisions-log.md`. The guide says what happens, not why.
 
 ## Opening a PR
 

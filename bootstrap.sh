@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bootstrap.sh — production entry point for workbench-core. See
-# README.md "Quick start" / docs/getting-started.md "Install".
+# README.md "Quick start" / docs/guide/getting-started.md "Install".
 #
 # Self-contained by necessity (bootstrap-fix brief §3.2/§4): this is what
 # fetches workbench-core onto a machine that has nothing installed yet, so

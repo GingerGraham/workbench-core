@@ -161,7 +161,7 @@ for shell in bash zsh; do
         fi
         # Every name a getter shows as unavailable says why (D101).
         if grep -q "module gave no reason" "${out_file}"; then
-            fail "tools absent: ${shell}: getter ${fn} lists names with no reason — give each predicate a --needs text (docs/module-authoring.md, 'Declaring function availability')"
+            fail "tools absent: ${shell}: getter ${fn} lists names with no reason — give each predicate a --needs text (docs/guide/module-authoring.md, 'Declaring function availability')"
             sed -n '/module gave no reason/,/^$/p' "${out_file}" | sed 's/^/        /'
         fi
     done

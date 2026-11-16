@@ -105,7 +105,7 @@ fi
 
 # A newly-generated key's public content and "add this deploy key"
 # instructions must actually be printed (flagged in review: the docstring
-# promised this and docs/getting-started.md relies on it, but nothing
+# promised this and docs/guide/getting-started.md relies on it, but nothing
 # actually printed the key).
 if grep -q "ACTION REQUIRED" /tmp/wb-ssh-3.log && grep -q "ssh-ed25519" /tmp/wb-ssh-3.log; then
     ok "bootstrap prints the newly-generated public key with 'ACTION REQUIRED' instructions"

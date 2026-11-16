@@ -154,7 +154,7 @@ is introspected as plain text (`_extract_function_names`,
 One line per discovered `install-*` function. `<friendly-name>` is
 `<function-name>` with the `install-` prefix stripped. `wb tools`
 aggregates this file across every loadable module — see
-`docs/module-authoring.md` for the naming convention and the collision
+`docs/guide/module-authoring.md` for the naming convention and the collision
 rule (first-by-module-name-order wins, warned once) when two modules
 declare the same friendly name.
 

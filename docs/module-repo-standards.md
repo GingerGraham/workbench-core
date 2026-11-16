@@ -97,11 +97,14 @@ It exists to be installed by `workbench-core`'s `wb add <module>`.
   manifest schema. Log a new decision there (never rewrite an existing
   one) rather than letting an implementation drift from what's
   documented.
-- [`workbench-core`'s `docs/module-authoring.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/module-authoring.md) —
+- [`workbench-core`'s module authoring guide](https://github.com/GingerGraham/workbench-core/blob/main/docs/guide/module-authoring.md) —
   the manifest contract: what `register:`, `deploy:`, and `hooks:` in
   this repo's manifest can and can't do, and what `workbench-core`'s
   reusable `module-ci.yml` "add to core" check (called from this repo's
   own `.github/workflows/ci.yml`) actually verifies.
+- [`workbench-core`'s `docs/module-repo-standards.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/module-repo-standards.md) —
+  the canonical content of this repo's agent-instruction, governance,
+  CI and release files. Change them there first, then propagate here.
 - [`README.md`](README.md) — what this module actually installs/gives
   you.
 - [`.claude/skills/conventional-commits/SKILL.md`](.claude/skills/conventional-commits/SKILL.md) —
@@ -167,11 +170,14 @@ It exists to be installed by `workbench-core`'s `wb add <module>`.
   manifest schema. Log a new decision there (never rewrite an existing
   one) rather than letting an implementation drift from what's
   documented.
-- [`workbench-core`'s `docs/module-authoring.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/module-authoring.md) —
+- [`workbench-core`'s module authoring guide](https://github.com/GingerGraham/workbench-core/blob/main/docs/guide/module-authoring.md) —
   the manifest contract: what `register:`, `deploy:`, and `hooks:` in
   this repo's manifest can and can't do, and what `workbench-core`'s
   reusable `module-ci.yml` "add to core" check (called from this repo's
   own `.github/workflows/ci.yml`) actually verifies.
+- [`workbench-core`'s `docs/module-repo-standards.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/module-repo-standards.md) —
+  the canonical content of this repo's agent-instruction, governance,
+  CI and release files. Change them there first, then propagate here.
 - [`README.md`](../README.md) — what this module actually
   installs/gives you.
 - [`.claude/skills/conventional-commits/SKILL.md`](../.claude/skills/conventional-commits/SKILL.md) —
@@ -385,7 +391,7 @@ body:
       value: |
         Thanks for taking the time to report this. If this looks like an
         install/sync issue rather than something specific to this module,
-        workbench-core's [troubleshooting guide](https://github.com/GingerGraham/workbench-core/blob/main/docs/troubleshooting.md)
+        workbench-core's [troubleshooting guide](https://github.com/GingerGraham/workbench-core/blob/main/docs/guide/troubleshooting.md)
         is worth a quick check first.
   - type: input
     id: module-version
@@ -520,7 +526,7 @@ body:
 blank_issues_enabled: false
 contact_links:
   - name: Troubleshooting guide
-    url: https://github.com/GingerGraham/workbench-core/blob/main/docs/troubleshooting.md
+    url: https://github.com/GingerGraham/workbench-core/blob/main/docs/guide/troubleshooting.md
     about: Check here before opening an issue — covers prereq, loader, sync, and SSH problems common to every module.
   - name: Architecture & decisions log
     url: https://github.com/GingerGraham/workbench-core/blob/main/docs/decisions-log.md

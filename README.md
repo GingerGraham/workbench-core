@@ -9,7 +9,7 @@ of Unix-like operating systems including Linux and macOS. Workbench was conceive
 to address the twin, but related, challenges of managing "dotfiles" and custom shell functions and aliases across
 multiple systems. Both of these challenges are common pain points for users who work across multiple systems or
 frequently distro-hop. Workbench is composed of a core engine (this repo) which delivers the fundamental functionality,
-and a set of optional modules that extend its capabilities. Workbench provides a set of opionated modules covering a
+and a set of optional modules that extend its capabilities. Workbench provides a set of opinionated modules covering a
 range of common developer and system administrator tasks; however users are free to create and integrate their own
 custom modules with whatever functionality they require.
 
@@ -115,16 +115,16 @@ rc file and, with `--bundle`, registers that bundle's modules.
 If a module would touch config you already have (a `~/.gitconfig`, a
 `tmux.conf`), you're asked first, and pressing Enter keeps yours. On a
 fresh machine nothing is asked. See
-[Install](docs/getting-started.md#install) for the choices, including the
+[Install](docs/guide/getting-started.md#install) for the choices, including the
 scripted `--use-files --yes` form.
 
 When it finishes, open a new terminal, or run the `source` line it prints
 to load workbench into the current one. After that, `wb` commands that
 change what's installed reload the shell they ran in.
 
-See [`docs/getting-started.md`](docs/getting-started.md) for the full
-walkthrough, including the developer setup path (a real `git clone`, for
-working on `workbench-core` itself) and how to keep your own module set.
+See [Getting started](docs/guide/getting-started.md) for the full
+walkthrough, including how to keep your own set of modules. Working on
+`workbench-core` itself? See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Everyday use
 
@@ -143,7 +143,8 @@ Every command has detailed help via `wb help <command>` or
 `wb <command> --help` — including explicit disambiguation for the
 commands people mix up most (`update` vs `apply`, `track` vs `dev`,
 `sync enable|disable` vs `track`). Run bare `wb` or `wb help` for the
-full grouped command summary.
+full grouped command summary. The [command reference](docs/guide/commands.md)
+lists every command with examples.
 
 ## Requirements
 
@@ -151,7 +152,7 @@ Linux, macOS, or WSL2. Bash 3.2+ or zsh. No Windows/PowerShell support
 (by design). `wb install` checks for, and offers to install via your
 distro's package manager, its required prerequisites (`awk`, `sed`,
 `tr`, `grep`, `column`, `git`, `curl`, `ssh-keyscan`, `ssh-keygen`) —
-see [`docs/troubleshooting.md`](docs/troubleshooting.md) if one can't be
+see [Troubleshooting](docs/guide/troubleshooting.md) if one can't be
 installed automatically.
 
 ## Repository layout
@@ -163,7 +164,8 @@ installed automatically.
 - `bootstrap.sh` — the production entry point for a machine that has
   nothing installed yet.
 - `contracts/` — the standing interfaces module authors build against.
-- `docs/` — user- and module-author-facing how-to documentation.
+- `docs/guide/` — the user guide: installing and using workbench.
+- `docs/` — design, decisions, module authoring and release documentation.
 - `tests/` — plain-bash checks, no framework: numbered checks, a
   `FAIL:`/`OK:` summary line.
 
@@ -172,21 +174,33 @@ and the rationale behind it.
 
 ## Documentation map
 
+Using workbench:
+
 | Document | For |
 |---|---|
-| [`docs/getting-started.md`](docs/getting-started.md) | Installing, adding modules, everyday commands, personal overrides. |
-| [`docs/module-authoring.md`](docs/module-authoring.md) | Writing a `workbench.yml` manifest for a new module or tracked tool. |
-| [`docs/troubleshooting.md`](docs/troubleshooting.md) | Diagnosing prereq, loader, sync, and SSH issues. |
-| [`docs/release-process.md`](docs/release-process.md) | How merges to `main` become version bumps, tags, and GitHub Releases — Conventional Commit scoping, the `core` scope, and the CHANGELOG discipline. |
+| [Getting started](docs/guide/getting-started.md) | Installing, adding modules, and your own settings. |
+| [Command reference](docs/guide/commands.md) | Every `wb` command, with examples. |
+| [Your config files](docs/guide/config-files.md) | How modules treat config you already have, and how to change your mind. |
+| [Updating, pausing and removing modules](docs/guide/managing-modules.md) | Background updates, pinning and reverting versions, removing modules, uninstalling. |
+| [Existing shell setups](docs/guide/existing-setups.md) | What workbench leaves alone on a machine with its own shell profile. |
+| [Troubleshooting](docs/guide/troubleshooting.md) | When something isn't working. |
+| [Module authoring guide](docs/guide/module-authoring.md) | Writing your own module: the manifest, shell content, installers, and testing. |
+| [`SECURITY.md`](SECURITY.md) | How to report a vulnerability, and the trust boundaries this project actually has. |
+| [`CHANGELOG.md`](CHANGELOG.md) | What's shipped, in order. |
+
+Working on workbench, or writing a module:
+
+| Document | For |
+|---|---|
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to propose a change — dev setup, commit/CHANGELOG discipline, the PR checklist, and the documentation rules. |
+| [`docs/module-repo-standards.md`](docs/module-repo-standards.md) | The agent-instruction, governance, CI and release files every `workbench-*` module repo carries. |
 | [`contracts/manifest-spec.md`](contracts/manifest-spec.md) | The authoritative manifest (`workbench.yml`, or legacy `.dotfiles-sync.yml`) field reference. |
 | [`contracts/core-api.md`](contracts/core-api.md) | The shell functions/variables every module can rely on, and the loader-tier order. |
 | [`contracts/tracking-spec.md`](contracts/tracking-spec.md) | How a module's tracked ref is resolved, fetched, and re-checked. |
 | [`contracts/state-schema.md`](contracts/state-schema.md) | The on-disk file/directory shapes `wb` reads and writes. |
 | [`docs/architecture.md`](docs/architecture.md) | The full design rationale, repo topology, and rollout plan — read this before proposing anything that touches repo structure, the manifest schema, or the sync engine. |
 | [`docs/decisions-log.md`](docs/decisions-log.md) | The full, numbered decisions log referenced from `docs/architecture.md` §12. |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to propose a change — dev setup, commit/CHANGELOG discipline, the PR checklist. |
-| [`SECURITY.md`](SECURITY.md) | How to report a vulnerability, and the trust boundaries this project actually has. |
-| [`CHANGELOG.md`](CHANGELOG.md) | What's shipped, in order. |
+| [`docs/release-process.md`](docs/release-process.md) | How merges to `main` become version bumps, tags, and GitHub Releases — Conventional Commit scoping, the `core` scope, and the CHANGELOG discipline. |
 
 ## Design principles
 

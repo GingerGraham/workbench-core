@@ -36,8 +36,9 @@
       engine, [`docs/decisions-log.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/decisions-log.md) has been
       checked for an existing decision, and a new entry added if this
       settles something new.
-- [ ] Docs (`docs/`, `contracts/`, `README.md`) updated if behaviour or
-      a contract changed.
+- [ ] Docs (`docs/guide/`, `docs/`, `contracts/`, `README.md`) updated if
+      behaviour or a contract changed, and `docs/guide/commands.md` if a
+      command or flag changed.
 
 ## How was this tested?
 

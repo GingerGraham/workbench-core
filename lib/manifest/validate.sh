@@ -569,7 +569,7 @@ done
 _hook_declared=$(yq eval '.hooks.post_deploy != null' "${MANIFEST}")
 
 if [[ "${_hook_declared}" == "true" ]]; then
-    warn "manifest declares a post_deploy hook — remember allow_hooks: true is required per machine, in host_vars (docs/module-authoring.md#hooks)."
+    warn "manifest declares a post_deploy hook — remember allow_hooks: true is required per machine, in host_vars (docs/guide/module-authoring.md#hooks)."
 
     _command_type=$(yq eval '.hooks.post_deploy.command | type' "${MANIFEST}")
     if [[ "${_command_type}" == "!!str" ]]; then
