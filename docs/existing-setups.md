@@ -2,7 +2,7 @@
 
 Many hosts already have a complete shell profile before workbench arrives:
 a distribution's own files, a colleague's dotfiles, or years of your own
-`.bashrc`. This page says what workbench leaves alone on such a host, what it
+`.bashrc`. This page covers what workbench leaves alone on such a host, what it
 does on purpose, and how to check.
 
 The rule behind it is [D110](decisions-log.md): **workbench changes only state
@@ -26,9 +26,11 @@ On a host with its own profile, loading workbench:
   workbench's own code does. Its sourced code uses `builtin cd` and
   `command ls`;
 - stays quiet about your rc file once you say it is meant to stay as it is
-  (see "Opting out").
+  (see "[Opting out](#opting-out)").
 
-The workbench-shell and workbench-devtools modules follow the same rule:
+The [workbench-shell](https://github.com/GingerGraham/workbench-shell) and
+[workbench-devtools](https://github.com/GingerGraham/workbench-devtools) modules
+follow the same rule:
 
 - an alias or function you already have is not replaced (workbench's `lsa`
   yields to yours);
@@ -115,7 +117,7 @@ time makes the diff say which module changed what.
 - **A config file you want to keep.** At the install prompt about an existing
   file, keep yours (D84). Later: `wb files policy <module> <file> skip`.
 - **A tool config block you do not want.** `wb add <module> --skip-layer
-  <layer>` never adds it. `wb files policy <module> <layer> skip` removes it.
+<layer>` never adds it. `wb files policy <module> <layer> skip` removes it.
   The block layers are described in [getting-started.md](getting-started.md).
 - **The rc-file migration warning.** If your rc file is meant to stay as it
   is, the warning prints a `touch '<backup>.acknowledged'` line under each
@@ -138,7 +140,7 @@ What workbench touches there:
   was);
 - files that modules deploy or layer into your config: the tmux and vim
   blocks and copied configs from workbench-shell, and the like. `wb files
-  status` lists every one.
+status` lists every one.
 
 What it leaves alone: `EDITOR`, `SUDO_EDITOR`, `BAT_THEME`, `MANPAGER`,
 `LANG`, the `ls`, `lsa` and `cd` aliases, the prompt hooks (`starship_precmd`,

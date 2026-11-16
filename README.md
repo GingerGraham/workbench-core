@@ -1,10 +1,25 @@
-# workbench-core
+# Workbench Core
 
-`workbench-core` is the engine behind `workbench` — a modular,
-multi-repo replacement for a single monolithic `dotfiles` checkout. It
-provides a shell configuration loader, a small platform-detection/
-utility API, and a generalised module registration & distribution
-engine, all driven by one CLI: `wb`.
+`workbench-core` is the core library of the Workbench ecosystem.
+
+## What is Workbench?
+
+Workbench is a modular platform designed to streamline the setup and ongoing administration
+of Unix-like operating systems including Linux and macOS. Workbench was conceived by [Graham Watts](https://github.com/GingerGraham)
+to address the twin, but related, challenges of managing "dotfiles" and custom shell functions and aliases across
+multiple systems. Both of these challenges are common pain points for users who work across multiple systems or
+frequently distro-hop. Workbench is composed of a core engine (this repo) which delivers the fundamental functionality,
+and a set of optional modules that extend its capabilities. Workbench provides a set of opionated modules covering a
+range of common developer and system administrator tasks; however users are free to create and integrate their own
+custom modules with whatever functionality they require.
+
+See [ShellTools](https://shelltools.pro/products/shell-scripting/workbench/) for more information on Workbench and
+the range of available modules.
+
+A [template module](https://github.com/GingerGraham/workbench-template) is available to help developers create their
+own custom modules for Workbench.
+
+## What does `workbench-core` provide?
 
 Core is **"module zero"**: it syncs and converges itself through the
 exact same engine any other `workbench-*` module or independent tracked
@@ -14,8 +29,6 @@ shorthand for a sequence of `wb add` calls, not a branch inside the
 engine itself. A separate TUI repo, `workbench`, is planned as a front
 end for `wb` — it isn't this repo, and won't own a second copy of
 anything `wb` already knows.
-
-## What it ships
 
 - **A multi-root shell configuration loader** — bash + zsh, bash 3.2
   compatible (macOS's default). Sources every registered, sync-enabled
@@ -45,12 +58,6 @@ anything `wb` already knows.
   `completion`/`help`. See
   [Everyday use](#everyday-use) below, or run `wb help` for the live,
   grouped reference.
-
-## Status
-
-Released and in daily use. Core and eleven modules are published; each
-module is its own repo with its own releases. See
-[`CHANGELOG.md`](CHANGELOG.md) for core's history.
 
 ## Modules and bundles
 

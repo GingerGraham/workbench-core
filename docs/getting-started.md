@@ -286,7 +286,8 @@ Modules ship opinionated defaults — a tmux.conf, a vimrc, a whole nvim config.
 - If you already have one, it's left alone. That includes the other places a tool looks — an existing `~/.vim/vimrc` stops workbench creating `~/.vimrc`.
 - If you edit one workbench created, it's yours from then on.
 - If you delete one, workbench won't put it back.
-- If something changes a file workbench links into place (`:Lazy update` rewriting `lazy-lock.json`, say), the next update holds that file where it is and asks you, rather than discarding the change.
+- If something changes a file workbench links into place (`:Lazy update` rewriting `lazy-lock.json` in neovim, say),
+  the next update holds that file where it is and asks you, rather than discarding the change.
 
 When something needs your decision, a new shell says so in one line. `wb files status` shows every file, what's waiting, and what the next update will do; `wb files resolve` asks you:
 
