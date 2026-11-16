@@ -79,7 +79,7 @@ _workbench_detect_platform() {
     export WORKBENCH_SHELL
 
     # New, not a rename: raw `uname -m` output. No universal name-normalizer
-    # is provided — see docs/module-authoring.md for the two common
+    # is provided — see docs/guide/module-authoring.md for the two common
     # normalization snippets a module can use for its own tool's convention.
     WORKBENCH_ARCH="$(uname -m)"
     export WORKBENCH_ARCH
@@ -452,7 +452,7 @@ _wb_function_available() {
 # the file-backed log, not the in-shell variable — see the comment above
 # _wb_availability_timeout_log for why that's the one guaranteed to have
 # survived every call site. A predicate that has to be killed is a bug in
-# whichever module declared it (docs/module-authoring.md, "Declaring
+# whichever module declared it (docs/guide/module-authoring.md, "Declaring
 # function availability": predicates must be cheap discovery checks,
 # never a live hardware/agent/network probe) — surfaced loudly, not
 # blended into the listing.
@@ -461,7 +461,7 @@ _wb_print_timeout_warning() {
     local _names
     _names="$(sort -u "${_wb_availability_timeout_log}" 2>/dev/null | tr '\n' ' ')"
     _names="${_names% }"
-    log_warn "wb functions: predicate(s) for [${_names}] exceeded ${WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS}s and were killed — see docs/module-authoring.md 'Declaring function availability'"
+    log_warn "wb functions: predicate(s) for [${_names}] exceeded ${WORKBENCH_AVAILABILITY_TIMEOUT_SECONDS}s and were killed — see docs/guide/module-authoring.md 'Declaring function availability'"
 }
 
 # _wb_filter_available_names
@@ -543,7 +543,7 @@ _wb_availability_needs() {
 # near-identical predicate bodies. eval is required to build a function
 # whose name is only known at runtime (bash 3.2 has no declare -n) — same
 # technique workbench-gpg's own _array_get already uses for array
-# indirection. See docs/module-authoring.md "Declaring function
+# indirection. See docs/guide/module-authoring.md "Declaring function
 # availability" for the full contract, including when to use
 # _wb_alias_availability or a hand-written predicate instead.
 #
@@ -567,7 +567,7 @@ _wb_declare_availability() {
 # tools together) that the module already has, or is worth extracting
 # once as a quiet twin of an existing loud "_xxx_require_yyy" preflight
 # helper (see the workbench-git and workbench-security examples in
-# docs/module-authoring.md).
+# docs/guide/module-authoring.md).
 #
 # The leading flags are optional. --needs records what the check requires,
 # for listings (_wb_availability_needs); --install adds the `wb tools` name

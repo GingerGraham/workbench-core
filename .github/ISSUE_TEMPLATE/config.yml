@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Troubleshooting guide
-    url: https://github.com/GingerGraham/workbench-core/blob/main/docs/troubleshooting.md
+    url: https://github.com/GingerGraham/workbench-core/blob/main/docs/guide/troubleshooting.md
     about: Check here before opening an issue — covers prereq, loader, sync, and SSH problems.
   - name: Architecture & decisions log
     url: https://github.com/GingerGraham/workbench-core/blob/main/docs/decisions-log.md

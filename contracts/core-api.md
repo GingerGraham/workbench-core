@@ -27,7 +27,7 @@ tier is sourced later):
 | `WORKBENCH_WSL` | `true` \| `false` | |
 | `WORKBENCH_DISTRO` | `rhel` \| `debian` \| `suse` \| `arch` \| `unknown` | Linux only; `unknown` on macOS. |
 | `WORKBENCH_SHELL` | `bash` \| `zsh` \| `sh` | |
-| `WORKBENCH_ARCH` | raw `uname -m` (e.g. `x86_64`, `arm64`, `aarch64`) | **New in workbench-core** — did not exist in the donor codebase at all. No universal name-normalizer is provided; see `docs/module-authoring.md` for the two common per-tool normalization snippets. |
+| `WORKBENCH_ARCH` | raw `uname -m` (e.g. `x86_64`, `arm64`, `aarch64`) | **New in workbench-core** — did not exist in the donor codebase at all. No universal name-normalizer is provided; see `docs/guide/module-authoring.md` for the two common per-tool normalization snippets. |
 
 ## Elevation & shell utility functions
 
@@ -72,7 +72,7 @@ once core's own `core`-tier registration is sourced:
   exit 1 hides it from every listing surface; a `<name>` with no predicate
   declared is always shown. `wb functions --all` /
   `WORKBENCH_FUNCTIONS_SHOW_ALL=true` bypasses gating regardless of any
-  predicate. See `docs/module-authoring.md`, "Declaring function
+  predicate. See `docs/guide/module-authoring.md`, "Declaring function
   availability", for the full contract.
 - `_wb_availability_needs [--install <tool>] <needs-text> <name> [<name> ...]`
   — records, for each `<name>`, what it needs (shown in listings under
@@ -108,7 +108,7 @@ once core's own `core`-tier registration is sourced:
   predicate whose real check is expensive (a live agent/hardware/network
   probe) but conceptually shared across several exposed names. `<cache-
   key>` is the author's own choice, never derived from `<command>` — see
-  `docs/module-authoring.md`, "Declaring function availability", for a
+  `docs/guide/module-authoring.md`, "Declaring function availability", for a
   worked example. **New in `CORE_API_VERSION` 1.3.**
 - `_wb_layers_settle <module>` — puts that module's workbench blocks back
   in position after a module function wrote to one of their target files

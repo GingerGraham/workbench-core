@@ -455,7 +455,7 @@ _wb_scaffold_local_overrides() {
 # Any OTHER *.sh file dropped into this same directory (workbench/local/)
 # is sourced once, together, filename-sorted, right after this file's
 # final pass — put your own functions/aliases there instead of piling them
-# up in this file. See docs/getting-started.md.
+# up in this file. See https://github.com/GingerGraham/workbench-core/blob/main/docs/guide/getting-started.md
 
 # Plain, unopinionated shell: disables the colourised prompt fallback and
 # forces WORKBENCH_SHOW_FUNCTIONS off, regardless of its own setting below.
@@ -1225,7 +1225,7 @@ _wb_cmd_functions_impl() {
     fi
 
     # ── Source eager_files once so any "_<name>-available" predicates they
-    # declare (docs/module-authoring.md "Declaring function availability")
+    # declare (docs/guide/module-authoring.md "Declaring function availability")
     # are callable by _wb_filter_available_names below. A module's own
     # getter runs inside the interactive shell, where the loader has
     # already sourced everything, so it needs nothing extra — this step
@@ -1364,7 +1364,7 @@ _wb_cmd_tools_list() {
     if [[ "${show_status}" == "false" ]]; then
         echo "  Pass --status to also show whether each tool is already installed"
         echo "  (requires the owning module to implement installed-<name> — see"
-        echo "  docs/module-authoring.md)."
+        echo "  docs/guide/module-authoring.md)."
     fi
     while IFS='|' read -r name abs_path func friendly; do
         [[ -z "${friendly}" ]] && continue
@@ -1388,7 +1388,7 @@ _wb_cmd_tools_list() {
 # _wb_tools_invoke <verb> <module> <abs-path> <function> <friendly-name>
 # Sources <abs-path> only if <function> isn't already defined in this
 # shell, then calls it exactly once. Idempotency/version-checking is
-# entirely the function's own responsibility (docs/module-authoring.md) —
+# entirely the function's own responsibility (docs/guide/module-authoring.md) —
 # core calls it and reports what it does, nothing more; there is no
 # aggregate "all up to date" summary, since core has no way to know that.
 # <verb> is "update" or "install" — cosmetic only, so log output echoes
@@ -1436,7 +1436,7 @@ _wb_tools_invoke() {
 # (identical lazy-source-on-demand as _wb_tools_invoke), calls it, and
 # prints exactly one of: installed | not-installed | unresponsive.
 #
-# Contract (docs/module-authoring.md "Reporting install status"): a
+# Contract (docs/guide/module-authoring.md "Reporting install status"): a
 # module MAY declare installed-<name> alongside install-<name>. Exit 0
 # means installed, exit 1 means not installed; anything else — a
 # different exit code, a crash, or simply not declaring the predicate at
@@ -3671,7 +3671,7 @@ automatically).
                       scripted "give me everything" install.
 
 Through bootstrap, the same flags go after 'bash -s --' (see
-docs/getting-started.md).
+docs/guide/getting-started.md).
 
 Confused with 'wb apply'? Same convergence — 'wb install' is the first-run
 entry point (and accepts --bundle); 'wb apply' is a literal alias for
@@ -3999,7 +3999,7 @@ of the main list and shown in a separate "available once tooling is
 installed" block underneath, grouped by what it needs — with the
 `wb tools install <tool>` command when an installer for that tool is
 registered. Those functions are still defined and callable; this only
-changes what is listed as usable. See docs/module-authoring.md "Declaring
+changes what is listed as usable. See docs/guide/module-authoring.md "Declaring
 function availability". --all (or WORKBENCH_FUNCTIONS_SHOW_ALL=true, which
 also works in front of any module's own get-<domain>-functions getter)
 lists every function in the main list regardless of availability, with no
@@ -4041,7 +4041,7 @@ friendly name (install-<name> with the prefix stripped) — it does not
 know or guess how any tool is installed, checked, or updated unless the
 module tells it via an optional installed-<name> predicate (see below);
 that's entirely the module author's responsibility
-(docs/module-authoring.md).
+(docs/guide/module-authoring.md).
 
   list [--status]     Print every discovered installer, grouped by owning
                         module. With --status, also runs each tool's

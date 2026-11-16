@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report this. `docs/troubleshooting.md`
+        Thanks for taking the time to report this. `docs/guide/troubleshooting.md`
         covers the common prereq/loader/sync/SSH issues — worth a quick
         check before filing.
   - type: input
@@ -75,5 +75,5 @@ body:
     attributes:
       label: Checklist
       options:
-        - label: I checked docs/troubleshooting.md first
+        - label: I checked docs/guide/troubleshooting.md first
           required: true

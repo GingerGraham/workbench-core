@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/check-function-availability-gating.sh — regression guard for the
-# "_<name>-available" predicate convention (docs/module-authoring.md
+# "_<name>-available" predicate convention (docs/guide/module-authoring.md
 # "Declaring function availability") and for how listings present the
 # names it gates (docs/decisions-log.md D86).
 #

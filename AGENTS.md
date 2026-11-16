@@ -26,8 +26,12 @@ stay short and point here rather than duplicating it",
 - [`docs/release-process.md`](docs/release-process.md) — the exact
   Conventional Commit grammar and scoping rules this repo's CI
   enforces.
-- [`docs/module-authoring.md`](docs/module-authoring.md) — the manifest
-  contract, for anything touching `register:`, `deploy:`, or `hooks:`.
+- [`docs/guide/module-authoring.md`](docs/guide/module-authoring.md) — the
+  manifest contract, for anything touching `register:`, `deploy:`, or
+  `hooks:`.
+- [`docs/module-repo-standards.md`](docs/module-repo-standards.md) — the
+  canonical agent-instruction, governance, CI and release files for
+  module repos. Change them there first, then propagate.
 
 ## Non-negotiables
 
@@ -85,3 +89,8 @@ than silently reinterpreting one of these away:
   known-safe idiom inline with `# shellcheck disable=` at the site,
   matching the existing annotation convention, rather than relaxing
   severity.
+- `docs/guide/` is the user guide, also published outside GitHub. Follow
+  `CONTRIBUTING.md` "Documentation": no decision numbers, internals or
+  links to design docs in it, and links out of it are absolute URLs. A
+  change to a `wb` command or user-facing flag updates
+  `docs/guide/commands.md` in the same change.

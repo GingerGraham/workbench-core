@@ -4,6 +4,15 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **A user guide, separate from the design docs.** Installing and using
+  workbench is now covered in `docs/guide/`, with a new command
+  reference (`docs/guide/commands.md`) listing every `wb` command with
+  examples. Getting started is shorter, and config files and managing
+  modules have their own pages. The module authoring guide moved to
+  `docs/guide/module-authoring.md`. (D116)
+
 ## [2.26.2] - 2026-11-14
 
 ### Fixed
