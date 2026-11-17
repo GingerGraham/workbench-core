@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.26.3] - 2026-11-16
+
 ### Changed
 
 - **A user guide, separate from the design docs.** Installing and using
