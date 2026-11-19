@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.27.0] - 2026-11-19
+
 ### Changed
 
 - **The installer asks before installing missing tools.** Both the
