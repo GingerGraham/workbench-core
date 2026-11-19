@@ -133,6 +133,164 @@ _cmp() {
     echo 0
 }
 
+# ── Missing prerequisites (docs/decisions-log.md D117) ─────────────────────
+# Detect, report, ask, install — the same flow as lib/core/prereqs.sh's
+# workbench_ensure_shell_prereqs, for the six binaries this file needs
+# itself. Duplicated because none of lib/ is on disk yet. _pkg_for's rows
+# must match lib/core/prereqs.sh's _wb_prereq_package for these six
+# (tests/check-prereqs.sh compares them).
+_pkg_for() {
+    case "$1:$2" in
+        apt:awk) echo "mawk" ;;
+        *:awk)   echo "gawk" ;;
+        *:tr)    echo "coreutils" ;;
+        *)       echo "$2" ;;
+    esac
+}
+
+_pm_detect() {
+    local pm
+    for pm in apt dnf yum zypper pacman brew; do
+        if command -v "${pm}" >/dev/null 2>&1; then echo "${pm}"; return 0; fi
+    done
+    return 1
+}
+
+# Display only, like _wb_prereq_elevation: nothing for brew or root.
+_elevation() {
+    [[ "$1" == "brew" ]] && return 0
+    [[ "$(id -u)" -eq 0 ]] && return 0
+    if command -v sudo >/dev/null 2>&1; then echo "sudo"; return 0; fi
+    if command -v run0 >/dev/null 2>&1; then echo "run0"; return 0; fi
+    return 1
+}
+
+# _describe / _install — the command shown, and the same command run.
+# Keep the two in step.
+_describe() {
+    local pm="$1" elev="$2"
+    shift 2
+    local p=""
+    [[ -n "${elev}" ]] && p="${elev} "
+    case "${pm}" in
+        apt)    echo "${p}apt-get update -qq && ${p}apt-get install -y $*" ;;
+        dnf)    echo "${p}dnf install -y $*" ;;
+        yum)    echo "${p}yum install -y $*" ;;
+        zypper) echo "${p}zypper install -y $*" ;;
+        pacman) echo "${p}pacman -Sy --noconfirm $*" ;;
+        brew)   echo "brew install $*" ;;
+    esac
+}
+
+_install() {
+    local pm="$1" elev="$2"
+    shift 2
+    local -a e=()
+    [[ -n "${elev}" ]] && e=("${elev}")
+    # "${e[@]}" on an empty array is "unbound" under set -u before bash
+    # 4.4, hence the two branches.
+    if [[ "${#e[@]}" -eq 0 ]]; then
+        case "${pm}" in
+            apt)    apt-get update -qq && apt-get install -y "$@" ;;
+            dnf)    dnf install -y "$@" ;;
+            yum)    yum install -y "$@" ;;
+            zypper) zypper install -y "$@" ;;
+            pacman) pacman -Sy --noconfirm "$@" ;;
+            brew)   brew install "$@" ;;
+        esac
+    else
+        case "${pm}" in
+            apt)    "${elev}" apt-get update -qq && "${elev}" apt-get install -y "$@" ;;
+            dnf)    "${elev}" dnf install -y "$@" ;;
+            yum)    "${elev}" yum install -y "$@" ;;
+            zypper) "${elev}" zypper install -y "$@" ;;
+            pacman) "${elev}" pacman -Sy --noconfirm "$@" ;;
+        esac
+    fi
+}
+
+# True when /dev/tty opens: works under `curl … | bash`, where stdin is
+# the script itself. Same test as lib/core/functions.sh's _wb_have_tty.
+_have_tty() {
+    { : </dev/tty; } 2>/dev/null
+}
+
+_ask() {
+    local answer=""
+    printf 'Install them now? [y/N]: ' >/dev/tty
+    if ! IFS= read -r answer </dev/tty; then
+        echo >/dev/tty
+        return 1
+    fi
+    case "${answer}" in
+        y|Y|yes|YES) return 0 ;;
+    esac
+    return 1
+}
+
+# _ensure_prereqs <yes:true|false> <binary>... — exits on anything but
+# "all present".
+_ensure_prereqs() {
+    local yes="$1"
+    shift
+    local -a missing=() pkgs=()
+    local bin pkg pm elev="" seen=" "
+    for bin in "$@"; do
+        command -v "${bin}" >/dev/null 2>&1 || missing+=("${bin}")
+    done
+    [[ "${#missing[@]}" -eq 0 ]] && return 0
+
+    if ! pm="$(_pm_detect)"; then
+        log "ERROR: required tools are missing: ${missing[*]} — no supported package manager found. Install them, then re-run. Nothing was changed."
+        exit 1
+    fi
+    {
+        echo
+        echo "These tools are required to install workbench and are missing:"
+        for bin in "${missing[@]}"; do
+            pkg="$(_pkg_for "${pm}" "${bin}")"
+            printf '  %-12s from package %s\n' "${bin}" "${pkg}"
+            case "${seen}" in
+                *" ${pkg} "*) ;;
+                *) pkgs+=("${pkg}"); seen="${seen}${pkg} " ;;
+            esac
+        done
+        echo
+    } >&2
+    if ! elev="$(_elevation "${pm}")"; then
+        log "ERROR: installing packages needs root, sudo or run0, and none is available. As root, run: $(_describe "${pm}" "" "${pkgs[@]}") — then re-run. Nothing was changed."
+        exit 1
+    fi
+    echo "bootstrap can install them with:" >&2
+    echo "  $(_describe "${pm}" "${elev}" "${pkgs[@]}")" >&2
+    echo >&2
+
+    if [[ "${yes}" != "true" ]]; then
+        if ! _have_tty; then
+            log "ERROR: no terminal to ask before installing them — run the command above yourself, or re-run with --yes ('bash -s -- --yes') to let bootstrap run it. Nothing was changed."
+            exit 1
+        fi
+        if ! _ask; then
+            log "not installing them — install them yourself, then re-run the same command. Nothing was changed."
+            exit 1
+        fi
+    fi
+
+    log "installing ${pkgs[*]} via ${pm}"
+    if ! _install "${pm}" "${elev}" "${pkgs[@]}"; then
+        log "ERROR: ${pm} could not install ${pkgs[*]} — install ${missing[*]} yourself, then re-run."
+        exit 1
+    fi
+    hash -r
+    for bin in "${missing[@]}"; do
+        if ! command -v "${bin}" >/dev/null 2>&1; then
+            log "ERROR: '${bin}' is still missing after installing ${pkgs[*]} — install it yourself, then re-run."
+            exit 1
+        fi
+    done
+    log "installed ${pkgs[*]} (for ${missing[*]})"
+}
+
 # Everything below runs only once the whole file has been received. Under
 # `curl | bash`, a connection dropped mid-transfer leaves bash with a file  # pattern-scan:ignore -- prose describing the install pattern in a comment, not executed code
 # that ends before this call, so nothing executes (security review L2).
@@ -162,10 +320,17 @@ main() {
     # ssh-keygen) is `bin/wb install`'s job (lib/core/prereqs.sh) — that code
     # doesn't exist locally yet at this point, and none of it is a hard
     # dependency of this file itself the way awk/sed/tr/grep are.
-    for _wb_bin in curl tar awk sed tr grep; do
-        command -v "${_wb_bin}" >/dev/null 2>&1 || { log "ERROR: '${_wb_bin}' is required but not found"; exit 1; }
+    # Missing ones are listed with their packages and installed only on a
+    # yes: the question at /dev/tty, or --yes among the arguments (which
+    # also reach `wb install`, where --yes means the same) (D117).
+    _wb_yes="false"
+    for _wb_arg in "$@"; do
+        case "${_wb_arg}" in
+            --yes|-y) _wb_yes="true" ;;
+        esac
     done
-    unset _wb_bin
+    _ensure_prereqs "${_wb_yes}" curl tar awk sed tr grep
+    unset _wb_yes _wb_arg
 
     # ── 3. Resolve a ref ──────────────────────────────────────────────────────
     # Latest vX.Y.Z tag via GitHub's unauthenticated API, same tag-format

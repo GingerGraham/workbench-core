@@ -185,6 +185,116 @@ else
     ok "sudo-test and get-elevation-command do not crash when \$USER is unset under set -u"
 fi
 
+# 8. Package names (D117): explicit rows for the binaries whose package
+#    name differs from the binary, or that apt/pacman can't resolve alone.
+_pkg_rows=(
+    "apt:awk=mawk" "dnf:awk=gawk" "pacman:awk=gawk" "zypper:awk=gawk"
+    "apt:tr=coreutils" "dnf:tr=coreutils" "brew:tr=coreutils"
+    "apt:column=bsdextrautils" "dnf:column=util-linux" "pacman:column=util-linux"
+    "dnf:git=git-core" "yum:git=git-core" "apt:git=git" "pacman:git=git"
+    "apt:ssh-keyscan=openssh-client" "apt:ssh-keygen=openssh-client"
+    "dnf:ssh-keyscan=openssh-clients" "zypper:ssh-keygen=openssh-clients"
+    "pacman:ssh-keyscan=openssh" "brew:ssh-keygen=openssh"
+    "dnf:curl=curl" "apt:sed=sed" "dnf:grep=grep"
+)
+_pkg_bad=""
+for row in "${_pkg_rows[@]}"; do
+    pm="${row%%:*}"; rest="${row#*:}"; bin="${rest%%=*}"; want="${rest#*=}"
+    got="$(_wb_prereq_package "${pm}" "${bin}")"
+    [[ "${got}" == "${want}" ]] || _pkg_bad="${_pkg_bad} ${pm}:${bin}=${got}(want ${want})"
+done
+if [[ -z "${_pkg_bad}" ]]; then
+    ok "_wb_prereq_package names the expected package for every checked row"
+else
+    fail "_wb_prereq_package rows wrong:${_pkg_bad}"
+fi
+
+# 9. bootstrap.sh's copy of the rows (_pkg_for) agrees with
+#    _wb_prereq_package for the six binaries bootstrap checks itself.
+_pkg_for_src="$(awk '/^_pkg_for\(\) \{/,/^\}/' "${REPO_ROOT}/bootstrap.sh")"
+if [[ -z "${_pkg_for_src}" ]]; then
+    fail "bootstrap.sh has no _pkg_for function"
+else
+    eval "${_pkg_for_src}"
+    _pkg_bad=""
+    for pm in apt dnf yum zypper pacman brew; do
+        for bin in curl tar awk sed tr grep; do
+            a="$(_pkg_for "${pm}" "${bin}")"
+            b="$(_wb_prereq_package "${pm}" "${bin}")"
+            [[ "${a}" == "${b}" ]] || _pkg_bad="${_pkg_bad} ${pm}:${bin}(bootstrap=${a} core=${b})"
+        done
+    done
+    if [[ -z "${_pkg_bad}" ]]; then
+        ok "bootstrap.sh's _pkg_for matches _wb_prereq_package for curl/tar/awk/sed/tr/grep"
+    else
+        fail "bootstrap.sh's _pkg_for and _wb_prereq_package disagree:${_pkg_bad}"
+    fi
+fi
+
+# 10-14. workbench_ensure_shell_prereqs: detect, report, ask, install,
+#    check again. Each case runs in a subshell with the package manager,
+#    the terminal and the question stubbed; RAN records whether the
+#    package manager was called and with what.
+# _ensure_case <yes> <tty:true|false> <answer:y|n> <installs:true|false>
+_ensure_case() {
+    (
+        set +e
+        _c_yes="$1" _c_tty="$2" _c_answer="$3" _c_installs="$4"
+        RAN="${TMP_XDG}/ran"
+        _installed="${TMP_XDG}/installed"
+        rm -f "${RAN}" "${_installed}"
+        workbench_missing_shell_prereqs() { [[ -e "${_installed}" ]] || echo "column"; }
+        detect-package-manager() { PACKAGE_MANAGER="dnf"; }
+        _wb_prereq_elevation() { echo "sudo"; }
+        _wb_have_tty() { [[ "${_c_tty}" == "true" ]]; }
+        _wb_prereq_ask() { [[ "${_c_answer}" == "y" ]]; }
+        _wb_prereq_run() {
+            echo "$*" > "${RAN}"
+            if [[ "${_c_installs}" == "true" ]]; then : > "${_installed}"; fi
+            return 0
+        }
+        workbench_ensure_shell_prereqs "test" "${_c_yes}" >"${TMP_XDG}/ensure.log" 2>&1
+        rc=$?
+        if [[ -e "${RAN}" ]]; then echo "rc=${rc} ran=$(cat "${RAN}")"; else echo "rc=${rc} ran=no"; fi
+    )
+}
+
+r="$(_ensure_case false false n true)"
+if [[ "${r}" == "rc=1 ran=no" ]] && grep -q "re-run with --yes" "${TMP_XDG}/ensure.log" \
+    && grep -q "sudo dnf install -y util-linux" "${TMP_XDG}/ensure.log"; then
+    ok "no terminal, no --yes: reports the command, installs nothing, returns 1"
+else
+    fail "no terminal, no --yes: got '${r}'"; cat "${TMP_XDG}/ensure.log"
+fi
+
+r="$(_ensure_case false true n true)"
+if [[ "${r}" == "rc=2 ran=no" ]]; then
+    ok "answered no: installs nothing, returns 2"
+else
+    fail "answered no: got '${r}'"; cat "${TMP_XDG}/ensure.log"
+fi
+
+r="$(_ensure_case false true y true)"
+if [[ "${r}" == "rc=0 ran=dnf util-linux" ]] && grep -q "installed util-linux (for column)" "${TMP_XDG}/ensure.log"; then
+    ok "answered yes: installs util-linux via dnf, reports it, returns 0"
+else
+    fail "answered yes: got '${r}'"; cat "${TMP_XDG}/ensure.log"
+fi
+
+r="$(_ensure_case true false n true)"
+if [[ "${r}" == "rc=0 ran=dnf util-linux" ]]; then
+    ok "--yes without a terminal: installs without asking, returns 0"
+else
+    fail "--yes without a terminal: got '${r}'"; cat "${TMP_XDG}/ensure.log"
+fi
+
+r="$(_ensure_case true false n false)"
+if [[ "${r}" == "rc=1 ran=dnf util-linux" ]] && grep -q "still missing after installing" "${TMP_XDG}/ensure.log"; then
+    ok "package installed but binary still missing: returns 1 and says so"
+else
+    fail "binary still missing after install: got '${r}'"; cat "${TMP_XDG}/ensure.log"
+fi
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."

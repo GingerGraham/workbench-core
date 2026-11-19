@@ -89,7 +89,10 @@ Sets up workbench on this machine. The installer runs it for you, so you normall
 wb install --bundle workstation                      # add a bundle
 wb install --bundle workstation --keep-files         # keep all your existing config, without asking
 wb install --bundle workstation --use-files --yes    # use workbench's config everywhere, without asking
+wb install --yes                                     # install any missing tools without asking
 ```
+
+If tools workbench needs are missing, `wb install` lists them with their packages and the install command, and asks before installing them. `--yes` answers yes to that question and to the `--use-files` confirmation.
 
 `--use-files` backs up your existing config before replacing it. Add `--follow` to keep those files following their module even after you edit them; your edits are backed up each time.
 

@@ -4,6 +4,27 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **The installer asks before installing missing tools.** Both the
+  bootstrap script and `wb install` now list each missing tool, the
+  package that provides it and the exact command they would run, then
+  ask `Install them now? [y/N]`. Answer no and the install stops with
+  nothing changed. Before, the bootstrap script stopped on a missing
+  `awk` while `wb install` installed a missing `git` without asking.
+  Unattended installs (cloud-init, CI) that relied on that silent install
+  now need `--yes`, which works in the bootstrap script too. On Fedora
+  and RHEL, a missing `git` now installs `git-core`, without the Perl
+  packages the full `git` package pulls in. (D117)
+
+### Fixed
+
+- **Package names for missing tools.** `tr` installs `coreutils`, `awk`
+  installs `mawk` on Debian/Ubuntu (apt won't pick one by itself), and
+  Arch and Homebrew get `openssh` for `ssh-keyscan`/`ssh-keygen`. As root
+  without `sudo` (a bare container), packages are now installed directly.
+  (D117)
+
 ## [2.26.3] - 2026-11-16
 
 ### Changed

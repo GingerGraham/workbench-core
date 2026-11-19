@@ -6,9 +6,21 @@ This page takes you from nothing installed to a shell with workbench loaded and 
 
 - Linux, macOS, or Windows with WSL2. Windows itself (PowerShell) isn't supported.
 - bash 3.2 or newer, or zsh.
-- `curl`, `tar`, `awk`, `sed`, `tr` and `grep`. Almost every system already has these.
+- `curl`, `tar`, `awk`, `sed`, `tr`, `grep`, `column`, `git`, `ssh-keyscan` and `ssh-keygen`. Most systems already have nearly all of these.
 
-The installer checks for the rest (`column`, `git`, `ssh-keyscan` and `ssh-keygen`) and offers to install anything missing with your system's package manager.
+You don't need to check first. If any are missing, the installer lists them with the packages that provide them and the exact command it would run, then asks:
+
+```text
+These tools are required to install workbench and are missing:
+  awk          from package gawk
+
+bootstrap can install them with:
+  sudo dnf install -y gawk
+
+Install them now? [y/N]:
+```
+
+Answer `y` and it installs them with your system's package manager, then carries on. Answer `n`, or press Enter, and it stops without changing anything; install them yourself and run the same command again. To install them without being asked, add `--yes` (after `bash -s --` when you install with `curl`). With no terminal (cloud-init, CI) and no `--yes`, the installer stops rather than install anything.
 
 ## Install
 
@@ -54,7 +66,7 @@ On a machine where you already have config that a module would touch, such as `~
 
 Keeping yours doesn't mean missing out. For git, ssh, tmux and vim, workbench adds one small marked block to your file, and anything you set yourself still wins. [Your config files](config-files.md) explains how that works and how to change your mind later.
 
-To answer in advance, add `--keep-files`, or `--use-files --yes`, after `--bundle <name>`. With no terminal (cloud-init, CI), the answer is always keep.
+To answer in advance, add `--keep-files`, or `--use-files --yes`, after `--bundle <name>`. With no terminal (cloud-init, CI), the answer is always keep. A scripted install that may need to install missing tools also needs `--yes`, for example `--bundle workstation --keep-files --yes`.
 
 ### Behind a shared IP address
 
