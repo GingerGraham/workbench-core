@@ -591,9 +591,11 @@ _wb_cmd_install() {
     log_info "wb install: workbench-core release: $(_workbench_release_version)"
     log_info "wb install: checking prerequisites..."
     workbench_check_shell_prereqs >/dev/null
-    if [[ "$(workbench_missing_shell_prereqs | wc -l | tr -d ' ')" -gt 0 ]]; then
-        workbench_install_shell_prereqs || log_warn "wb install: could not install all missing prerequisites automatically — install them manually and re-run"
-    fi
+    # Missing ones are listed with their packages and installed only on a
+    # yes (the question, or --yes); otherwise stop here, before anything
+    # is written (D117). Unattended convergence (the timer's 'wb apply')
+    # has no terminal and no --yes, so it stops and its caller warns.
+    workbench_ensure_shell_prereqs "wb install" "${yes}" || return 1
 
     _workbench_ensure_version_file
     _workbench_migrate_state_schema
@@ -3642,9 +3644,10 @@ EOF
 
 _wb_help_install() {
     cat <<'EOF'
-Usage: wb install [--bundle <name> [--keep-files | --use-files [--follow] [--yes]]]
+Usage: wb install [--yes] [--bundle <name> [--keep-files | --use-files [--follow]]]
 
-First-run convergence for this host: checks/installs shell prerequisites,
+First-run convergence for this host: checks shell prerequisites (and
+offers to install any that are missing),
 bootstraps the core module itself, symlinks 'wb' onto PATH, writes the
 shell rc loader stub, provisions SSH deploy keys for any private modules,
 and refreshes the OS-level scheduled-sync timer IF it's already enabled
@@ -3665,10 +3668,17 @@ automatically).
   --follow          With --use-files: every file of those modules keeps
                       following its module even after you edit it (your
                       edits are backed up each time).
-  --yes             Skip the --use-files confirmation. Without a terminal
-                      and without --yes, --use-files refuses before
-                      registering anything. '--use-files --yes' is the
-                      scripted "give me everything" install.
+  --yes             Answer yes without asking: install missing
+                      prerequisites with your package manager, and skip
+                      the --use-files confirmation. Without a terminal and
+                      without --yes, a missing prerequisite or --use-files
+                      stops the install before anything is written.
+                      '--use-files --yes' is the scripted "give me
+                      everything" install.
+
+Missing prerequisites are listed with the packages that provide them and
+the exact install command, then you're asked. Answer no and wb install
+stops; install them yourself and run it again.
 
 Through bootstrap, the same flags go after 'bash -s --' (see
 docs/guide/getting-started.md).

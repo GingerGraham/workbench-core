@@ -308,6 +308,89 @@ else
     cat "${WORK}/no-git-run.log"
 fi
 
+# ── Missing prerequisite: detect, report, ask, install (D117) ──────────────
+# A PATH with no awk and no real package manager or elevation command;
+# stub dnf records its arguments and "installs" awk by linking the real
+# one in, stub sudo just runs its arguments (used only when not root).
+NOAWK_BIN="${WORK}/noawk-bin"
+mkdir -p "${NOAWK_BIN}"
+_real_awk="$(command -v awk)"
+for f in "${CLEAN_BIN}"/*; do
+    b="$(basename "${f}")"
+    case "${b}" in
+        awk|gawk|mawk|nawk|original-awk|busybox) continue ;;
+        apt|apt-get|dnf|yum|zypper|pacman|brew|sudo|run0) continue ;;
+    esac
+    ln -s "${f}" "${NOAWK_BIN}/${b}" 2>/dev/null || true
+done
+cat > "${NOAWK_BIN}/dnf" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "${WORK}/dnf-calls.log"
+ln -sf "${_real_awk}" "${NOAWK_BIN}/awk"
+EOF
+cat > "${NOAWK_BIN}/sudo" <<'EOF'
+#!/usr/bin/env bash
+exec "$@"
+EOF
+chmod +x "${NOAWK_BIN}/dnf" "${NOAWK_BIN}/sudo"
+
+setsid_cmd=""
+command -v setsid >/dev/null 2>&1 && setsid_cmd="setsid -w"
+
+# No terminal, no --yes: report, install nothing, change nothing.
+H5="${WORK}/home5"; mkdir -p "${H5}"
+rm -f "${WORK}/dnf-calls.log" "${NOAWK_BIN}/awk"
+rc=0
+${setsid_cmd} env -i PATH="${NOAWK_BIN}" HOME="${H5}" XDG_DATA_HOME="${H5}/data" \
+    MOCK_TAGS_JSON="${WORK}/tags-mixed.json" MOCK_MAIN_JSON="${WORK}/commits-main.json" MOCK_TARBALL="${MOCK_TARBALL}" \
+    bash "${BOOTSTRAP}" </dev/null >"${WORK}/noawk-notty.log" 2>&1 || rc=$?
+if [[ -z "${setsid_cmd}" ]]; then
+    ok "missing awk without a terminal: skipped (no setsid on this platform)"
+elif [[ "${rc}" -ne 0 && ! -e "${WORK}/dnf-calls.log" && ! -e "${H5}/data" ]] \
+    && grep -q "awk  *from package gawk" "${WORK}/noawk-notty.log" \
+    && grep -q "dnf install -y gawk" "${WORK}/noawk-notty.log" \
+    && grep -q "re-run with --yes" "${WORK}/noawk-notty.log"; then
+    ok "missing awk without a terminal: lists it with its package and the command, installs nothing, writes nothing, exits non-zero"
+else
+    fail "missing awk without a terminal: rc=${rc}"
+    cat "${WORK}/noawk-notty.log"
+fi
+
+# --yes: installs via the package manager without asking, then carries on
+# and passes --yes through to wb install.
+H6="${WORK}/home6"; mkdir -p "${H6}"
+rm -f "${WORK}/dnf-calls.log" "${NOAWK_BIN}/awk"
+rc=0
+${setsid_cmd} env -i PATH="${NOAWK_BIN}" HOME="${H6}" XDG_DATA_HOME="${H6}/data" \
+    MOCK_TAGS_JSON="${WORK}/tags-mixed.json" MOCK_MAIN_JSON="${WORK}/commits-main.json" MOCK_TARBALL="${MOCK_TARBALL}" \
+    bash "${BOOTSTRAP}" --yes </dev/null >"${WORK}/noawk-yes.log" 2>&1 || rc=$?
+if [[ "${rc}" -eq 0 ]] && grep -qx "install -y gawk" "${WORK}/dnf-calls.log" 2>/dev/null \
+    && grep -q "installed gawk (for awk)" "${WORK}/noawk-yes.log" \
+    && grep -q "wb-stub: invoked with: install --yes" "${WORK}/noawk-yes.log"; then
+    ok "missing awk with --yes: installs gawk via dnf, finishes, passes --yes on to wb install"
+else
+    fail "missing awk with --yes: rc=${rc}"
+    cat "${WORK}/noawk-yes.log"
+fi
+
+# Answered no at a terminal (script(1) gives it one): installs nothing.
+H7="${WORK}/home7"; mkdir -p "${H7}"
+rm -f "${WORK}/dnf-calls.log" "${NOAWK_BIN}/awk"
+if command -v script >/dev/null 2>&1 && script -qec true /dev/null >/dev/null 2>&1; then
+    printf 'n\n' | script -qec "env -i PATH='${NOAWK_BIN}' HOME='${H7}' XDG_DATA_HOME='${H7}/data' MOCK_TAGS_JSON='${WORK}/tags-mixed.json' MOCK_MAIN_JSON='${WORK}/commits-main.json' MOCK_TARBALL='${MOCK_TARBALL}' bash '${BOOTSTRAP}'" /dev/null >"${WORK}/noawk-no.log" 2>&1 || true
+    if [[ ! -e "${WORK}/dnf-calls.log" && ! -e "${H7}/data" ]] \
+        && grep -q "Install them now? \[y/N\]" "${WORK}/noawk-no.log" \
+        && grep -q "not installing them" "${WORK}/noawk-no.log"; then
+        ok "missing awk, answered no: asks, installs nothing, writes nothing"
+    else
+        fail "missing awk, answered no"
+        cat "${WORK}/noawk-no.log"
+    fi
+else
+    ok "missing awk, answered no: skipped (no util-linux script(1) on this platform)"
+fi
+rm -f "${NOAWK_BIN}/awk"
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."

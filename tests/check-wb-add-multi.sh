@@ -177,7 +177,7 @@ ${setsid_cmd} bash -c '
     set --
     source "${wb_path}" >/dev/null 2>&1
     workbench_missing_shell_prereqs() { :; }
-    workbench_install_shell_prereqs() { echo "TEST: prerequisite install attempted" >&2; return 1; }
+    _wb_prereq_run() { echo "TEST: prerequisite install attempted" >&2; return 1; }
     _wb_cmd_install --bundle pair
 ' _ "${WB}" </dev/null >"${OUT}" 2>&1 || rc=$?
 [[ "${rc}" -eq 0 ]] && registered m-one && registered m-two \

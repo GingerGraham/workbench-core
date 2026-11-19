@@ -1,15 +1,20 @@
 # Troubleshooting
 
-## The installer says a tool couldn't be installed automatically
+## The installer stopped because tools are missing
 
-Install it with your package manager, then run `wb install` again.
+You answered no, or there was no terminal to ask and no `--yes`. Install the tools it listed with your package manager (it prints the command), then run the same install command again. Or run it again with `--yes` to let the installer install them.
 
-Workbench needs `awk`, `sed`, `tr`, `grep`, `column`, `git`, `curl`, `ssh-keyscan` and `ssh-keygen`. Two of those come from packages with unexpected names:
+Workbench needs `awk`, `sed`, `tr`, `grep`, `column`, `git`, `curl`, `tar`, `ssh-keyscan` and `ssh-keygen`. Some come from packages with unexpected names:
 
-| Tool | Fedora, RHEL | Debian, Ubuntu |
-|---|---|---|
-| `column` | `util-linux` | `bsdextrautils` |
-| `ssh-keyscan`, `ssh-keygen` | `openssh-clients` | `openssh-client` |
+| Tool | Fedora, RHEL | Debian, Ubuntu | Arch |
+|---|---|---|---|
+| `awk` | `gawk` | `mawk` | `gawk` |
+| `tr` | `coreutils` | `coreutils` | `coreutils` |
+| `column` | `util-linux` | `bsdextrautils` | `util-linux` |
+| `git` | `git-core` | `git` | `git` |
+| `ssh-keyscan`, `ssh-keygen` | `openssh-clients` | `openssh-client` | `openssh` |
+
+On Fedora and RHEL, `git-core` is all workbench needs; the full `git` package adds Perl-based extras such as `git send-email`.
 
 ## My shell has no workbench commands after installing
 

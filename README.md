@@ -108,8 +108,8 @@ bundle at any time.
 
 No `git` required. Bootstrap resolves the latest release tag, fetches it
 as a tarball straight into its permanent snapshot location, and hands off
-to `wb install`. `wb install` checks for its prerequisites and offers to
-install them, symlinks `wb` onto `PATH`, adds a loader stub to your shell
+to `wb install`. `wb install` checks for its prerequisites and, if any are
+missing, asks before installing them, symlinks `wb` onto `PATH`, adds a loader stub to your shell
 rc file and, with `--bundle`, registers that bundle's modules.
 
 If a module would touch config you already have (a `~/.gitconfig`, a
@@ -149,11 +149,12 @@ lists every command with examples.
 ## Requirements
 
 Linux, macOS, or WSL2. Bash 3.2+ or zsh. No Windows/PowerShell support
-(by design). `wb install` checks for, and offers to install via your
-distro's package manager, its required prerequisites (`awk`, `sed`,
-`tr`, `grep`, `column`, `git`, `curl`, `ssh-keyscan`, `ssh-keygen`) —
-see [Troubleshooting](docs/guide/troubleshooting.md) if one can't be
-installed automatically.
+(by design). The installer checks for its required prerequisites (`awk`, `sed`,
+`tr`, `grep`, `column`, `git`, `curl`, `tar`, `ssh-keyscan`,
+`ssh-keygen`). If any are missing it lists them, with the packages and
+the exact package-manager command, and asks before installing them;
+`--yes` installs without asking. See
+[Troubleshooting](docs/guide/troubleshooting.md) to install them yourself.
 
 ## Repository layout
 
