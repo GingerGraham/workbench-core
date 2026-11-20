@@ -710,6 +710,10 @@ list:
   signature database.
 - **Dangerous shell patterns** — a maintained list of known-bad
   constructs (remote-pipe-to-shell, world-writable permissions, etc).
+  Scans shell scripts of any extension (`.sh`, `.bash`, `.zsh`, anything
+  with a shell shebang), `bin/`, `hooks/`, `shell/`, `files/`, CI
+  workflow files and `*.conf`. ssh_config and gitconfig keys match in any
+  letter case.
 
 These run alongside shellcheck and this repo's own structural tests.
 

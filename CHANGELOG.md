@@ -4,6 +4,17 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The dangerous-pattern scan missed common spellings.** It now catches
+  `proxycommand` and other ssh_config and gitconfig keys in any letter
+  case, `curl -k` and `--insecure` anywhere on the line (not just as the
+  first flag), `wget --no-check-certificate`, and a script piped into a
+  shell through `sudo` with flags such as `sudo -E bash`. It also scans
+  files that aren't named `*.sh`: `*.bash`, `*.zsh`, CI workflow files,
+  `*.conf`, and anything starting with a shell shebang. Module CI picks
+  this up from core's next release. (D118)
+
 ## [2.27.0] - 2026-11-19
 
 ### Changed
