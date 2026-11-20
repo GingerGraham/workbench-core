@@ -4234,8 +4234,9 @@ each command group's own sub-commands ('wb tools <TAB>', 'wb module
 registered module names, catalog module/bundle names, and discovered
 tool names on this host (e.g. 'wb track <TAB>' only offers modules
 you've actually registered — never a deregistered one). Flag names
-(--private, --bundle, etc.) and 'wb module reset <name>'s own target
-argument aren't completed yet — see docs/decisions-log.md D54.
+complete once you type a leading dash ('wb add --pr<TAB>'), and the
+target of 'wb module reset <name>' and 'wb files use <name>' completes
+to that module's own files, plus 'all'.
 EOF
 }
 

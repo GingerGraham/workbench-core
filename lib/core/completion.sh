@@ -76,6 +76,114 @@ _wb_completion_subdispatch_commands() {
         | tr '|' '\n'
 }
 
+# _wb_completion_function_flags <function-name> [<depth>]
+# Prints the long flags (--name) the named function parses, one per line, by
+# reading its `case` arms as plain text — never sourced. The function can be
+# defined in bin/wb or any lib/modules/*.sh. An arm counts when its label
+# list contains a `--flag`; labels are split on '|'. Left out on purpose:
+#   --help      every command has it
+#   --*, -*     catch-all arms
+#   an arm whose whole body is `;;` — a flag that is accepted but does
+#     nothing (a retired one, like `wb install --skip-ansible`), which a
+#     person shouldn't be offered
+# A function that only forwards to another (`_wb_cmd_module_reset() {
+# _wb_cmd_files_use "$@"; }`) reports that function's flags.
+_wb_completion_function_flags() {
+    local func_name="$1" depth="${2:-0}" files body target
+    files="${WB_ROOT}/bin/wb"
+    local f
+    for f in "${WB_ROOT}"/lib/modules/*.sh; do
+        [[ -f "${f}" ]] && files="${files} ${f}"
+    done
+    # shellcheck disable=SC2086  # files is a space-separated list of paths without spaces
+    body="$(awk -v fn="${func_name}" '
+        $0 == fn "() {" { in_fn=1; next }
+        in_fn && /^}$/ { in_fn=0 }
+        in_fn { print }
+    ' ${files})"
+    [[ -z "${body}" ]] && return 0
+
+    # Forwarder: one statement, `<function> "$@"`.
+    if [[ "${depth}" -lt 3 ]]; then
+        target="$(printf '%s\n' "${body}" | grep -vE '^[[:space:]]*(#|$)' | awk 'NR == 1 { first = $0 } END { if (NR == 1 && first ~ /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]+"\$@"[[:space:]]*$/) { gsub(/^[[:space:]]+|[[:space:]]+"\$@"[[:space:]]*$/, "", first); print first } }')"
+        if [[ -n "${target}" ]]; then
+            _wb_completion_function_flags "${target}" $((depth + 1))
+            return 0
+        fi
+    fi
+
+    printf '%s\n' "${body}" | awk '
+        /^[[:space:]]*-[^)]*\)/ {
+            line = $0
+            sub(/^[[:space:]]+/, "", line)
+            label = line; sub(/\).*$/, "", label)
+            rest = line; sub(/^[^)]*\)[[:space:]]*/, "", rest)
+            if (rest ~ /^;;[[:space:]]*$/) next
+            n = split(label, parts, "|")
+            for (i = 1; i <= n; i++)
+                if (parts[i] ~ /^--[a-z][a-z0-9-]*$/ && parts[i] != "--help" && !(parts[i] in seen)) {
+                    seen[parts[i]] = 1
+                    print parts[i]
+                }
+        }
+    '
+}
+
+# _wb_completion_command_flags <command> [<sub-command>]
+# The long flags of a flat command (`wb add`), or of one sub-command of a
+# group (`wb files use`). Flat commands read `_wb_cmd_<command>` and
+# `workbench_cmd_<command>` plus any helper function that extends one of
+# those names (`_wb_cmd_functions_impl`); a sub-command reads
+# `_wb_cmd_<command>_<sub-command>`. Sorted, one per line, no duplicates.
+_wb_completion_command_flags() {
+    local cmd="$1" sub="${2:-}" fn funcs src
+    if [[ -n "${sub}" ]]; then
+        funcs="_wb_cmd_${cmd}_${sub//-/_}"
+    else
+        funcs=""
+        for src in "${WB_ROOT}/bin/wb" "${WB_ROOT}"/lib/modules/*.sh; do
+            [[ -f "${src}" ]] || continue
+            funcs="${funcs} $(grep -oE "^(_wb_cmd_|workbench_cmd_)${cmd//-/_}(_[a-z_]+)?\(\)" "${src}" | tr -d '()')"
+        done
+    fi
+    for fn in ${funcs}; do
+        _wb_completion_function_flags "${fn}"
+    done | sort -u
+}
+
+# _wb_completion_flag_case <sub-command-expression>
+# Prints a `case` statement for the generated scripts that sets _wb_flags to
+# the space-separated flags of the command on the line. <sub-command-
+# expression> is how that shell reads the word after the command (bash and
+# zsh index their word arrays differently). Group commands get a nested case
+# per sub-command; commands with no flags get no arm.
+_wb_completion_flag_case() {
+    local sub_expr="$1" cmd subs sub flags sub_flags dispatch group
+    dispatch="$(_wb_completion_dispatch_commands)"
+    # shellcheck disable=SC2016  # ${cmd} is for the generated script to expand
+    printf '        case "${cmd}" in\n'
+    while IFS= read -r cmd; do
+        [[ -z "${cmd}" ]] && continue
+        subs="$(_wb_completion_subdispatch_commands "_wb_cmd_${cmd}" 2>/dev/null)"
+        if [[ -n "${subs}" ]]; then
+            group=""
+            while IFS= read -r sub; do
+                [[ -z "${sub}" ]] && continue
+                sub_flags="$(_wb_completion_command_flags "${cmd}" "${sub}" | paste -sd' ' -)"
+                [[ -z "${sub_flags}" ]] && continue
+                group="${group}                ${sub}) _wb_flags=\"${sub_flags}\" ;;"$'\n'
+            done <<< "${subs}"
+            if [[ -n "${group}" ]]; then
+                printf '            %s)\n                case "%s" in\n%s                esac\n                ;;\n' "${cmd}" "${sub_expr}" "${group}"
+            fi
+        else
+            flags="$(_wb_completion_command_flags "${cmd}" | paste -sd' ' -)"
+            [[ -n "${flags}" ]] && printf '            %s) _wb_flags="%s" ;;\n' "${cmd}" "${flags}"
+        fi
+    done <<< "${dispatch}"
+    printf '        esac\n'
+}
+
 # _wb_cmd_complete <kind>
 # Hidden, internal-only fast path consumed by the generated bash/zsh
 # completion scripts at keystroke time (Phase 2, docs/decisions-log.md
@@ -97,8 +205,28 @@ _wb_cmd_complete() {
         catalog-bundles)    _wb_require modules/catalog.sh; workbench_catalog_list_bundles ;;
         tools)              workbench_tools_collect 2>/dev/null | cut -d'|' -f4 ;;
         layer-ids)          _wb_complete_layer_ids "${2:-}" ;;
+        reset-targets)      _wb_complete_reset_targets "${2:-}" ;;
         *)                  return 1 ;;
     esac
+}
+
+# _wb_complete_reset_targets <module>
+# 'wb module reset <module> <TAB>' and 'wb files use <module> <TAB>' (D122):
+# the module's own deploy targets, as the dest each declares — the one form
+# the resolver always accepts, where a basename can be ambiguous. Read fresh
+# from the module's current manifest every time, so they follow what the
+# module ships now. Nothing for a module that isn't registered or has no
+# synced snapshot: a name that would fail is never offered.
+_wb_complete_reset_targets() {
+    local module="$1" dest
+    [[ -n "${module}" ]] && workbench_valid_module_name "${module}" 2>/dev/null || return 0
+    workbench_is_registered "${module}" 2>/dev/null || return 0
+    [[ -d "$(workbench_module_current_dir "${module}")" ]] || return 0
+    _wb_engine_require_files >/dev/null 2>&1 || return 0
+    while IFS='|' read -r _ _ dest _; do
+        [[ -n "${dest}" ]] && printf '%s\n' "${dest}"
+    done < <(workbench_files_targets "${module}" 2>/dev/null)
+    return 0
 }
 
 # _wb_complete_layer_ids [<module>]
@@ -145,6 +273,9 @@ _wb_completion_generate_bash() {
     module_subs="$(_wb_completion_subdispatch_commands _wb_cmd_module | paste -sd' ' -)"
     files_subs="$(_wb_completion_subdispatch_commands _wb_cmd_files | paste -sd' ' -)"
     scheduler_subs="$(_wb_completion_subdispatch_commands _wb_cmd_scheduler | paste -sd' ' -)"
+    local flag_case
+    # shellcheck disable=SC2016  # the expression is for the generated script to expand
+    flag_case="$(_wb_completion_flag_case '${COMP_WORDS[2]:-}')"
     command cat <<EOF
 # Generated by 'wb completion bash' — do not hand-edit, re-run to refresh.
 _wb_completions() {
@@ -156,6 +287,15 @@ _wb_completions() {
     if [[ \${COMP_CWORD} -eq 1 ]]; then
         # shellcheck disable=SC2207
         COMPREPLY=( \$(compgen -W "${commands}" -- "\${cur}") )
+        return 0
+    fi
+
+    # Flag names (Phase 3, D122): baked in at generation time, like the
+    # sub-command lists, from the case arms each command parses.
+    if [[ "\${cur}" == -* ]]; then
+        local _wb_flags=""
+${flag_case}
+        COMPREPLY=( \$(compgen -W "\${_wb_flags}" -- "\${cur}") )
         return 0
     fi
 
@@ -203,6 +343,8 @@ _wb_completions() {
                 COMPREPLY=( \$(compgen -W "${module_subs}" -- "\${cur}") )
             elif [[ \${COMP_CWORD} -eq 3 && ( "\${COMP_WORDS[2]}" == "info" || "\${COMP_WORDS[2]}" == "docs" || "\${COMP_WORDS[2]}" == "reset" ) ]]; then
                 COMPREPLY=( \$(compgen -W "\$(wb __complete registered-modules 2>/dev/null)" -- "\${cur}") )
+            elif [[ \${COMP_CWORD} -eq 4 && "\${COMP_WORDS[2]}" == "reset" ]]; then
+                COMPREPLY=( \$(compgen -W "\$(wb __complete reset-targets "\${COMP_WORDS[3]}" 2>/dev/null) all" -- "\${cur}") )
             fi
             ;;
         files)
@@ -210,6 +352,8 @@ _wb_completions() {
                 COMPREPLY=( \$(compgen -W "${files_subs}" -- "\${cur}") )
             elif [[ \${COMP_CWORD} -eq 3 ]]; then
                 COMPREPLY=( \$(compgen -W "\$(wb __complete registered-modules 2>/dev/null)" -- "\${cur}") )
+            elif [[ \${COMP_CWORD} -eq 4 && "\${COMP_WORDS[2]}" == "use" ]]; then
+                COMPREPLY=( \$(compgen -W "\$(wb __complete reset-targets "\${COMP_WORDS[3]}" 2>/dev/null) all" -- "\${cur}") )
             fi
             ;;
         scheduler)
@@ -240,6 +384,9 @@ _wb_completion_generate_zsh() {
     module_subs="$(_wb_completion_subdispatch_commands _wb_cmd_module | paste -sd' ' -)"
     files_subs="$(_wb_completion_subdispatch_commands _wb_cmd_files | paste -sd' ' -)"
     scheduler_subs="$(_wb_completion_subdispatch_commands _wb_cmd_scheduler | paste -sd' ' -)"
+    local flag_case
+    # shellcheck disable=SC2016  # the expression is for the generated script to expand
+    flag_case="$(_wb_completion_flag_case '${words[3]:-}')"
     command cat <<EOF
 # Generated by 'wb completion zsh' — do not hand-edit, re-run to refresh.
 _wb_completions() {
@@ -250,6 +397,17 @@ _wb_completions() {
         local -a commands
         commands=(${commands})
         _describe 'wb command' commands
+        return 0
+    fi
+
+    # Flag names (Phase 3, D122): baked in at generation time, like the
+    # sub-command lists, from the case arms each command parses.
+    if [[ "\${words[CURRENT]}" == -* ]]; then
+        local _wb_flags=""
+${flag_case}
+        local -a _wb_flag_list
+        _wb_flag_list=(\${=_wb_flags})
+        compadd -- "\${_wb_flag_list[@]}"
         return 0
     fi
 
@@ -323,6 +481,10 @@ _wb_completions() {
                 local -a _wb_reg_mods
                 _wb_reg_mods=(\${(f)"\$(wb __complete registered-modules 2>/dev/null)"})
                 _describe 'module' _wb_reg_mods
+            elif [[ \${CURRENT} -eq 5 && "\${words[3]}" == "reset" ]]; then
+                local -a _wb_targets
+                _wb_targets=(\${(f)"\$(wb __complete reset-targets "\${words[4]}" 2>/dev/null)"} all)
+                _describe 'file' _wb_targets
             fi
             ;;
         files)
@@ -333,6 +495,10 @@ _wb_completions() {
                 local -a _wb_reg_mods
                 _wb_reg_mods=(\${(f)"\$(wb __complete registered-modules 2>/dev/null)"})
                 _describe 'module' _wb_reg_mods
+            elif [[ \${CURRENT} -eq 5 && "\${words[3]}" == "use" ]]; then
+                local -a _wb_targets
+                _wb_targets=(\${(f)"\$(wb __complete reset-targets "\${words[4]}" 2>/dev/null)"} all)
+                _describe 'file' _wb_targets
             fi
             ;;
         scheduler)

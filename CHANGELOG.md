@@ -4,6 +4,17 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Tab completion for flags and for `wb module reset` targets.** Type a
+  dash and press Tab after any command (`wb add --pr<Tab>` gives
+  `--private`), and each command offers the flags it accepts. After
+  `wb module reset <module>` or `wb files use <module>`, Tab offers that
+  module's own files, read from its current release, plus `all`. A flag
+  that is accepted but does nothing, such as `wb install --skip-ansible`,
+  is not offered. The flag lists come from the commands themselves, so a
+  new flag completes without a second list to update. (D122)
+
 ### Changed
 
 - **`~/.local/bin` goes at the end of `PATH`, not the front.** When
