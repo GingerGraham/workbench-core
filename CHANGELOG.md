@@ -14,6 +14,15 @@ All notable changes to `workbench-core` are documented here.
   files that aren't named `*.sh`: `*.bash`, `*.zsh`, CI workflow files,
   `*.conf`, and anything starting with a shell shebang. Module CI picks
   this up from core's next release. (D118)
+- **Module releases no longer run core's scripts next to a write token.**
+  The release job for a module repo runs scripts from core's latest
+  release. It used to mint the release App's write token first and leave
+  it in the checkout's git config while they ran. Now the checkouts keep
+  no credentials, the scripts run before any token exists, a check fails
+  the release unless `CHANGELOG.md` is the only file changed, and the
+  token is minted last and used only for API calls that commit that one
+  file and open the release PR. Signing the release remains a separate,
+  deferred decision. (D119)
 
 ## [2.27.0] - 2026-11-19
 

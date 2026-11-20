@@ -34,6 +34,17 @@ on:
 # commit, PR creation, auto-merge) uses the minted App token below, scoped
 # to exactly contents: write + pull-requests: write at the point it's
 # minted — never the default GITHUB_TOKEN.
+#
+# The scripts this workflow runs come from workbench-core at core_ref
+# (latest release by default), so they are not code this repo reviewed. The
+# job is ordered so they never meet the write token (D119, N4):
+#   1. checkouts use the read-only default token and keep no credentials;
+#   2. the core scripts run next, with no App token minted yet;
+#   3. a step with no token checks the scripts changed CHANGELOG.md and
+#      nothing else;
+#   4. only then is the App token minted, and the steps that hold it run
+#      GitHub API calls through github-script — no git, gh or core script
+#      runs while it exists, and only CHANGELOG.md is committed.
 permissions:
   contents: read
 
@@ -69,21 +80,15 @@ jobs:
     if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Mint release App token
-        id: app-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ vars.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
-
+      # Read-only default token, and no credentials left in .git/config: the
+      # core scripts below run in this workspace and must not find a write
+      # token here (D119).
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
           fetch-tags: true
+          persist-credentials: false
 
       - name: Checkout workbench-core@${{ needs.resolve-core-ref.outputs.ref }} (for the shared release scripts)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -91,6 +96,7 @@ jobs:
           repository: GingerGraham/workbench-core
           ref: ${{ needs.resolve-core-ref.outputs.ref }}
           path: _core
+          persist-credentials: false
 
       - name: Configure git identity
         run: |
@@ -133,24 +139,52 @@ jobs:
             echo "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md) for the human-readable detail -- this PR's diff includes the heading rename."
           } > release-notes.md
 
+      # The last step that runs git, and it holds no token. apply-bump.sh
+      # only rewrites CHANGELOG.md, so anything else changed means a core
+      # script did something it should not have -- stop before a token
+      # exists (D119).
+      - name: Check the release changes only CHANGELOG.md
+        id: verify
+        if: steps.compute.outputs.severity != 'none'
+        run: |
+          changed="$(git diff --name-only HEAD)"
+          if [[ "${changed}" != "CHANGELOG.md" ]]; then
+            echo "::error::A release may change only CHANGELOG.md, but these tracked files changed:"
+            echo "${changed:-<none>}"
+            exit 1
+          fi
+          echo "base_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Minted only now, after every core script has finished.
+      - name: Mint release App token
+        id: app-token
+        if: steps.compute.outputs.severity != 'none'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       # main requires verified commit signatures -- a plain `git commit` is
       # never signed regardless of which token pushes it, so the release
       # commit is created via the createCommitOnBranch GraphQL mutation
-      # instead, exactly like core's own release.yml (D27).
+      # instead, exactly like core's own release.yml (D27). It commits
+      # CHANGELOG.md alone, read straight from disk: no git runs here.
       - name: Create release branch and commit via API (verified signature)
         if: steps.compute.outputs.severity != 'none'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           NEW_VERSION: ${{ steps.compute.outputs.new_version }}
+          BASE_SHA: ${{ steps.verify.outputs.base_sha }}
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const fs = require('fs');
-            const { execSync } = require('child_process');
 
             const newVersion = process.env.NEW_VERSION;
             const branchName = `release/v${newVersion}`;
-            const baseSha = execSync('git rev-parse HEAD').toString().trim();
+            const baseSha = process.env.BASE_SHA;
 
             try {
               await github.rest.git.createRef({
@@ -174,21 +208,10 @@ jobs:
               }
             }
 
-            const changedFiles = execSync('git diff --name-only')
-              .toString()
-              .trim()
-              .split('\n')
-              .filter(Boolean);
-
-            if (changedFiles.length === 0) {
-              core.setFailed(`apply-bump.sh reported a ${process.env.NEW_VERSION} bump but left no tracked-file changes -- refusing to create an empty release commit.`);
-              return;
-            }
-
-            const additions = changedFiles.map((path) => ({
-              path,
-              contents: fs.readFileSync(path).toString('base64'),
-            }));
+            const additions = [{
+              path: 'CHANGELOG.md',
+              contents: fs.readFileSync('CHANGELOG.md').toString('base64'),
+            }];
 
             const mutation = `
               mutation ($input: CreateCommitOnBranchInput!) {
@@ -210,15 +233,32 @@ jobs:
               },
             });
 
+      # Through the API rather than the gh CLI: gh runs git in the
+      # workspace, and the workspace is where the core scripts ran.
       - name: Open release PR and enable auto-merge
         if: steps.compute.outputs.severity != 'none'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           NEW_VERSION: ${{ steps.compute.outputs.new_version }}
-        run: |
-          PR_URL="$(gh pr create \
-            --base main \
-            --head "release/v${NEW_VERSION}" \
-            --title "chore(release): v${NEW_VERSION}" \
-            --body-file release-notes.md)"
-          gh pr merge --auto --squash "${PR_URL}"
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const fs = require('fs');
+            const newVersion = process.env.NEW_VERSION;
+
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              base: 'main',
+              head: `release/v${newVersion}`,
+              title: `chore(release): v${newVersion}`,
+              body: fs.readFileSync('release-notes.md', 'utf8'),
+            });
+
+            await github.graphql(`
+              mutation ($id: ID!) {
+                enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: SQUASH }) {
+                  clientMutationId
+                }
+              }
+            `, { id: pr.node_id });
