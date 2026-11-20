@@ -310,6 +310,9 @@ sed '\\|${start}|,\\|${end}|d' ${q} > ${q%\"}.wb-tmp\" && cat ${q%\"}.wb-tmp\" >
         echo "# Delete the Host workbench-${module} entry from ~/.ssh/config.d/10-workbench.conf"
         _wb_uninstall_rewrite_cmd "awk '/^Host / { skip = (\$2 == \"workbench-${module}\") } !skip'" "$(_wb_uninstall_q "${ssh_conf}")"
     fi
+    # Snapshots are read-only (D120), so the owner needs write access back
+    # before rm can empty them.
+    echo "chmod -R u+w $(_wb_uninstall_q "${module_dir}")"
     echo "rm -rf $(_wb_uninstall_q "${module_dir}")"
     echo '```'
     echo
@@ -410,7 +413,7 @@ _wb_uninstall_write_notes() {
         echo "## What this changes"
         echo
         echo "- New shells no longer load anything from workbench. That covers every module's functions, aliases, prompt setup and completions, plus any \`PATH\` entries and environment variables they set."
-        echo "- Workbench no longer makes sure \`~/.local/bin\` is on your \`PATH\`. If a tool stops being found, add \`export PATH=\"\$HOME/.local/bin:\$PATH\"\` to your shell's rc file."
+        echo "- Workbench no longer makes sure \`~/.local/bin\` is on your \`PATH\`. If a tool stops being found, add \`export PATH=\"\$PATH:\$HOME/.local/bin\"\` to your shell's rc file."
         echo "- Nothing updates any more."
         echo "- Config files and config blocks left by modules still apply, listed below."
         echo
@@ -497,6 +500,7 @@ _wb_uninstall_write_notes() {
         echo "1. Check the backups for anything you want to keep, then run:"
         echo
         echo '```sh'
+        echo "chmod -R u+w $(_wb_uninstall_q "$(_wb_uninstall_data_root)")  # snapshots are read-only"
         echo "rm -rf $(_wb_uninstall_q "$(_wb_uninstall_data_root)")  # includes the backups and these notes"
         echo "rm -rf $(_wb_uninstall_q "$(_wb_uninstall_config_root)")"
         echo "rm -f $(_wb_uninstall_q "$(workbench_removal_notes_link)")"
@@ -660,6 +664,9 @@ workbench_cmd_uninstall() {
     fi
     rm -rf "$(_wb_uninstall_config_root)/core" || problems+=("$(_wb_uninstall_tilde "$(_wb_uninstall_config_root)/core")")
     rm -rf "$(_wb_uninstall_cache_root)" || problems+=("$(_wb_uninstall_tilde "$(_wb_uninstall_cache_root)")")
+    # Snapshots are read-only (D120); unseal before deleting them.
+    command -v _wb_require &>/dev/null && _wb_require distribution/snapshot.sh
+    command -v workbench_snapshot_unseal &>/dev/null && workbench_snapshot_unseal "$(workbench_module_dir core)"
     rm -rf "$(workbench_module_dir core)" || problems+=("$(_wb_uninstall_tilde "$(workbench_module_dir core)")")
 
     echo

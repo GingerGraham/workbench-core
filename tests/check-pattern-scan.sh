@@ -260,6 +260,99 @@ else
     fail "nested files/ path: rc=${RC80} out=${OUT80}"
 fi
 
+# ── N11: scanner gaps (lowercase keys, flag order, sudo flags, wget,
+#    non-.sh files). A third throwaway repo; every fixture is written with
+#    printf and the generating line carries a reasoned suppression, same as
+#    the cases above, so this source file stays clean under the real scan. ──
+cd "${WORK}" || exit 1
+rm -rf n11 && mkdir n11 && cd n11 || exit 1
+git init -q
+git config user.email t@t.com
+git config user.name Test
+mkdir -p shell files tools docs .github/workflows
+
+# write_fixture <path> <text> — writes one fixture file; \n and \t in <text>
+# are expanded by printf %b
+write_fixture() { printf '%b' "$2" > "$1"; }
+
+# Positive cases: every one must be flagged.
+write_fixture files/lower.conf   'proxycommand nc %h %p\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture files/upper.conf   'PROXYCOMMAND nc %h %p\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture files/lower-git.conf '[core]\n\tsshcommand = ssh -i key\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture files/shk.conf     'stricthostkeychecking NO\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture shell/pos-curl-late-flag.sh   '#!/usr/bin/env bash\ncurl -fsSL -k https://example.invalid/\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture shell/pos-curl-after-url.sh   '#!/usr/bin/env bash\ncurl https://example.invalid/ -k\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture shell/pos-curl-bundled-k.sh   '#!/usr/bin/env bash\ncurl -sSLk https://example.invalid/\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture shell/pos-curl-long-late.sh   '#!/usr/bin/env bash\ncurl -fsSL https://example.invalid/ --insecure\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture shell/pos-wget-nocheck.sh     '#!/usr/bin/env bash\nwget -q --no-check-certificate https://example.invalid/x\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture shell/pos-sudo-e-bash.sh      '#!/usr/bin/env bash\ncurl -fsSL https://example.invalid/i | sudo -E bash\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture shell/pos-sudo-two-flags.sh   '#!/usr/bin/env bash\nwget -qO- https://example.invalid/i | sudo -H -E sh\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture shell/pos-pipe-zsh.sh         '#!/usr/bin/env bash\ncurl -fsSL https://example.invalid/i | zsh\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture shell/pos-dialect.zsh         'curl -fsSL https://example.invalid/i | bash\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture .github/workflows/pos.yml     'jobs:\n  x:\n    steps:\n      - run: curl -fsSL https://example.invalid/i | sudo -E bash\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture tools/pos-extensionless       '#!/usr/bin/env bash\ncurl -k https://example.invalid/\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+write_fixture tools/pos-env-sh              '#!/usr/bin/env sh\nwget --no-check-certificate https://example.invalid/\n'  # pattern-scan:ignore -- N11 fixture, written into a scratch repo
+
+# Negative cases: none may be flagged.
+write_fixture shell/neg-curl-output.sh      '#!/usr/bin/env bash\ncurl -fsSL https://example.invalid/ -o out.k\n'
+write_fixture shell/neg-curl-config.sh      '#!/usr/bin/env bash\ncurl -K cfg https://example.invalid/\n'
+write_fixture shell/neg-curl-keepalive.sh   '#!/usr/bin/env bash\ncurl --keepalive-time 5 https://example.invalid/\n'
+write_fixture shell/neg-curl-then-pipe.sh   '#!/usr/bin/env bash\ncurl -fsSL https://example.invalid/ | sudo tee /etc/x >/dev/null\ncurl -fsSL https://example.invalid/ | sudo -E tee /etc/y >/dev/null\n'
+write_fixture shell/neg-wget.sh             '#!/usr/bin/env bash\nwget -q https://example.invalid/x\n'
+write_fixture shell/neg-next-line-k.sh      '#!/usr/bin/env bash\ncurl -fsSL https://example.invalid/\nls -k\n'
+write_fixture files/neg-lower-comment.conf  '# proxycommand is not set here\n'
+write_fixture docs/quoted.md                'Do not run: curl -k https://example.invalid/ | sudo -E bash\n'  # pattern-scan:ignore -- out-of-scope negative fixture (docs are not scanned), written into a scratch repo
+write_fixture tools/neg-python              '#!/usr/bin/env python3\nprint("curl -k https://example.invalid/")\n'  # pattern-scan:ignore -- out-of-scope negative fixture (not a shell script), written into a scratch repo
+
+git add -A && git commit -q -m fx
+OUT11="$(bash "${SCAN_SCRIPT}" "${RULES_FILE}" 2>&1)"; RC11=$?
+
+if [[ "${RC11}" -eq 1 ]]; then
+    ok "N11: scan of the gap fixtures exits non-zero"
+else
+    fail "N11: expected rc 1, got ${RC11}"
+fi
+
+_n11_all=1
+for _f in files/lower.conf files/upper.conf files/lower-git.conf files/shk.conf \
+    shell/pos-curl-late-flag.sh shell/pos-curl-after-url.sh shell/pos-curl-bundled-k.sh \
+    shell/pos-curl-long-late.sh shell/pos-wget-nocheck.sh shell/pos-sudo-e-bash.sh \
+    shell/pos-sudo-two-flags.sh shell/pos-pipe-zsh.sh shell/pos-dialect.zsh \
+    .github/workflows/pos.yml tools/pos-extensionless tools/pos-env-sh; do
+    if ! grep -q "^::error file=${_f}," <<< "${OUT11}"; then
+        fail "N11: ${_f} was not flagged"
+        _n11_all=0
+    fi
+done
+[[ "${_n11_all}" -eq 1 ]] && ok "N11: every gap fixture is flagged (lowercase keys, flag order, sudo flags, wget, non-.sh files)"
+
+_n11_none=1
+for _f in shell/neg-curl-output.sh shell/neg-curl-config.sh shell/neg-curl-keepalive.sh \
+    shell/neg-curl-then-pipe.sh shell/neg-wget.sh shell/neg-next-line-k.sh \
+    files/neg-lower-comment.conf docs/quoted.md tools/neg-python; do
+    if grep -q "^::error file=${_f}," <<< "${OUT11}"; then
+        fail "N11: ${_f} was wrongly flagged"
+        _n11_none=0
+    fi
+done
+[[ "${_n11_none}" -eq 1 ]] && ok "N11: no look-alike or out-of-scope fixture is flagged (-K, --keepalive, sudo tee, next line, *.md, python)"
+
+# The rules file's optional third column: 'i' is the only flag that exists,
+# and a rule without it stays case-sensitive.
+_ci_rules="$(mktemp)"
+printf 'Zorp\tcase-sensitive rule\nQuux\tcase-insensitive rule\ti\n' > "${_ci_rules}"
+cd "${WORK}" && rm -rf ci-flag && mkdir ci-flag && cd ci-flag || exit 1
+git init -q && git config user.email t@t.com && git config user.name Test
+printf 'zorp\nquux\n' > a.sh
+git add -A && git commit -q -m fx
+_ci_out="$(bash "${SCAN_SCRIPT}" "${_ci_rules}" 2>&1)"
+rm -f "${_ci_rules}"
+if grep -q 'case-insensitive rule' <<< "${_ci_out}" && ! grep -q 'case-sensitive rule' <<< "${_ci_out}"; then
+    ok "N11: flag 'i' makes a rule case-insensitive; no flag keeps it case-sensitive"
+else
+    fail "N11: case flag handling: ${_ci_out}"
+fi
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."

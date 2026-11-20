@@ -22,7 +22,8 @@ fail() { check_no=$((check_no + 1)); echo "FAIL: [$check_no] $*"; FAILED=$((FAIL
 skip() { echo "SKIP: $*"; }
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "${WORK}"' EXIT
+# Snapshots are read-only (D120): unseal before deleting them.
+trap 'chmod -R u+w "${WORK}" 2>/dev/null; rm -rf "${WORK}"' EXIT
 
 export HOME="${WORK}/home"
 export XDG_DATA_HOME="${WORK}/data"

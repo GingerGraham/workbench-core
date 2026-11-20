@@ -15,8 +15,27 @@ failed=0
 # printed as a ::notice so reviewers see it in the run summary.
 ignore_re='pattern-scan:ignore[[:space:]]+--[[:space:]]+[^[:space:]]'
 
-while IFS=$'\t' read -r pattern description || [[ -n "${pattern}" ]]; do
+# What gets scanned (N11). Beyond *.sh and the conventional script/config
+# directories, this covers shell dialect extensions, CI workflow files (their
+# run: blocks are shell too), *.conf files, and any other tracked file that
+# starts with a shell shebang — an extensionless script outside bin/ or
+# hooks/ is still a script. Docs (*.md) are deliberately not scanned: they
+# quote dangerous commands on purpose.
+scan_pathspecs=(
+    '*.sh' '*.bash' '*.zsh' '*.ksh'
+    'bin/*' 'hooks/*' 'files/*' 'shell/*'
+    '*.yml' '*.yaml' '*.conf'
+)
+shebang_re='^#![[:space:]]*(/usr/bin/env[[:space:]]+)?[^[:space:]]*(bash|zsh|dash|ksh|[^a-z]sh)([[:space:]]|$)'
+while IFS= read -r shebang_file; do
+    [[ -n "${shebang_file}" ]] && scan_pathspecs+=("${shebang_file}")
+done < <(git grep -lIE -e "${shebang_re}" 2>/dev/null || true)
+
+while IFS=$'\t' read -r pattern description flags || [[ -n "${pattern}" ]]; do
     [[ -z "${pattern}" || "${pattern}" == \#* ]] && continue
+    # Optional third column: 'i' makes this rule case-insensitive.
+    grep_flags="-nE"
+    [[ "${flags:-}" == *i* ]] && grep_flags="-nEi"
     while IFS=: read -r file line_no line || [[ -n "${file:-}" ]]; do
         [[ -z "${file:-}" ]] && continue
         if [[ "${line}" == *"pattern-scan:ignore"* ]]; then
@@ -38,7 +57,7 @@ while IFS=$'\t' read -r pattern description || [[ -n "${pattern}" ]]; do
     # files/* covers configuration modules copy into sensitive places
     # (workbench-ssh ships ~/.ssh/config.d content there — review R5).
     # A git pathspec '*' also matches across '/', so nested files count.
-    done < <(git grep -nE -e "${pattern}" -- '*.sh' 'bin/*' 'hooks/*' 'files/*' 2>/dev/null || true)
+    done < <(git grep "${grep_flags}" -e "${pattern}" -- "${scan_pathspecs[@]}" 2>/dev/null || true)
 done < "${rules_file}"
 
 exit "${failed}"

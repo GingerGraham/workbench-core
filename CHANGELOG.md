@@ -4,6 +4,60 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Tab completion for flags and for `wb module reset` targets.** Type a
+  dash and press Tab after any command (`wb add --pr<Tab>` gives
+  `--private`), and each command offers the flags it accepts. After
+  `wb module reset <module>` or `wb files use <module>`, Tab offers that
+  module's own files, read from its current release, plus `all`. A flag
+  that is accepted but does nothing, such as `wb install --skip-ansible`,
+  is not offered. The flag lists come from the commands themselves, so a
+  new flag completes without a second list to update. (D122)
+
+### Changed
+
+- **`~/.local/bin` goes at the end of `PATH`, not the front.** When
+  workbench has to add it (it isn't there yet), it now goes after the
+  system directories, so a program dropped into it can't shadow a system
+  command such as `ls` or `sudo`. A `~/.local/bin` that is already on
+  `PATH` is left where it is, so a distro that puts it first keeps doing
+  so. A tool you install with `wb tools install` into `~/.local/bin` is
+  now found only if no system package provides the same command; to
+  prefer the one in `~/.local/bin`, put it first in your own startup
+  file. `wb uninstall`'s notes suggest the same end-of-`PATH` line.
+  (D121)
+- **Downloaded module copies are read-only.** Each snapshot under
+  `~/.local/share/workbench/modules/<name>/snapshots/` is made read-only
+  once it is written, so an editor, a tool or a hook can't change what
+  workbench deploys by accident. Files that a `link` or `link_tree`
+  deploy points at stay writable, so editing through a link and having
+  the change held still works. Copies workbench makes into your home
+  directory are not affected and stay editable. To delete the data
+  directory by hand, run `chmod -R u+w` on it first; `wb uninstall` does
+  this itself. A `post_deploy` hook runs in its module's `current`
+  directory, which is now read-only. (D120)
+
+### Fixed
+
+- **The dangerous-pattern scan missed common spellings.** It now catches
+  `proxycommand` and other ssh_config and gitconfig keys in any letter
+  case, `curl -k` and `--insecure` anywhere on the line (not just as the
+  first flag), `wget --no-check-certificate`, and a script piped into a
+  shell through `sudo` with flags such as `sudo -E bash`. It also scans
+  files that aren't named `*.sh`: `*.bash`, `*.zsh`, CI workflow files,
+  `*.conf`, and anything starting with a shell shebang. Module CI picks
+  this up from core's next release. (D118)
+- **Module releases no longer run core's scripts next to a write token.**
+  The release job for a module repo runs scripts from core's latest
+  release. It used to mint the release App's write token first and leave
+  it in the checkout's git config while they ran. Now the checkouts keep
+  no credentials, the scripts run before any token exists, a check fails
+  the release unless `CHANGELOG.md` is the only file changed, and the
+  token is minted last and used only for API calls that commit that one
+  file and open the release PR. Signing the release remains a separate,
+  deferred decision. (D119)
+
 ## [2.27.0] - 2026-11-19
 
 ### Changed

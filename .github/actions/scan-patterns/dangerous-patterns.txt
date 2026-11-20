@@ -1,5 +1,9 @@
-curl[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh)([[:space:]]|$)	remote script piped directly into a shell — fetch, verify, then execute instead
-wget[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh)([[:space:]]|$)	remote script piped directly into a shell — fetch, verify, then execute instead
+# Dangerous-pattern rules, one per line: <extended regex><TAB><description>[<TAB><flags>]
+# Blank lines and lines starting with '#' are ignored.
+# flags: 'i' matches case-insensitively. Use it for ssh_config and gitconfig
+# keys, which those tools read case-insensitively, never for shell commands.
+curl[^|]*\|[[:space:]]*(sudo([[:space:]]+-[^[:space:]]+)*[[:space:]]+)?(bash|sh|zsh|dash)([[:space:]]|$)	remote script piped directly into a shell — fetch, verify, then execute instead
+wget[^|]*\|[[:space:]]*(sudo([[:space:]]+-[^[:space:]]+)*[[:space:]]+)?(bash|sh|zsh|dash)([[:space:]]|$)	remote script piped directly into a shell — fetch, verify, then execute instead
 chmod[[:space:]]+(-R[[:space:]]+)?0?777([[:space:]]|$)	world-writable permissions
 chmod[[:space:]]+(-R[[:space:]]+)?a\+w([[:space:]]|$)	world-writable permissions
 bash[[:space:]]+<\([[:space:]]*(curl|wget)	remote script run via process substitution — fetch, verify, then execute instead
@@ -8,11 +12,12 @@ sh[[:space:]]+-c[[:space:]]+"\$\((curl|wget|fetch)	remote script run via command
 --allow-unsigned-rpm	package signature check disabled
 --nogpgcheck	package signature check disabled
 --gpg-auto-import-keys	repository signing keys trusted without verification
-curl[[:space:]]+(-[a-zA-Z]*k([[:space:]]|$)|--insecure)	TLS certificate verification disabled
-StrictHostKeyChecking[= ]+no	SSH host key verification disabled
-^[[:space:]]*(ProxyCommand|LocalCommand|KnownHostsCommand)([[:space:]]|=)	ssh_config directive that runs a command — review before shipping
-^[[:space:]]*PermitLocalCommand([[:space:]]|=)+yes	ssh_config LocalCommand execution enabled
-^[[:space:]]*Match[[:space:]]+(.*[[:space:]])?exec[[:space:]]	ssh_config Match exec runs a command on every connection
-^[[:space:]]*(fsmonitor|sshCommand|hooksPath)[[:space:]]*=	gitconfig directive that runs a command or redirects hooks — review before shipping
-^[[:space:]]*helper[[:space:]]*=[[:space:]]*!	gitconfig credential helper runs a shell command — review before shipping
-^[[:space:]]*(clean|smudge|process)[[:space:]]*=	gitconfig filter runs a command on checkout/commit — review before shipping
+curl[^|;&]*[[:space:]](-[a-zA-Z]*k[a-zA-Z]*|--insecure)([[:space:]]|$)	TLS certificate verification disabled
+wget[^|;&]*[[:space:]]--no-check-certificate([[:space:]=]|$)	TLS certificate verification disabled
+StrictHostKeyChecking[= ]+no	SSH host key verification disabled	i
+^[[:space:]]*(ProxyCommand|LocalCommand|KnownHostsCommand)([[:space:]]|=)	ssh_config directive that runs a command — review before shipping	i
+^[[:space:]]*PermitLocalCommand([[:space:]]|=)+yes	ssh_config LocalCommand execution enabled	i
+^[[:space:]]*Match[[:space:]]+(.*[[:space:]])?exec[[:space:]]	ssh_config Match exec runs a command on every connection	i
+^[[:space:]]*(fsmonitor|sshCommand|hooksPath)[[:space:]]*=	gitconfig directive that runs a command or redirects hooks — review before shipping	i
+^[[:space:]]*helper[[:space:]]*=[[:space:]]*!	gitconfig credential helper runs a shell command — review before shipping	i
+^[[:space:]]*(clean|smudge|process)[[:space:]]*=	gitconfig filter runs a command on checkout/commit — review before shipping	i

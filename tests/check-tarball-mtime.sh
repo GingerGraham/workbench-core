@@ -20,7 +20,8 @@ ok()   { check_no=$((check_no + 1)); echo "OK:   [$check_no] $*"; }
 fail() { check_no=$((check_no + 1)); echo "FAIL: [$check_no] $*"; FAILED=$((FAILED + 1)); }
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "${WORK}"' EXIT
+# Snapshots are read-only (D120): unseal before deleting them.
+trap 'chmod -R u+w "${WORK}" 2>/dev/null; rm -rf "${WORK}"' EXIT
 mkdir -p "${WORK}/bin" "${WORK}/src/owner-repo-abc123/files"
 
 # The tarball: one directory, as codeload serves it, every entry in 2099.

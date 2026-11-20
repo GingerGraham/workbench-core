@@ -428,7 +428,8 @@ working copy — with one deliberate, opt-in exception (dev tracking, below).
   It is **not** the developer's own editing clone — that lives and is
   managed entirely outside anything `workbench` tracks (§9.6).
 - Every fetch, regardless of pathway, lands in
-  `snapshots/<ref-slug>-<shortsha>/` (§9.3), immutable once written, with
+  `snapshots/<ref-slug>-<shortsha>/` (§9.3), immutable once written (read-only
+  on disk, apart from what a link-mode deploy points at — D120), with
   `current` flipped to it via an atomic symlink swap. Old snapshots are
   pruned beyond a small retention window — the same pattern `dotfiles`'
   existing self-sync release mode already uses, generalised to every

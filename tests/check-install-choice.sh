@@ -32,7 +32,8 @@ if ! command -v script &>/dev/null; then
 fi
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "${WORK}"' EXIT
+# Snapshots are read-only (D120): unseal before deleting them.
+trap 'chmod -R u+w "${WORK}" 2>/dev/null; rm -rf "${WORK}"' EXIT
 OUT="${WORK}/out.log"
 export WORKBENCH_PAGER=cat
 export GIT_CONFIG_NOSYSTEM=1

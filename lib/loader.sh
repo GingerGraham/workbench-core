@@ -52,16 +52,21 @@ fi
 # first time `wb install` creates ~/.local/bin/wb (bin/wb's
 # _wb_link_cli_bin). Absent entirely on stock macOS zsh. Guaranteed here
 # instead, every shell start, independent of core even being registered.
+#
+# Added at the END, never the front (D121): a user-writable directory ahead
+# of /usr/bin lets anything dropped there shadow `ls` or `sudo`. A distro
+# that already puts ~/.local/bin first keeps it first — this only adds it
+# when it is missing, and never moves it.
 case ":${PATH}:" in
     *":${HOME}/.local/bin:"*) ;;
     *)
-        # A plain "${HOME}/.local/bin:${PATH}" would leave a trailing colon
-        # when PATH is empty/unset — an empty PATH element that many shells
-        # treat as the current directory (flagged in PR review).
+        # A plain "${PATH}:${HOME}/.local/bin" would start with a colon when
+        # PATH is empty/unset — an empty PATH element that many shells treat
+        # as the current directory (flagged in PR review).
         if [[ -z "${PATH:-}" ]]; then
             PATH="${HOME}/.local/bin"
         else
-            PATH="${HOME}/.local/bin:${PATH}"
+            PATH="${PATH}:${HOME}/.local/bin"
         fi
         ;;
 esac

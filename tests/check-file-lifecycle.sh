@@ -21,7 +21,8 @@ ok()   { check_no=$((check_no + 1)); echo "OK:   [$check_no] $*"; }
 fail() { check_no=$((check_no + 1)); echo "FAIL: [$check_no] $*"; FAILED=$((FAILED + 1)); }
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "${WORK}"' EXIT
+# Snapshots are read-only (D120): unseal before anything deletes them.
+trap 'chmod -R u+w "${WORK}" 2>/dev/null; rm -rf "${WORK}"' EXIT
 
 export HOME="${WORK}/home"
 export XDG_DATA_HOME="${WORK}/data"
@@ -39,6 +40,7 @@ LOG="${WORK}/run.log"
 BACKUPS="${XDG_DATA_HOME}/workbench/backups"
 
 reset_case() {
+    workbench_snapshot_unseal "${MDIR}"
     rm -rf "${MDIR}" "${HOME}" "${STAGE}" "${BACKUPS}" "$(workbench_files_conf_path)"
     SNAPN=0
     mkdir -p "${HOME}" "${STAGE}/files"
@@ -53,6 +55,7 @@ manifest() {
 # snap <name>: freeze the stage into snapshots/<name>
 snap() {
     mkdir -p "${MDIR}/snapshots"
+    workbench_snapshot_unseal "${MDIR}/snapshots/$1"
     rm -rf "${MDIR}/snapshots/$1"
     cp -R "${STAGE}" "${MDIR}/snapshots/$1"
     # prune orders snapshots by mtime: give each a distinct, increasing one
@@ -608,6 +611,7 @@ rc=0
 ( workbench_files_before_swap() { return 1; }; workbench_sync_module e2e-nvim manual ) >>"${LOG}" 2>&1 || rc=$?
 [[ "${rc}" -ne 0 && "$(readlink "$(workbench_module_dir e2e-nvim)/current")" == "${E_CUR_BEFORE}" ]] \
     && ok "real sync: if changes can't be secured, the update is refused and nothing swaps" || fail "sync swapped despite before_swap failing (rc ${rc})"
+workbench_snapshot_unseal "$(workbench_module_dir e2e-nvim)"
 rm -rf "$(workbench_module_dir e2e-nvim)"
 
 # ═════════════════════════════ engine wiring ═══════════════════════════════

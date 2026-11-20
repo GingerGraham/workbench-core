@@ -305,6 +305,8 @@ wb completion bash
 wb completion zsh
 ```
 
+Tab completes command and sub-command names, the modules, bundles and tools on your machine, and each command's flags once you type a dash (`wb add --pr<Tab>`). For `wb module reset <name>` and `wb files use <name>`, it offers that module's own files, and `all`.
+
 ### `wb help`
 
 Lists every command, grouped. With a command name, shows everything that command can do.

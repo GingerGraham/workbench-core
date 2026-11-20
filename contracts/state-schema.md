@@ -38,7 +38,7 @@ any existing host's file.
 ${XDG_DATA_HOME:-~/.local/share}/workbench/modules/<name>/
 ├── sync.conf
 ├── snapshots/
-│   └── <ref-slug>-<shortsha>/    immutable once written
+│   └── <ref-slug>-<shortsha>/    immutable once written (read-only on disk, D120)
 ├── current -> snapshots/<ref-slug>-<shortsha>
 ├── register.list
 ├── installers.list
