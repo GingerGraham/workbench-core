@@ -26,7 +26,7 @@ The [workbench-shell](https://github.com/GingerGraham/workbench-shell) and [work
 ## What workbench changes on purpose
 
 - **It adds one line to your shell startup file** (`~/.bashrc`, and the zsh files if you use zsh), after everything already there. Before adding it the first time, it backs up a file that already has content. See [Your existing startup file](#your-existing-startup-file).
-- **It adds `~/.local/bin` to `PATH` if it's missing.** If it's already there, in any position, nothing moves. Directories are added, never reordered.
+- **It adds `~/.local/bin` to the end of `PATH` if it's missing.** If it's already there, in any position, nothing moves. Directories are added, never reordered. At the end, system commands win over anything in `~/.local/bin`; to prefer a tool you installed there, put the directory first in your own startup file.
 - **It removes repeated `PATH` entries** once loading finishes. It keeps the first copy of each, so it never changes which directory wins. This is the one place workbench touches something it didn't create.
 - **Some modules set defaults where you have none.** With workbench-shell installed and no `FZF_*` variables of your own, fzf gets workbench's defaults (height, layout, and `fd` to list files). That also changes how your own fzf aliases look and where they list files from. Set the variable yourself and workbench leaves it alone.
 

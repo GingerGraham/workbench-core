@@ -6,6 +6,16 @@ All notable changes to `workbench-core` are documented here.
 
 ### Changed
 
+- **`~/.local/bin` goes at the end of `PATH`, not the front.** When
+  workbench has to add it (it isn't there yet), it now goes after the
+  system directories, so a program dropped into it can't shadow a system
+  command such as `ls` or `sudo`. A `~/.local/bin` that is already on
+  `PATH` is left where it is, so a distro that puts it first keeps doing
+  so. A tool you install with `wb tools install` into `~/.local/bin` is
+  now found only if no system package provides the same command; to
+  prefer the one in `~/.local/bin`, put it first in your own startup
+  file. `wb uninstall`'s notes suggest the same end-of-`PATH` line.
+  (D121)
 - **Downloaded module copies are read-only.** Each snapshot under
   `~/.local/share/workbench/modules/<name>/snapshots/` is made read-only
   once it is written, so an editor, a tool or a hook can't change what

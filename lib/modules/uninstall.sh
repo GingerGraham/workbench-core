@@ -413,7 +413,7 @@ _wb_uninstall_write_notes() {
         echo "## What this changes"
         echo
         echo "- New shells no longer load anything from workbench. That covers every module's functions, aliases, prompt setup and completions, plus any \`PATH\` entries and environment variables they set."
-        echo "- Workbench no longer makes sure \`~/.local/bin\` is on your \`PATH\`. If a tool stops being found, add \`export PATH=\"\$HOME/.local/bin:\$PATH\"\` to your shell's rc file."
+        echo "- Workbench no longer makes sure \`~/.local/bin\` is on your \`PATH\`. If a tool stops being found, add \`export PATH=\"\$PATH:\$HOME/.local/bin\"\` to your shell's rc file."
         echo "- Nothing updates any more."
         echo "- Config files and config blocks left by modules still apply, listed below."
         echo

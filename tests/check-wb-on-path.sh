@@ -123,9 +123,29 @@ fi
 LOADER="${REPO_ROOT}/lib/loader.sh"
 OUT_PATH="$(PATH="/usr/bin:/bin" HOME="${HOME}" bash -c "source '${LOADER}' >/dev/null 2>&1; printf '%s' \"\${PATH}\"")"
 case ":${OUT_PATH}:" in
-    *":${HOME}/.local/bin:"*) ok "sourcing lib/loader.sh prepends ~/.local/bin onto PATH" ;;
+    *":${HOME}/.local/bin:"*) ok "sourcing lib/loader.sh adds ~/.local/bin to PATH" ;;
     *) fail "lib/loader.sh did not add ~/.local/bin to PATH: ${OUT_PATH}" ;;
 esac
+
+# D121: added after the system directories, so nothing dropped in
+# ~/.local/bin shadows a system command it didn't already shadow.
+if [[ "${OUT_PATH}" == "/usr/bin:/bin:${HOME}/.local/bin" ]]; then
+    # shellcheck disable=SC2088
+    ok "~/.local/bin is added at the end of PATH, after the system directories"
+else
+    # shellcheck disable=SC2088
+    fail "~/.local/bin was not added last: ${OUT_PATH}"
+fi
+
+# An entry already on PATH is never moved, so a distro that puts it first
+# (Fedora's default .bashrc) keeps its own ordering.
+# shellcheck disable=SC2097,SC2098
+OUT_FIRST="$(PATH="${HOME}/.local/bin:/usr/bin:/bin" HOME="${HOME}" bash -c "source '${LOADER}' >/dev/null 2>&1; printf '%s' \"\${PATH}\"")"
+if [[ "${OUT_FIRST}" == "${HOME}/.local/bin:/usr/bin:/bin" ]]; then
+    ok "a ~/.local/bin the distro already put first stays first"
+else
+    fail "an existing ~/.local/bin position changed: ${OUT_FIRST}"
+fi
 
 # Split on ':' and match whole segments — `grep -o ":X:"` would consume the
 # shared colon between adjacent duplicates (…:X:X:…) and undercount them,

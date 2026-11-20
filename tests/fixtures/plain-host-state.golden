@@ -47,7 +47,7 @@ workbench_valid_repo_url
 ## cd/zd/z bodies
 ## exported env
 HOME=@WORK@/plain/home
-PATH=@WORK@/plain/home/.local/bin:/usr/local/bin:/usr/bin:/bin
+PATH=/usr/local/bin:/usr/bin:/bin:@WORK@/plain/home/.local/bin
 SHLVL=1
 TERM=dumb
 WORKBENCH_LOADER_PATH=@WORK@/plain/data/workbench/modules/core/current/lib/loader.sh
