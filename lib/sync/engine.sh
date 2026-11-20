@@ -289,6 +289,8 @@ workbench_deploy_module() {
     done < <(workbench_files_targets "${name}" --log)
 
     workbench_files_write_pending "${name}"
+    # Last, so link entries created above are writable through (D120).
+    workbench_files_seal_snapshots "${name}"
     return 0
 }
 
@@ -825,6 +827,10 @@ workbench_sync_module() {
 
     workbench_snapshot_swap "${name}" "${new_snapshot}"
     workbench_snapshot_prune "${name}"
+    # D120: from here the snapshot is read-only. A staged first sync stops
+    # below before any deploy, so this is the only seal it gets; otherwise
+    # the deploy re-seals once its link entries exist.
+    workbench_files_seal_snapshots "${name}"
 
     # D84: 'wb add', 'wb install --bundle' and bootstrap stage the first
     # sync — fetched and current, nothing deployed, no hook run — so the

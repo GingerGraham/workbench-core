@@ -113,6 +113,12 @@ Workbench downloads public modules without `git`. It uses `git` only for private
 
 That's expected. Your own copy of the repository is where you edit. Workbench keeps a separate copy of the branch it follows. Changes reach workbench's copy when you push them to the branch.
 
+## I can't edit or delete a file under `~/.local/share/workbench`
+
+Workbench makes the copy of each module it downloads read-only, so a stray edit can't change what it deploys. To change a setting, edit the file in your home directory. A file workbench copied there is yours to edit. A file workbench links to the module's copy can be edited where it is.
+
+To delete the whole directory by hand, first run `chmod -R u+w ~/.local/share/workbench`. `wb uninstall` does this for you.
+
 ## Still stuck
 
 [Open an issue](https://github.com/GingerGraham/workbench-core/issues/new/choose). Include the output of `wb status` and `wb version`, and what you ran.

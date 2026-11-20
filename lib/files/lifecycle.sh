@@ -122,7 +122,9 @@ _wb_files_write() {
     fi
     mkdir -p "$(dirname "${real}")" || return 1
     tmp="$(mktemp "${real}.wb.XXXXXX")" || return 1
-    if cp "${abs_src}" "${tmp}" && chmod "$(_wb_files_mode "${abs_src}")" "${tmp}" && mv -f "${tmp}" "${real}"; then
+    # The source can be a sealed snapshot file with no write bit (D120); the
+    # copy is the user's to edit, so it always keeps the owner's.
+    if cp "${abs_src}" "${tmp}" && chmod "$(_wb_files_mode "${abs_src}")" "${tmp}" && chmod u+w "${tmp}" && mv -f "${tmp}" "${real}"; then
         return 0
     fi
     rm -f "${tmp}"
@@ -241,6 +243,63 @@ workbench_files_ledger_rows() {
 # never deletes these.
 workbench_files_pinned_snapshots() {
     workbench_files_ledger_rows "$1" | awk -F'|' '$3 == "held" && $7 != "-" { print $7 }'
+}
+
+# workbench_files_seal_snapshots <module>
+# Makes every snapshot of the module read-only except what a link must be
+# able to write through (D120). Idempotent and cheap, so it runs after
+# anything that can change which entries are linked: a sync's deploy, the
+# first staged fetch, 'wb files use|resolve|restore'.
+#   current snapshot  sealed, except the paths active link entries point at
+#                     (a link_tree entry, '.', leaves it all writable)
+#   pinned snapshot   left alone: a held entry's changes live there
+#   any other         sealed completely
+workbench_files_seal_snapshots() {
+    local module="$1" module_dir snaps current pinned snap name writable
+    module_dir="$(workbench_module_dir "${module}")"
+    snaps="${module_dir}/snapshots"
+    [[ -d "${snaps}" ]] || return 0
+    command -v _wb_require &>/dev/null && _wb_require distribution/snapshot.sh
+    command -v workbench_snapshot_seal &>/dev/null || return 0
+    current=""
+    [[ -L "${module_dir}/current" ]] && current="$(readlink "${module_dir}/current")"
+    pinned="$(workbench_files_pinned_snapshots "${module}")"
+    writable="$(workbench_files_ledger_rows "${module}" | awk -F'|' '$3 == "active" && index($4, "link:") == 1 { print substr($4, 6) }')"
+    for snap in "${snaps}"/*; do
+        [[ -d "${snap}" && ! -L "${snap}" ]] || continue
+        name="$(basename "${snap}")"
+        if [[ -n "${pinned}" ]] && printf '%s\n' "${pinned}" | grep -qxF "${name}"; then
+            continue
+        fi
+        if [[ "${snap}" == "${current}" ]]; then
+            workbench_snapshot_seal "${snap}" <<< "${writable}"
+        else
+            workbench_snapshot_seal "${snap}" < /dev/null
+        fi
+    done
+    return 0
+}
+
+# 'use', 'resolve' and 'restore' can each create, convert or drop link entries,
+# so each re-seals the module's snapshots when it finishes (D120). The bodies
+# are the _wb_files_*_impl functions further down.
+workbench_files_use() {
+    local rc
+    _wb_files_use_impl "$@"; rc=$?
+    workbench_files_seal_snapshots "$1"
+    return "${rc}"
+}
+workbench_files_resolve() {
+    local rc
+    _wb_files_resolve_impl "$@"; rc=$?
+    workbench_files_seal_snapshots "$1"
+    return "${rc}"
+}
+workbench_files_restore() {
+    local rc
+    _wb_files_restore_impl "$@"; rc=$?
+    workbench_files_seal_snapshots "$1"
+    return "${rc}"
 }
 
 # ── Policy ──────────────────────────────────────────────────────────────────
@@ -1146,7 +1205,7 @@ _wb_files_link_snapshot() {
 # exists is moved aside so the tool only finds this one, any hold or
 # managed-copy form is undone, and the per-entry policy is cleared — or set
 # to follow.
-workbench_files_use() {
+_wb_files_use_impl() {
     local module="$1" line="$2" follow="${3:-}"
     local real row state pin snap drift original backup
     _wb_files_target_fields "${line}"
@@ -1231,7 +1290,7 @@ _wb_files_unconvert() {
 #   use     take the default (yours is backed up)
 # Returns 3 when the target has nothing to resolve; 4 when dest is no longer
 # core's link (the user replaced it — it's theirs, nothing to decide).
-workbench_files_resolve() {
+_wb_files_resolve_impl() {
     local module="$1" line="$2" choice="$3" follow="${4:-}"
     local row state pin snap real src_sha src_path
     case "${choice}" in
@@ -1382,7 +1441,7 @@ _wb_files_convert_one() {
 # The entry ends 'restored' with policy 'skip'. Returns 3 when there is
 # nothing of workbench's to restore, 4 when dest is now a symlink the user
 # made (left in place).
-workbench_files_restore() {
+_wb_files_restore_impl() {
     local module="$1" dest="$2"
     local real row kind state sha original pin snap drift child rc=0
     real="$(_wb_expand_dest "${dest%/}")"

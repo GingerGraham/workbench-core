@@ -70,6 +70,65 @@ workbench_snapshot_swap() {
     fi
 }
 
+# workbench_snapshot_seal <snapshot_dir>   (writable paths on stdin)
+# Makes a snapshot read-only, as the architecture says it is once written
+# (D120): nothing can write into a module's own content by accident — an
+# editor, a tool run from a linked directory, a hook. Each line on stdin is
+# a path relative to the snapshot that a link-mode deploy points at; those
+# stay writable (D81 lets a user edit through a link, then holds the
+# change), and so does the one directory each sits in, so an editor that
+# saves by rename still works. A line of '.' means the whole snapshot is a
+# link target: the snapshot is made fully writable again, since an earlier
+# pass (a staged first sync seals before any link entry exists) may have
+# sealed it. The result depends only on the arguments, never on the mode a
+# previous pass left. Always read stdin: pass a here-string, or </dev/null
+# for a full seal.
+#
+# Hardening, not a gate: a failure to change modes (a filesystem without
+# permission bits) warns once and returns 0.
+workbench_snapshot_seal() {
+    local dir="$1" rel path
+    local -a writable=()
+    while IFS= read -r rel; do
+        [[ -z "${rel}" ]] && continue
+        if [[ "${rel}" == "." ]]; then
+            workbench_snapshot_unseal "${dir}"
+            return 0
+        fi
+        writable+=("${rel%/}")
+    done
+    [[ -d "${dir}" ]] || return 0
+    if ! chmod -R a-w "${dir}" 2>/dev/null; then
+        log_warn "workbench_snapshot_seal: couldn't make ${dir} read-only"
+        return 0
+    fi
+    # Empty-array expansion fails under bash 3.2's set -u; guard on the count.
+    if [[ "${#writable[@]}" -gt 0 ]]; then
+        for rel in "${writable[@]}"; do
+            path="${dir}/${rel}"
+            [[ -e "${path}" ]] || continue
+            chmod -R u+w "${path}" 2>/dev/null
+            chmod u+w "$(dirname "${path}")" 2>/dev/null
+        done
+    fi
+    return 0
+}
+
+# workbench_snapshot_unseal <dir>
+# Gives the owner write access to a whole tree again, ahead of deleting it.
+workbench_snapshot_unseal() {
+    [[ -e "$1" ]] && chmod -R u+w "$1" 2>/dev/null
+    return 0
+}
+
+# workbench_snapshot_remove <dir>
+# Deletes a snapshot: a sealed directory can't have its contents removed, so
+# unseal first. The only way core deletes one.
+workbench_snapshot_remove() {
+    workbench_snapshot_unseal "$1"
+    rm -rf "$1"
+}
+
 # workbench_snapshot_prune <module> [keep_count]
 # Removes snapshot directories beyond the retention window, oldest first by
 # mtime — when each was fetched (tar -m, fetch-tarball.sh) — never
@@ -113,7 +172,7 @@ workbench_snapshot_prune() {
         if [[ -n "${pinned}" ]] && printf '%s\n' "${pinned}" | grep -qxF "$(basename "${all[$i]}")"; then
             continue
         fi
-        rm -rf "${all[$i]}"
+        workbench_snapshot_remove "${all[$i]}"
         rm -f "${module_dir}/sums/$(basename "${all[$i]}")"
         log_info "workbench_snapshot_prune: removed old snapshot ${all[$i]}"
     done

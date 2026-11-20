@@ -44,7 +44,7 @@ shallow form first and falls back to a full fetch + checkout when it fails.
 ```
 ${XDG_DATA_HOME}/workbench/modules/<name>/
 ├── sync.conf
-├── snapshots/<ref-slug>-<shortsha>/     immutable once written
+├── snapshots/<ref-slug>-<shortsha>/     immutable once written (read-only on disk, D120)
 ├── current -> snapshots/<ref-slug>-<shortsha>
 └── register.list / deploy is read live from the manifest in `current`
 ```

@@ -4,6 +4,19 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Downloaded module copies are read-only.** Each snapshot under
+  `~/.local/share/workbench/modules/<name>/snapshots/` is made read-only
+  once it is written, so an editor, a tool or a hook can't change what
+  workbench deploys by accident. Files that a `link` or `link_tree`
+  deploy points at stay writable, so editing through a link and having
+  the change held still works. Copies workbench makes into your home
+  directory are not affected and stay editable. To delete the data
+  directory by hand, run `chmod -R u+w` on it first; `wb uninstall` does
+  this itself. A `post_deploy` hook runs in its module's `current`
+  directory, which is now read-only. (D120)
+
 ### Fixed
 
 - **The dangerous-pattern scan missed common spellings.** It now catches

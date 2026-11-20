@@ -14,7 +14,8 @@ ok()   { check_no=$((check_no + 1)); echo "OK:   [$check_no] $*"; }
 fail() { check_no=$((check_no + 1)); echo "FAIL: [$check_no] $*"; FAILED=$((FAILED + 1)); }
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "${WORK}"' EXIT
+# Snapshots are read-only (D120): unseal before deleting them.
+trap 'chmod -R u+w "${WORK}" 2>/dev/null; rm -rf "${WORK}"' EXIT
 
 # ── 1. Bump arithmetic (lib.sh, no fixture repo needed) ─────────────────
 # shellcheck source=.github/scripts/release/lib.sh

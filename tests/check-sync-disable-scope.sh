@@ -19,7 +19,8 @@ ok()   { check_no=$((check_no + 1)); echo "OK:   [$check_no] $*"; }
 fail() { check_no=$((check_no + 1)); echo "FAIL: [$check_no] $*"; FAILED=$((FAILED + 1)); }
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "${WORK}"' EXIT
+# Snapshots are read-only (D120): unseal before deleting them.
+trap 'chmod -R u+w "${WORK}" 2>/dev/null; rm -rf "${WORK}"' EXIT
 export HOME="${WORK}/home"
 export XDG_DATA_HOME="${WORK}/data"
 export XDG_CONFIG_HOME="${WORK}/config"
@@ -127,6 +128,8 @@ wb sync disable paused
 
 # A frozen module on a version this core doesn't support: 'wb status' warns.
 current="$(readlink "${MODULES}/paused/current")"
+# The snapshot is read-only (D120); this test edits it on purpose.
+chmod -R u+w "${current}"
 sed -i.bak 's/^core_api:.*/core_api: ">=1.0 <1.1"/' "${current}/workbench.yml"
 rm -f "${current}/workbench.yml.bak"
 bash -c "source '${WB}' >/dev/null 2>&1; _workbench_ensure_version_file; _workbench_sync_version_facts" >/dev/null 2>&1

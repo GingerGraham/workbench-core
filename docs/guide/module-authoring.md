@@ -476,7 +476,7 @@ hooks:
     timeout: 60
 ```
 
-Your hook runs in your module's `current` directory, with these environment variables:
+Your hook runs in your module's `current` directory, which is read-only. Write caches and build output under `$XDG_CACHE_HOME` or `$XDG_DATA_HOME`, not there. Your hook runs with these environment variables:
 
 | Variable | Value |
 |---|---|
