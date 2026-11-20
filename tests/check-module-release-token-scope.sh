@@ -122,7 +122,8 @@ expect_problem() {
 }
 
 m="${WORK}/m1.yml"
-sed '0,/persist-credentials: false/s//persist-credentials: true/' "${WORKFLOW}" > "${m}"
+# awk, not sed: BSD sed (macOS) has no `0,/re/` address for "first match only".
+awk '!done && /persist-credentials: false/ { sub(/persist-credentials: false/, "persist-credentials: true"); done = 1 } { print }' "${WORKFLOW}" > "${m}"
 expect_problem "a checkout keeps credentials" "checkouts keep credentials" "${m}"
 
 # Move the whole mint step to the top of the propose job.
@@ -143,7 +144,7 @@ expect_problem "the CHANGELOG-only check is removed" "only CHANGELOG.md changed"
 printf '      - name: after\n        run: git push\n' | cat "${WORKFLOW}" - > "${WORK}/m4.yml"
 expect_problem "a run: step follows the mint" "run: step follows" "${WORK}/m4.yml"
 
-sed "s|path: 'CHANGELOG.md',|path: 'CHANGELOG.md',\n              extra: 1,|; s|const additions = \[{|const additions = [{ path: 'x.sh' }, {|" "${WORKFLOW}" > "${WORK}/m5.yml"
+sed "s|const additions = \[{|const additions = [{ path: 'x.sh' }, {|" "${WORKFLOW}" > "${WORK}/m5.yml"
 expect_problem "the commit sends another file" "more than CHANGELOG.md" "${WORK}/m5.yml"
 
 echo
