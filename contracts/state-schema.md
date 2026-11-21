@@ -363,6 +363,33 @@ content matched.
 No retention policy and no scheduled cleanup — deliberate, not deferred;
 revisit only if volume ever actually becomes a problem.
 
+## Alias clash state
+
+```
+${XDG_DATA_HOME:-~/.local/share}/workbench/alias-clashes.list
+${XDG_DATA_HOME:-~/.local/share}/workbench/alias-clashes.seen
+```
+
+Written by the loader (`lib/loader.sh`) at the end of an **interactive**
+shell start, and only when something changed (docs/decisions-log.md D124).
+Both are plain text, one `name|module|kind` per line, where `kind` is
+`alias` or `function`: what already used the name when a module's
+`workbench_alias_define` call found it taken.
+
+| File | Holds | Read by |
+|---|---|---|
+| `alias-clashes.list` | the clashes of the last interactive shell start | `wb status`, `wb functions`, listings |
+| `alias-clashes.seen` | the clashes the user has already been told about | the loader, to warn once |
+
+Each is rewritten whole (temp file and rename) when its content changes, and
+removed when empty, so a host with no clash has neither file. A clash that
+goes away leaves both files, so one that returns warns again. Only the
+interactive loader pass can see the live shell's aliases and functions;
+`wb` runs in its own process and cannot, so it reads the list. A file that
+can't be read or written is skipped silently. Safe to delete: the next
+interactive shell start re-derives the list and, with `seen` gone, warns
+once more.
+
 ## `REMOVAL-NOTES.md`
 
 `${XDG_DATA_HOME}/workbench/REMOVAL-NOTES.md`, written by `wb uninstall` before it changes anything, and deleted by the next `wb install` (docs/decisions-log.md D108). `wb uninstall` links it from `~/workbench-removal-notes.md` unless something else is already at that path; `wb install` removes that link only when it points at the notes. For a person to read; nothing parses it. After `wb uninstall`, `modules/<name>/` (except `core`), `backups/` and `adoption.log` remain, so a reinstall picks every remaining module up where it was.

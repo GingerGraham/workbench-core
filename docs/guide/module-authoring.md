@@ -12,6 +12,7 @@ The full field reference is the [manifest specification](https://github.com/Ging
 - [Release tags](#release-tags)
 - [Registering shell content](#registering-shell-content)
 - [Getters](#getters)
+- [Defining aliases](#defining-aliases)
 - [Shipping overridable defaults (`overrides_src`)](#shipping-overridable-defaults-overrides_src)
 - [Deploying files](#deploying-files)
 - [Layering config into a tool the user already uses](#layering-config-into-a-tool-the-user-already-uses)
@@ -103,6 +104,30 @@ The generated getter lists every function and alias in your `register.shell[]` f
 `function` must not be empty, must not start with `_`, and can only use `A-Z a-z 0-9 _ -`. Workbench skips any other entry with a warning.
 
 A getter you write yourself still works, and wins over the generated one. If you keep one, don't use `BASH_SOURCE` inside the function to find your own files: zsh doesn't set it, so the getter prints `(none)` there.
+
+## Defining aliases
+
+Define every alias with `workbench_alias_define <name> <module> <value>`, never with a bare `alias`. It defines the alias only when the name is free, so your module never replaces an alias or function the user already has:
+
+```bash
+# before
+alias gst="git status"
+alias gitkeep='find . -type d -empty -exec touch {}/.gitkeep \;'
+
+# after
+workbench_alias_define gst git "git status"
+workbench_alias_define gitkeep git 'find . -type d -empty -exec touch {}/.gitkeep \;'
+```
+
+`<module>` is your module's name; it appears in the warning the user sees when a name was already in use. Keep each value's original quoting, so it expands at the same time as before.
+
+- A name is free when nothing uses it, when workbench defined it earlier in this shell (a reload refreshes it), or when an alias with the identical definition exists. It's taken when a function of that name exists or a different alias does. A command on `PATH` doesn't count.
+- When a name is taken the call returns 1, defines nothing, and records the clash. The loader reports it once and `wb status` lists it. Don't rename your alias to dodge one: on that host the existing name is the user's.
+- Put each call at the start of a line, in an `if` block, not after `&&`. The getter finds names only at the start of a line.
+- It's a Core API function, available from the `core` tier on, so don't call it from an `env`-tier file. Declare `core_api: ">=1.10 <2.0"`.
+- Aliases that a tool creates for itself (`eval "$(tool init)"`) can't go through the function; they're the tool's.
+
+Why this matters: bash expands an alias when it reads a line, including the name in `name() {`. A bare alias breaks any file of the user's that later defines a function with the same name, with `syntax error near unexpected token '('`. The template's `tests/check-no-bare-alias.sh` fails on a bare `alias` definition; end a line with `# wb-allow-bare-alias` to allow one on purpose.
 
 ## Shipping overridable defaults (`overrides_src`)
 

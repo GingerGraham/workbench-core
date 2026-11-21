@@ -30,7 +30,9 @@ The columns:
 | `LOAD` | `true` if its shell functions and aliases load. |
 | `HOOKS_PENDING` | `true` if a setup step is waiting for your approval. Run `wb update <name>` to review it. |
 
-When a file is waiting on your decision, the last line says how many. `wb files status` lists them.
+When a file is waiting on your decision, a line says how many. `wb files status` lists them.
+
+The last section lists any aliases workbench didn't set because you already had an alias or function of that name, or says `none`. It's as of your last interactive shell start. See [Alias and function clashes](existing-setups.md#alias-and-function-clashes).
 
 ### `wb update`
 

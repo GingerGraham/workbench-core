@@ -23,6 +23,20 @@ The [workbench-shell](https://github.com/GingerGraham/workbench-shell) and [work
 - starship isn't started a second time when your setup already started it;
 - the lazy-loading `nvm`, `node`, `npm` and `npx` commands aren't defined when `nvm` is already loaded in your shell.
 
+## Alias and function clashes
+
+Workbench never replaces an alias or function it didn't define. If a module would define an alias for a name that's already an alias or a function in your shell, workbench keeps yours and doesn't define its own. A command on your `PATH` doesn't count: aliases such as `cat` and `top` shadow commands on purpose. An existing alias that is identical to the one workbench would set isn't a clash either.
+
+This matters beyond keeping your definition. Bash reads an alias before it parses the line, including the name in `name() {`. If workbench's alias existed, re-sourcing a file of yours that defines a function of the same name would fail with `syntax error near unexpected token '('`.
+
+What you see:
+
+- **The first interactive shell** after a clash appears prints one warning that lists each name, whether yours is an alias or a function, and the value workbench would have set. Nothing is changed. Later shells say nothing about a clash they've already reported; a clash that goes away and comes back warns again. Non-interactive shells never print it.
+- **`wb status`** lists the clashes as of your last interactive shell start.
+- **`wb functions`** and each module's `get-<name>-functions` don't list a name workbench left alone.
+
+There's no setting yet that makes workbench's alias win. To use workbench's version, rename or remove yours. If you do, the next shell defines it and the entry disappears.
+
 ## What workbench changes on purpose
 
 - **It adds one line to your shell startup file** (`~/.bashrc`, and the zsh files if you use zsh), after everything already there. Before adding it the first time, it backs up a file that already has content. See [Your existing startup file](#your-existing-startup-file).
@@ -111,6 +125,8 @@ What workbench changes there:
 - files that modules add or layer into your config, such as the tmux and vim blocks and copied config from workbench-shell. `wb files status` lists every one.
 
 What it leaves alone: `EDITOR`, `SUDO_EDITOR`, `BAT_THEME`, `MANPAGER`, `LANG`, the `ls`, `lsa` and `cd` aliases, the prompt hooks (`starship_precmd`, the terminal-title update, both `__zoxide_hook` entries), the `PATH` order, and an existing `~/.config/starship.toml` (if you keep it when asked).
+
+Omarchy 4.5 defines a function named `gd`, so workbench-git doesn't define its `gd` alias there. Omarchy's `gd` stays as it is, and the first interactive shell says so once. See [Alias and function clashes](#alias-and-function-clashes).
 
 What you'll see: `VISUAL` set to the same value as your `EDITOR`; the `cat`, `top`, `python`, `pip` and `lsr` aliases; and the fzf defaults described above, which also apply to Omarchy's `ff` and `eff` aliases.
 
