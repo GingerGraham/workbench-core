@@ -831,6 +831,132 @@ _wb_print_unavailable_block() {
     _wb_print_unavailable_group "${_cur_needs}" "${_cur_install}" "${_cur_names}"
 }
 
+# ── Alias definitions that yield (docs/decisions-log.md D124) ─────────────
+# Workbench never replaces an alias or function it did not define. A module
+# defines an alias only through workbench_alias_define; if the name is
+# already in use, the existing definition stays, nothing is defined, and the
+# loader reports the clash once (lib/loader.sh) and `wb status` lists it.
+#
+# Why this matters beyond "don't clobber": bash expands an alias when a line
+# is READ, including the name in `name() {`. Once an alias exists, a host
+# file that defines a function of the same name fails to parse
+# ("syntax error near unexpected token `('"). Yielding to a function is
+# what keeps a re-sourced host profile working.
+#
+# Shared state, WORKBENCH_-prefixed and never unset by the loader's reset:
+#   WORKBENCH_ALIASES_OURS   space-separated names workbench has defined in
+#                            this shell. Never cleared, so a reload
+#                            refreshes our own aliases instead of
+#                            reporting them as someone else's.
+#   WORKBENCH_ALIAS_CLASHES  newline-separated name|module|kind|value
+#                            records. The loader empties it at the start
+#                            of each pass, so a clash the user has since
+#                            fixed disappears.
+# Not exported. Space/newline-delimited strings, not arrays: bash 3.2 has
+# no associative arrays. BASH_ALIASES is not read for the same reason.
+WORKBENCH_ALIASES_OURS="${WORKBENCH_ALIASES_OURS:-}"
+WORKBENCH_ALIAS_CLASHES="${WORKBENCH_ALIAS_CLASHES:-}"
+
+# workbench_alias_define <name> <module> <value>
+# Returns 0 if the alias was defined (or refreshed, or already identical),
+# 1 if an existing definition was left in place.
+#
+# The name is free when any of these holds:
+#   1. workbench defined it earlier in this shell (a reload refreshes it),
+#   2. nothing of that name exists,
+#   3. an alias exists and its definition is identical to <value>'s.
+# It is not free when a function of that name exists (never compared), or a
+# different alias exists. A command on PATH is not a clash: aliases such as
+# cat, top and python shadow commands on purpose.
+#
+# `builtin` in front of alias, unalias and typeset is deliberate: this
+# body must not be rewritten by a host alias of the same name (D110). The
+# subshell below runs only when an alias of that name already exists, so
+# the normal path forks nothing.
+workbench_alias_define() {
+    local name="$1" module="$2" value="$3" existing wanted kind
+
+    case " ${WORKBENCH_ALIASES_OURS:-} " in
+        *" ${name} "*)
+            # shellcheck disable=SC2139  # the value is meant to expand now, as a plain alias would
+            builtin alias "${name}=${value}"  # wb-allow-bare-alias
+            return 0
+            ;;
+    esac
+
+    if builtin typeset -f "${name}" >/dev/null 2>&1; then
+        kind="function"
+    elif builtin alias "${name}" >/dev/null 2>&1; then
+        # An alias exists. Print what ours would look like, in this shell's
+        # own format (bash: alias gd='git diff'; zsh: gd='git diff'), and
+        # compare. Identical means there is nothing to protect. The test
+        # above is a plain builtin and forks nothing; only this branch
+        # forks, so a free name (the normal case) costs no process.
+        existing="$(builtin alias "${name}" 2>/dev/null)"
+        # shellcheck disable=SC2139  # same: expands now, in a subshell that keeps nothing
+        wanted="$( builtin unalias "${name}"; builtin alias "${name}=${value}"; builtin alias "${name}" )"  # wb-allow-bare-alias
+        if [[ "${existing}" == "${wanted}" ]]; then
+            WORKBENCH_ALIASES_OURS="${WORKBENCH_ALIASES_OURS:-} ${name}"
+            return 0
+        fi
+        kind="alias"
+    else
+        # shellcheck disable=SC2139  # same
+        builtin alias "${name}=${value}"  # wb-allow-bare-alias
+        WORKBENCH_ALIASES_OURS="${WORKBENCH_ALIASES_OURS:-} ${name}"
+        return 0
+    fi
+
+    # name|module|kind|value, one record per line. value is last so it may
+    # contain "|"; a newline in it would split the record, so flatten it.
+    local newline=$'\n'
+    WORKBENCH_ALIAS_CLASHES="${WORKBENCH_ALIAS_CLASHES:-}${name}|${module}|${kind}|${value//"${newline}"/ }${newline}"
+    return 1
+}
+
+# workbench_alias_is_ours <name>
+# True when workbench has defined an alias of that name in this shell.
+workbench_alias_is_ours() {
+    case " ${WORKBENCH_ALIASES_OURS:-} " in
+        *" ${1} "*) return 0 ;;
+    esac
+    return 1
+}
+
+# _wb_alias_clash_names
+# Names workbench did not set because they were already in use: this shell's
+# live record plus the list the last interactive shell start persisted.
+# Both are read because `wb functions` runs as its own process and sees no
+# live shell state, only the file.
+_wb_alias_clash_names() {
+    local _clash_file _name _rest
+    _clash_file="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/alias-clashes.list"
+    while IFS='|' read -r _name _rest; do
+        [[ -n "${_name}" ]] && printf '%s\n' "${_name}"
+    done <<< "${WORKBENCH_ALIAS_CLASHES:-}"
+    if [[ -r "${_clash_file}" ]]; then
+        while IFS='|' read -r _name _rest || [[ -n "${_name}" ]]; do
+            [[ -n "${_name}" ]] && printf '%s\n' "${_name}"
+        done < "${_clash_file}"
+    fi
+}
+
+# _wb_alias_drop_clashed
+# Filter: reads alias names on stdin, one per line, and prints those that
+# are not clashed. A clashed name is the host's alias or function, not
+# workbench's, so no listing may show it under a module's heading (D124).
+_wb_alias_drop_clashed() {
+    local _clashed _n
+    _clashed=$'\n'"$(_wb_alias_clash_names)"$'\n'
+    while IFS= read -r _n; do
+        [[ -n "${_n}" ]] || continue
+        case "${_clashed}" in
+            *$'\n'"${_n}"$'\n'*) continue ;;
+        esac
+        printf '%s\n' "${_n}"
+    done
+}
+
 # ── Getter pattern ────────────────────────────────────────────────────────
 # Two generic primitives every "get-<domain>-functions" getter is built from
 # — verbatim from the donor codebase, already domain-agnostic. Private
@@ -850,9 +976,16 @@ _extract_function_names() {
         | sort -u
 }
 
+#
+# _extract_alias_names matches `alias NAME=` and, since Core API 1.10,
+# `workbench_alias_define NAME <module> <value>` (D124). Both must start the
+# line, so a definition belongs in an if-block, not after `&&`.
 _extract_alias_names() {
-    grep -Eho '^[[:space:]]*alias [a-zA-Z0-9_-]+=' "$@" 2>/dev/null \
-        | sed -E 's/^[[:space:]]*alias ([a-zA-Z0-9_-]+)=.*/\1/' \
+    grep -Eho \
+        -e '^[[:space:]]*alias [a-zA-Z0-9_.-]+=' \
+        -e '^[[:space:]]*workbench_alias_define [a-zA-Z0-9_.-]+[[:space:]]' \
+        "$@" 2>/dev/null \
+        | sed -E 's/^[[:space:]]*(alias|workbench_alias_define) ([a-zA-Z0-9_.-]+)[=[:space:]].*/\2/' \
         | sort -u
 }
 
@@ -894,6 +1027,9 @@ _get_aliases_in() {
         echo "  (no files given)"; echo; return 1
     fi
     local _names; _names="$(_extract_alias_names "$@")"
+    # A name workbench left alone because the host already had it is the
+    # host's, not this module's: never list it here (D124).
+    _names="$(printf '%s\n' "${_names}" | _wb_alias_drop_clashed)"
     if [[ "${_pattern}" == \!* ]]; then
         _names="$(printf '%s\n' "${_names}" | grep -Ev "${_pattern#!}")"
     elif [[ -n "${_pattern}" ]]; then
