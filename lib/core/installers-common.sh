@@ -615,4 +615,4 @@ _wb_dnf_vendor_repo() {
 }
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/installers-common.sh" "0.4.1" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/core/installers-common.sh" "0.5.0" || true

@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.29.0] - 2026-11-21
+
 ### Added
 
 - **Install helpers can refuse a Node.js that is too old before installing
