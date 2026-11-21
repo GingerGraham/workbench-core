@@ -249,6 +249,42 @@ else
 fi
 RUN_PREFIX=""
 
+# ── zsh: the same loader in an interactive zsh. ─────────────────────────────
+# zsh keeps its alias text in a different format (gcm='...', not alias
+# gcm='...'), so the warning's "existing" text is worth checking here too.
+if command -v zsh >/dev/null 2>&1; then
+    rm -f "${LIST}" "${SEEN}"
+    mkdir -p "${WORK}/zdot"
+    host_rc yes yes
+    cp "${WORK}/rc" "${WORK}/zdot/.zshrc"
+    start_zsh() {
+        env -i HOME="${HOST_HOME}" ZDOTDIR="${WORK}/zdot" XDG_DATA_HOME="${HOST_DATA}" XDG_CONFIG_HOME="${HOST_CONFIG}" \
+            XDG_CACHE_HOME="${HOST_CACHE}" PATH="/usr/local/bin:/usr/bin:/bin" TERM=dumb skip_global_compinit=1 \
+            WORKBENCH_USER_EXT_ENABLED=false zsh -i -c 'echo SHELL-STARTED' 2>&1 </dev/null
+    }
+    out="$(start_zsh)"
+    if [[ "$(warning_count "${out}")" -eq 1 ]] && grep -q '2 aliases were not set' <<<"${out}" \
+        && grep -q 'existing function' <<<"${out}" && grep -q "existing gcm='git commit --signoff -m'" <<<"${out}" \
+        && grep -q 'SHELL-STARTED' <<<"${out}"; then
+        ok "zsh: interactive start with two clashes prints one consolidated warning (function and alias kinds)"
+    else
+        fail "zsh: first start"; printf '%s\n' "${out}"
+    fi
+    if grep -qx 'gd|git|function' "${LIST}" && grep -qx 'gcm|git|alias' "${LIST}" && [[ "$(grep -c . "${SEEN}")" -eq 2 ]]; then
+        ok "zsh: both state files hold both clashes"
+    else
+        fail "zsh: state files"; cat "${LIST}" "${SEEN}" 2>&1
+    fi
+    out="$(start_zsh)"
+    if [[ "$(warning_count "${out}")" -eq 0 ]] && [[ "${out}" == "SHELL-STARTED" ]]; then
+        ok "zsh: the next start is silent"
+    else
+        fail "zsh: second start"; printf '%s\n' "${out}"
+    fi
+else
+    skip "zsh is not installed — the zsh loader case was not run"
+fi
+
 echo
 if [[ "${FAILED}" -eq 0 ]]; then
     echo "All ${check_no} checks passed."
