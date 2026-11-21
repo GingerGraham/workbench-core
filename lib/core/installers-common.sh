@@ -88,9 +88,58 @@ _node_version_at_least() {
     [[ "${have}" -ge "${want}" ]]
 }
 
-# _ensure_npm — ensure npm is usable, preferring nvm. Returns 0 if npm resolves.
+# _wb_distro_node_major <package-manager>
+# Prints the major version of the Node.js that <package-manager> would install
+# for `nodejs`, or nothing when it can't be worked out. Read-only: it asks the
+# package manager's own metadata and never elevates. brew is not handled — it
+# installs without elevation and its `node` formula tracks the current release.
+_wb_distro_node_major() {
+    local package_manager="$1" versions=""
+
+    case "${package_manager}" in
+        apt)
+            versions="$(apt-cache policy nodejs 2>/dev/null | sed -n 's/^ *Candidate: *//p')"
+            ;;
+        dnf|yum)
+            versions="$("${package_manager}" -q repoquery --qf '%{version}\n' nodejs 2>/dev/null)"
+            ;;
+        zypper)
+            versions="$(zypper --non-interactive --quiet info nodejs 2>/dev/null | sed -n 's/^Version *: *//p')"
+            ;;
+        pacman)
+            versions="$(pacman -Si nodejs 2>/dev/null | sed -n 's/^Version *: *//p')"
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+
+    # One version per line. Drop any epoch ("2:18.19.0" → "18.19.0"), keep the
+    # leading digits, and take the highest when a manager lists several.
+    printf '%s\n' "${versions}" \
+        | sed -E 's/^[0-9]+://; s/^([0-9]+).*/\1/' \
+        | grep -E '^[0-9]+$' \
+        | sort -n \
+        | tail -n 1
+}
+
+# _ensure_npm [<min_major>] — ensure npm is usable, preferring nvm. Returns 0
+# if npm resolves.
 # Priority: live npm → nvm stub → unsourced nvm (install LTS) → package manager.
+#
+# <min_major>, when given, is the lowest Node.js major version the caller can
+# use. It only gates the package-manager step, the one that elevates: that
+# step runs only when the package manager's own candidate is at least
+# <min_major>, and returns 1 without elevating when it is lower or can't be
+# read. Without <min_major> the behaviour is unchanged. The caller still checks
+# the Node.js version that ends up active (_node_version_at_least).
 _ensure_npm() {
+    local min_major="${1:-}"
+    if [[ -n "${min_major}" && ! "${min_major}" =~ ^[0-9]+$ ]]; then
+        log_error "_ensure_npm: <min_major> must be a numeric version, got '${min_major}'"
+        return 1
+    fi
+
     if command -v npm &>/dev/null; then
         return 0
     fi
@@ -115,6 +164,20 @@ _ensure_npm() {
 
     log_info "nvm not found — attempting to install Node.js via package manager..."
     [[ -z "${PACKAGE_MANAGER:-}" ]] && { detect-package-manager || return 1; }
+
+    if [[ -n "${min_major}" && "${PACKAGE_MANAGER}" != "brew" ]]; then
+        local candidate_major
+        candidate_major="$(_wb_distro_node_major "${PACKAGE_MANAGER}")"
+        if [[ -z "${candidate_major}" ]]; then
+            log_warn "Cannot tell which Node.js version ${PACKAGE_MANAGER} would install, and Node.js ${min_major}+ is needed — not installing it."
+            return 1
+        fi
+        if [[ "${candidate_major}" -lt "${min_major}" ]]; then
+            log_warn "${PACKAGE_MANAGER} would install Node.js ${candidate_major}, but Node.js ${min_major}+ is needed — not installing it."
+            return 1
+        fi
+    fi
+
     local elevation_cmd
     elevation_cmd="$(get-elevation-command)" || return 1
     case "${PACKAGE_MANAGER}" in

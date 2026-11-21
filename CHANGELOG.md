@@ -4,6 +4,17 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Install helpers can refuse a Node.js that is too old before installing
+  it.** `_ensure_npm` takes an optional minimum Node.js major version
+  (Core API 1.9). When npm is missing and there is no `nvm`, it used to
+  install the distro's `nodejs` with `sudo` whatever its version, and the
+  caller's own version check failed afterwards. With a minimum, it asks the
+  package manager what it would install first, and does nothing, with no
+  `sudo`, if that is too old or can't be read. Modules that use it declare
+  `core_api: ">=1.9 <2.0"`. (D123)
+
 ## [2.28.0] - 2026-11-20
 
 ### Added

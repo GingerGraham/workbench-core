@@ -140,7 +140,10 @@ Modules that declare `layers:` or call either 1.6 function declare
 `core_api: ">=1.6 <2.0"`. Modules that call `_wb_availability_needs` or
 pass `--needs`/`--install` to `_wb_alias_availability` declare
 `core_api: ">=1.7 <2.0"`. Modules that rely on core-generated getters, or call
-`_wb_gh_release_asset_url`, declare `core_api: ">=1.8 <2.0"`.
+`_wb_gh_release_asset_url`, declare `core_api: ">=1.8 <2.0"`. Modules that
+pass `<min_major>` to `_ensure_npm` declare `core_api: ">=1.9 <2.0"`: on an
+older core the argument is ignored and the fallback installs whatever
+Node.js the distro has.
 
 ## Install-helper functions (`lib/core/installers-common.sh`)
 
@@ -157,8 +160,15 @@ module) carrying its own copy:
   an existing file (changed in 1.4 — D74).
 - `_node_version_at_least <major>` — true if the active `node`'s major
   version is `>= <major>`.
-- `_ensure_npm` — ensures `npm` resolves, preferring `nvm` (live shell
-  function → unsourced `nvm.sh` → LTS install → package-manager fallback).
+- `_ensure_npm [<min_major>]` — ensures `npm` resolves, preferring `nvm`
+  (live shell function → unsourced `nvm.sh` → LTS install →
+  package-manager fallback). **`<min_major>` is new in 1.9:** when given,
+  the package-manager fallback — the only step that elevates — runs only if
+  the manager's own candidate Node.js is at least `<min_major>`; a lower or
+  unreadable candidate returns 1 without elevating, so the caller can point
+  the user at `nvm`. `brew` doesn't elevate and isn't gated. Without it the
+  behaviour is unchanged. A caller that needs a minimum should still check
+  the active Node.js afterwards with `_node_version_at_least`.
 - `_npm_global_install <package>` — installs/updates a global npm package,
   redirecting to `~/.local` when the active npm prefix is system-owned
   (`/usr`, `/opt`) so no elevation is required.
