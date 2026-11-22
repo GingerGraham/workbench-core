@@ -4,6 +4,20 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A reload no longer replaces an alias you redefined after workbench set
+  it.** `wb reload`, and the reload that follows a `wb` command, used to
+  put workbench's alias back over one you had replaced (a line of your own
+  below workbench's in your startup file, or one typed at the prompt). Now
+  workbench remembers the value it set, refreshes the alias only while it
+  still is that value, and otherwise keeps yours, reports it once and lists
+  it in `wb status`. A module update's new value still takes effect on
+  reload; an alias you removed with `unalias` is defined again. Each alias
+  already defined costs one subshell to check, so a reload takes roughly
+  1.5 ms longer per alias (about 115 ms for the 76 `workbench-iac` aliases);
+  a fresh shell start is unchanged. (D125)
+
 ## [2.30.0] - 2026-11-22
 
 ### Added

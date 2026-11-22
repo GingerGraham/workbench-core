@@ -37,6 +37,8 @@ What you see:
 
 There's no setting yet that makes workbench's alias win. To use workbench's version, rename or remove yours. If you do, the next shell defines it and the entry disappears.
 
+This holds on a reload too. If you redefine one of workbench's aliases after workbench has loaded (a line of your own below workbench's in your startup file, or at the prompt), `wb reload` and the reload after a `wb` command keep your version, and `wb status` lists it. Workbench's own aliases are still refreshed on a reload, so a module update's new value takes effect. A reload takes a little longer because workbench checks each alias it set earlier.
+
 ## What workbench changes on purpose
 
 - **It adds one line to your shell startup file** (`~/.bashrc`, and the zsh files if you use zsh), after everything already there. Before adding it the first time, it backs up a file that already has content. See [Your existing startup file](#your-existing-startup-file).

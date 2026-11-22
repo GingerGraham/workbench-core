@@ -141,10 +141,13 @@ once core's own `core`-tier registration is sourced:
   defined, refreshed or found an identical alias, and 1 when an existing
   definition was left in place. **Modules define aliases only through
   this function** (docs/decisions-log.md D124). A name is free when
-  workbench defined it earlier in this shell (a reload refreshes it),
-  when nothing of that name exists, or when an alias exists whose
+  workbench defined it earlier in this shell and it is still the alias
+  workbench set (a reload refreshes it, so a module update's new value
+  takes effect), when nothing of that name exists, or when an alias exists whose
   definition is identical to `<value>`'s. It is not free when a function
-  of that name exists, or a different alias does; the clash is recorded
+  of that name exists, or a different alias does (this includes an alias
+  workbench set earlier and the user has since replaced: it is no longer
+  workbench's, and a reload leaves the user's); the clash is recorded
   (name, `<module>`, `alias` or `function`, `<value>`) and the existing
   definition stays. A command on `PATH` is not a clash. `<module>` is the
   module's name, used only to report the clash. Works the same in bash and
