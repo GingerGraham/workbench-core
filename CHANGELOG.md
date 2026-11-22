@@ -4,6 +4,34 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Workbench never replaces an alias or function you already have, and
+  tells you once.** A module now defines an alias with
+  `workbench_alias_define <name> <module> <value>` (Core API 1.10), which
+  sets it only when the name is free: nothing uses it, workbench set it
+  earlier in this shell, or your alias is identical. A function or a
+  different alias of that name is kept and workbench's isn't defined. The
+  first interactive shell after a clash prints one warning naming each
+  name, whether yours is an alias or a function, and what workbench would
+  have set; later shells say nothing about it. `wb status` lists the
+  current clashes. Modules that define aliases declare
+  `core_api: ">=1.10 <2.0"` once they use it. There is no setting yet
+  that makes workbench's alias win. (D124)
+
+### Fixed
+
+- **`bashsource` no longer fails with `syntax error near unexpected token
+  '('` on a host that defines a function workbench also had an alias for.**
+  Bash reads an alias before it parses the line, so with workbench's
+  `alias gd="git diff"` in place, re-reading a host file that defines
+  `gd() {` failed, and in every new shell the alias had silently replaced
+  the host's own `gd`. Workbench now leaves the host's function alone. A
+  shell that started before the update still holds the old aliases: open a
+  new terminal, or run `unalias <name>` first. (D124)
+- `wb functions` and each module's `get-<name>-functions` no longer list a
+  name workbench left alone because you already had it. (D124)
+
 ## [2.29.0] - 2026-11-21
 
 ### Added

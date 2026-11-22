@@ -101,6 +101,22 @@ If `wb scheduler enable` says it could not enable or start `workbench-sync.timer
 
 That's workbench pointing at the copy it saved of your startup file before adding its line. See [Your existing startup file](existing-setups.md#your-existing-startup-file) to move your old setup across, or to stop the warning.
 
+## `bashsource` fails with `syntax error near unexpected token '('`
+
+Something defines an alias with the same name as a function in the file being re-read. Bash expands the alias before it parses `name() {`, so the line reads as something else and fails. Current workbench doesn't create that situation: it doesn't define an alias when a function of that name exists.
+
+A shell that started before you updated workbench still holds the old aliases. Re-sourcing a file that defines a function of the same name fails in that one shell. Open a new terminal, or remove the alias first:
+
+```sh
+unalias <name>
+```
+
+Every shell started after the update is fine. The first one prints a warning if workbench left any name alone; see [Alias and function clashes](existing-setups.md#alias-and-function-clashes).
+
+## A workbench alias is missing, and a warning said why
+
+The warning means you already had an alias or function of that name, and workbench kept it. `wb status` lists every name it left alone. To use workbench's version instead, rename or remove yours. There's no setting yet that makes workbench's alias win.
+
 ## A file is waiting on my decision
 
 A new shell says when a file needs your decision, and `wb status` says how many. Run `wb files status` to see them. [When a file needs your decision](config-files.md#when-a-file-needs-your-decision) explains the choices.

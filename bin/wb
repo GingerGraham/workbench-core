@@ -1008,6 +1008,29 @@ _wb_cmd_status() {
     if [[ "${files_waiting}" -gt 0 ]]; then
         echo "Files waiting on you: ${files_waiting} — run 'wb files status'"
     fi
+
+    _wb_status_alias_clashes
+}
+
+# _wb_status_alias_clashes
+# Lists the aliases workbench did not set because the name was already an
+# alias or function (D124). The list is written by the loader at the end of
+# an interactive shell start: only that pass can see the live shell's
+# aliases and functions, and this command runs in its own process.
+_wb_status_alias_clashes() {
+    local clash_file name module kind
+    clash_file="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/alias-clashes.list"
+    echo
+    echo "Alias clashes (names workbench left alone, as of the last interactive shell start):"
+    if [[ ! -s "${clash_file}" ]]; then
+        echo "  none"
+        return 0
+    fi
+    printf '  %-26s %-14s %s\n' "NAME" "MODULE" "EXISTING"
+    while IFS='|' read -r name module kind || [[ -n "${name}" ]]; do
+        [[ -n "${name}" ]] || continue
+        printf '  %-26s %-14s %s\n' "${name}" "${module}" "${kind}"
+    done < "${clash_file}"
 }
 
 # ── functions ──────────────────────────────────────────────────────────────
@@ -1272,6 +1295,10 @@ _wb_cmd_functions_impl() {
             local _after_aliases
             _after_aliases="$(alias -p 2>/dev/null | sed -E 's/^alias ([a-zA-Z0-9_-]+)=.*/\1/')"
             _new_aliases="$(comm -13 <(sort <<< "${_before_aliases}") <(sort <<< "${_after_aliases}"))"
+            # This process has no host aliases, so every name defines here.
+            # A name the interactive shell had to leave alone (D124) is the
+            # host's there, so it is not listed as loaded.
+            _new_aliases="$(printf '%s\n' "${_new_aliases}" | _wb_alias_drop_clashed)"
         fi
     fi
 

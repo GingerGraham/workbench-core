@@ -129,7 +129,40 @@ register:
 EOF
 make_module "${SRC_O}" "${BARE_O}"
 
+
+# ── Fixture 3 (D124): a module that defines aliases through
+#    workbench_alias_define, one of whose names the host already uses as a
+#    function. The getter and `wb functions` must list the first and not the
+#    second: the second is the host's, not this module's. ──────────────────
+SRC_D="${WORK}/src-define"; BARE_D="${WORK}/define.git"
+new_repo "${SRC_D}" "${BARE_D}"
+mkdir -p "${SRC_D}/shell"
+cat > "${SRC_D}/shell/define.sh" <<'EOF'
+fxd-fn() { :; }
+if true; then
+    workbench_alias_define fxd-keep fxdef "echo keep"
+fi
+if true; then
+    workbench_alias_define fxd-clash fxdef "echo workbench"
+fi
+EOF
+cat > "${SRC_D}/.dotfiles-sync.yml" <<EOF
+version: 1
+branch: main
+core_api: ">=1.8 <2.0"
+register:
+  shell:
+    - src: shell/define.sh
+      tier: tools
+  getters:
+    - name: fxdef
+      function: get-fxdef-functions
+      label: "Define helpers"
+EOF
+make_module "${SRC_D}" "${BARE_D}"
+
 workbench_cmd_add fixture-mod "${BARE_F}" --private >"${WORK}/add-fixture.log" 2>&1
+workbench_cmd_add fxdef-mod "${BARE_D}" --private >"${WORK}/add-define.log" 2>&1
 workbench_cmd_add own-mod "${BARE_O}" --private >"${WORK}/add-own.log" 2>&1
 
 MODS="${XDG_DATA_HOME}/workbench/modules"
@@ -255,6 +288,59 @@ if [[ ! -e "${PWN}" ]]; then
     ok "the unsafe getter entry's command was never executed"
 else
     fail "the unsafe getter entry's command was executed"
+fi
+
+
+# ── D124: a name workbench left alone is not listed as workbench's. ────────
+# The scanner recognises the helper's form, so a name defined that way is
+# listed; the host's function named fxd-clash makes the helper skip it, and
+# the getter must then leave it out.
+DEFINE_FILE="${MODS}/fxdef-mod/current/shell/define.sh"
+SCANNED="$(_extract_alias_names "${DEFINE_FILE}" | tr '\n' ' ')"
+if [[ "${SCANNED}" == "fxd-clash fxd-keep " ]]; then
+    ok "_extract_alias_names recognises 'workbench_alias_define <name> ...' as well as 'alias name='"
+else
+    fail "_extract_alias_names on workbench_alias_define lines returned: '${SCANNED}'"
+fi
+
+check_define_shell() {
+    local shell="$1" out flag="-c"
+    [[ "${shell}" == "zsh" ]] && flag="-ic"
+    out="$(env -i HOME="${HOME}" XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" XDG_DATA_HOME="${XDG_DATA_HOME}" \
+        XDG_CACHE_HOME="${XDG_CACHE_HOME}" WORKBENCH_USER_EXT_ENABLED=false TERM=dumb skip_global_compinit=1 \
+        PATH="${PATH}" "${shell}" "${flag}" \
+        "fxd-clash() { echo host-owned; }; source '${REPO_ROOT}/lib/loader.sh'; get-fxdef-functions" 2>/dev/null)"
+    if printf '%s\n' "${out}" | grep -qw 'fxd-keep' && ! printf '%s\n' "${out}" | grep -qw 'fxd-clash'; then
+        ok "${shell}: the getter lists a workbench_alias_define name (fxd-keep) and not the name the host already owned (fxd-clash)"
+    else
+        fail "${shell}: getter output wrong for the define/clash fixture"
+        printf '%s\n' "${out}"
+    fi
+}
+check_define_shell bash
+if command -v zsh &>/dev/null; then
+    check_define_shell zsh
+fi
+
+# `wb functions` runs in its own process, with no host aliases of its own, so
+# every name defines there. It must still leave out what the interactive shell
+# recorded as clashed (the list the loader persists).
+mkdir -p "${XDG_DATA_HOME}/workbench"
+printf 'fxd-clash|fxdef|function\n' > "${XDG_DATA_HOME}/workbench/alias-clashes.list"
+WBF_OUT="$(bash "${WB}" functions --no-pager fxd- 2>&1 </dev/null)"
+if printf '%s\n' "${WBF_OUT}" | grep -qw 'fxd-keep' && ! printf '%s\n' "${WBF_OUT}" | grep -qw 'fxd-clash'; then
+    ok "wb functions lists fxd-keep under Loaded aliases and leaves out the persisted clash fxd-clash"
+else
+    fail "wb functions listing for the define/clash fixture"
+    printf '%s\n' "${WBF_OUT}"
+fi
+rm -f "${XDG_DATA_HOME}/workbench/alias-clashes.list"
+WBF_OUT="$(bash "${WB}" functions --no-pager fxd- 2>&1 </dev/null)"
+if printf '%s\n' "${WBF_OUT}" | grep -qw 'fxd-keep' && printf '%s\n' "${WBF_OUT}" | grep -qw 'fxd-clash'; then
+    ok "wb functions with no persisted clash lists both names"
+else
+    fail "wb functions without a clash list should list both names"
+    printf '%s\n' "${WBF_OUT}"
 fi
 
 # ── _extract_function_names: all three definition forms. ───────────────────

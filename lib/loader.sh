@@ -602,6 +602,12 @@ unset _wb_hook_var
 
 unset WORKBENCH_PROMPT_SET WORKBENCH_PROMPT_ENGINE
 
+# D124: the clash record is per pass, so a clash the user has since fixed
+# disappears. It is emptied, not unset. WORKBENCH_ALIASES_OURS is never
+# touched here: it has to survive a reload, or a reload would report
+# workbench's own aliases as someone else's.
+WORKBENCH_ALIAS_CLASHES=""
+
 if command -v workbench_list_loadable_modules &>/dev/null; then
     # Keep in step with _WB_LOADER_TIERS above.
     for _wb_tier in env core tools platform distro lazy; do
@@ -905,6 +911,121 @@ if [[ $- == *i* ]] && command -v workbench_modules_dir &>/dev/null; then
     unset _wb_pending_count _wb_pending_file _wb_pending_files
 fi
 
+# ── Alias clashes (docs/decisions-log.md D124) ───────────────────────────────
+# A module's alias is not defined when the name is already an alias or a
+# function (workbench_alias_define, lib/core/functions.sh). Every tier,
+# lazy included, has loaded by now, so the record is complete. This block
+# persists it and tells the user once.
+#
+#   alias-clashes.list   what is clashed now (name|module|kind). Written
+#                        only when it changes; removed when it is empty.
+#                        `wb status` reads it.
+#   alias-clashes.seen   what the user has already been told. Entries that
+#                        are no longer clashed are dropped, so a clash that
+#                        returns warns again.
+#
+# Interactive shells only. The loader stub also reaches non-interactive
+# shells (zsh reads .zshenv for every invocation), and those have not read
+# the host's interactive profile: they see a different set of aliases and
+# would rewrite the list wrongly. The plain-host path (nothing recorded, nothing
+# on disk) is two string tests and no fork. A state file that cannot be
+# read or written is skipped without a word; the warning then simply
+# repeats for that shell. Never fails or delays the shell start.
+_wb_loader_alias_clash_report() {
+    [[ $- == *i* ]] || return 0
+
+    local data_dir list_file seen_file
+    data_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench"
+    list_file="${data_dir}/alias-clashes.list"
+    seen_file="${data_dir}/alias-clashes.seen"
+
+    if [[ -z "${WORKBENCH_ALIAS_CLASHES:-}" && ! -e "${list_file}" && ! -e "${seen_file}" ]]; then
+        return 0
+    fi
+
+    local nl=$'\n' line name module kind value
+    local current="" previous="" seen="" new_keys="" new_count=0
+
+    # name|module|kind for each record; the value stays out of the files.
+    while IFS='|' read -r name module kind value; do
+        [[ -n "${name}" ]] || continue
+        current="${current}${name}|${module}|${kind}${nl}"
+    done <<< "${WORKBENCH_ALIAS_CLASHES:-}"
+
+    if [[ -r "${list_file}" ]]; then
+        while IFS= read -r line || [[ -n "${line}" ]]; do
+            [[ -n "${line}" ]] && previous="${previous}${line}${nl}"
+        done < "${list_file}"
+    fi
+    if [[ -r "${seen_file}" ]]; then
+        while IFS= read -r line || [[ -n "${line}" ]]; do
+            [[ -n "${line}" ]] && seen="${seen}${line}${nl}"
+        done < "${seen_file}"
+    fi
+
+    # What is clashed and not yet told.
+    while IFS= read -r line; do
+        [[ -n "${line}" ]] || continue
+        case "${nl}${seen}" in
+            *"${nl}${line}${nl}"*) ;;
+            *) new_keys="${new_keys}${line}${nl}"; new_count=$((new_count + 1)) ;;
+        esac
+    done <<< "${current}"
+
+    if [[ "${new_count}" -gt 0 ]]; then
+        local noun="aliases were" shown existing
+        [[ "${new_count}" -eq 1 ]] && noun="alias was"
+        log_warn "workbench: ${new_count} ${noun} not set because the name is already in use."
+        while IFS='|' read -r name module kind value; do
+            [[ -n "${name}" ]] || continue
+            case "${nl}${new_keys}" in
+                *"${nl}${name}|${module}|${kind}${nl}"*) ;;
+                *) continue ;;
+            esac
+            if [[ "${kind}" == "alias" ]]; then
+                shown="$(builtin alias "${name}" 2>/dev/null)"
+                existing="existing ${shown#alias }"
+            else
+                existing="existing function"
+            fi
+            printf '        %-18s %s; module %s would set: %s\n' "${name}" "${existing}" "${module}" "${value}" >&2
+        done <<< "${WORKBENCH_ALIAS_CLASHES:-}"
+        printf '%s\n' "        Your definitions were left as they are. 'wb status' lists these again." >&2
+    fi
+
+    # Persist: the list when it changed, then seen. Seen ends up equal to the
+    # current list: the entries already told that are still clashed, plus
+    # the ones just told. Nothing is rewritten when nothing changed.
+    if [[ "${current}" != "${previous}" ]]; then
+        _wb_loader_alias_clash_write "${data_dir}" "${list_file}" "${current}"
+    fi
+    if [[ "${current}" != "${seen}" ]]; then
+        _wb_loader_alias_clash_write "${data_dir}" "${seen_file}" "${current}"
+    fi
+    return 0
+}
+
+# _wb_loader_alias_clash_write <dir> <file> <content>
+# Temp file and rename, so a reader never sees half a file. Empty content
+# removes the file. Every failure is silent.
+_wb_loader_alias_clash_write() {
+    local dir="$1" file="$2" content="$3" tmp
+    if [[ -z "${content}" ]]; then
+        command rm -f "${file}" 2>/dev/null
+        return 0
+    fi
+    [[ -d "${dir}" ]] || command mkdir -p "${dir}" 2>/dev/null
+    tmp="${file}.$$"
+    if { printf '%s' "${content}" > "${tmp}"; } 2>/dev/null; then
+        command mv -f "${tmp}" "${file}" 2>/dev/null || command rm -f "${tmp}" 2>/dev/null
+    else
+        command rm -f "${tmp}" 2>/dev/null
+    fi
+    return 0
+}
+
+_wb_loader_alias_clash_report
+
 # ── Interactive startup ───────────────────────────────────────────────────────
 # --no-pager --no-aliases (docs/decisions-log.md D73): this fires on every
 # new interactive shell, so it must never itself drop into an interactive
@@ -935,6 +1056,7 @@ else
 fi
 unset _WB_PROMPT_HOOKS_ADDED_NEW _wb_hook_var _wb_hook_start _wb_loader_items _wb_loader_us _wb_loader_rs
 unset -f _wb_loader_hook_vars _wb_loader_hook_form _wb_loader_hook_read _wb_loader_hook_snapshot \
-    _wb_loader_hook_added _wb_loader_hook_remove
+    _wb_loader_hook_added _wb_loader_hook_remove \
+    _wb_loader_alias_clash_report _wb_loader_alias_clash_write
 
 unset _wb_loader_lib_dir

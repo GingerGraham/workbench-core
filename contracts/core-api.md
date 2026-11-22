@@ -136,6 +136,35 @@ once core's own `core`-tier registration is sourced:
   when nothing else has, without duplicating it (docs/decisions-log.md
   D83). **New in `CORE_API_VERSION` 1.6.**
 
+- `workbench_alias_define <name> <module> <value>` — defines the alias
+  `<name>` as `<value>` only when the name is free; returns 0 when it
+  defined, refreshed or found an identical alias, and 1 when an existing
+  definition was left in place. **Modules define aliases only through
+  this function** (docs/decisions-log.md D124). A name is free when
+  workbench defined it earlier in this shell (a reload refreshes it),
+  when nothing of that name exists, or when an alias exists whose
+  definition is identical to `<value>`'s. It is not free when a function
+  of that name exists, or a different alias does; the clash is recorded
+  (name, `<module>`, `alias` or `function`, `<value>`) and the existing
+  definition stays. A command on `PATH` is not a clash. `<module>` is the
+  module's name, used only to report the clash. Works the same in bash and
+  zsh, and forks no process for a free name. Write each call at the start
+  of a line (inside an `if` block, not after `&&`): listings find a name
+  only there. The function is defined in `lib/core/functions.sh`, so it
+  exists from the `core` tier on. **New in `CORE_API_VERSION` 1.10.**
+- `workbench_alias_is_ours <name>` — true when workbench defined an alias
+  of that name in this shell. **New in `CORE_API_VERSION` 1.10.**
+- `WORKBENCH_ALIASES_OURS` (space-separated names) and
+  `WORKBENCH_ALIAS_CLASHES` (newline-separated `name|module|kind|value`
+  records) — the shell state behind the two functions. Read-only for
+  modules; not exported. The loader empties the second at the start of
+  every pass and never touches the first. **New in `CORE_API_VERSION`
+  1.10.**
+- `_extract_alias_names` also matches `workbench_alias_define NAME ...` at
+  the start of a line, and a name workbench left alone is dropped from
+  `get-<domain>-functions` and `wb functions`. **Changed in 1.10**
+  (additive: every name listed before is still listed).
+
 Modules that declare `layers:` or call either 1.6 function declare
 `core_api: ">=1.6 <2.0"`. Modules that call `_wb_availability_needs` or
 pass `--needs`/`--install` to `_wb_alias_availability` declare
@@ -143,7 +172,9 @@ pass `--needs`/`--install` to `_wb_alias_availability` declare
 `_wb_gh_release_asset_url`, declare `core_api: ">=1.8 <2.0"`. Modules that
 pass `<min_major>` to `_ensure_npm` declare `core_api: ">=1.9 <2.0"`: on an
 older core the argument is ignored and the fallback installs whatever
-Node.js the distro has.
+Node.js the distro has. Modules that call `workbench_alias_define` declare
+`core_api: ">=1.10 <2.0"`: on an older core the function doesn't exist, so
+the alias is never defined.
 
 ## Install-helper functions (`lib/core/installers-common.sh`)
 
