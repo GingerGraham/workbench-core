@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.30.0] - 2026-11-22
+
 ### Added
 
 - **Workbench never replaces an alias or function you already have, and
