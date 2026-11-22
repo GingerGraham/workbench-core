@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.30.1] - 2026-11-22
+
 ### Fixed
 
 - **A reload no longer replaces an alias you redefined after workbench set
