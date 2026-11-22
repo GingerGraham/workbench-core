@@ -75,7 +75,7 @@ start_interactive() {
     ${RUN_PREFIX:-} env -i HOME="${HOST_HOME}" XDG_DATA_HOME="${HOST_DATA}" XDG_CONFIG_HOME="${HOST_CONFIG}" \
         XDG_CACHE_HOME="${HOST_CACHE}" PATH="/usr/local/bin:/usr/bin:/bin" TERM=dumb \
         WORKBENCH_USER_EXT_ENABLED=false \
-        bash --noprofile --rcfile "${WORK}/rc" -i -c 'echo SHELL-STARTED' 2>&1 </dev/null \
+        bash --noprofile --rcfile "${WORK}/rc" -i -c "${1:-echo SHELL-STARTED}" 2>&1 </dev/null \
         | grep -vE 'cannot set terminal process group|no job control in this shell'
 }
 
@@ -206,6 +206,29 @@ else
     fail "files remain with no clash"; ls -la "${STATE_DIR}"
 fi
 
+# ── wb reload after the user replaced a workbench alias. ────────────────────
+# The loader runs again in a shell whose `gd` is no longer the alias workbench
+# set. The user's version stays, and it is reported once as a clash; the
+# aliases that are still workbench's are refreshed and not reported.
+rm -f "${LIST}" "${SEEN}"
+host_rc no no
+reload_cmd="alias gd='mine'; source '${REPO_ROOT}/lib/loader.sh'; alias gd; alias gst"
+out="$(start_interactive "${reload_cmd}")"
+if [[ "$(warning_count "${out}")" -eq 1 ]] && grep -q '1 alias was not set' <<<"${out}" \
+    && grep -Eq "^(alias )?gd='?mine'?$" <<<"${out}" && grep -Eq "^(alias )?gst='?git status'?$" <<<"${out}" \
+    && grep -qx 'gd|git|alias' "${LIST}" && [[ "$(grep -c . "${LIST}")" -eq 1 ]]; then
+    ok "wb reload: an alias the user replaced is kept and reported once; the others are refreshed and not reported"
+else
+    fail "wb reload after a user override"; printf '%s\n' "${out}"; cat "${LIST}" 2>&1
+fi
+rm -f "${LIST}" "${SEEN}"
+out="$(start_interactive "source '${REPO_ROOT}/lib/loader.sh'; source '${REPO_ROOT}/lib/loader.sh'; echo DONE")"
+if [[ "$(warning_count "${out}")" -eq 0 ]] && [[ ! -e "${LIST}" ]]; then
+    ok "wb reload twice with nothing changed: no warning and no state file"
+else
+    fail "wb reload with no change"; printf '%s\n' "${out}"
+fi
+
 # ── 5. A non-interactive shell: no output, no files. ────────────────────────
 host_rc yes yes
 out="$(start_noninteractive)"
@@ -260,7 +283,7 @@ if command -v zsh >/dev/null 2>&1; then
     start_zsh() {
         env -i HOME="${HOST_HOME}" ZDOTDIR="${WORK}/zdot" XDG_DATA_HOME="${HOST_DATA}" XDG_CONFIG_HOME="${HOST_CONFIG}" \
             XDG_CACHE_HOME="${HOST_CACHE}" PATH="/usr/local/bin:/usr/bin:/bin" TERM=dumb skip_global_compinit=1 \
-            WORKBENCH_USER_EXT_ENABLED=false zsh -i -c 'echo SHELL-STARTED' 2>&1 </dev/null
+            WORKBENCH_USER_EXT_ENABLED=false zsh -i -c "${1:-echo SHELL-STARTED}" 2>&1 </dev/null
     }
     out="$(start_zsh)"
     if [[ "$(warning_count "${out}")" -eq 1 ]] && grep -q '2 aliases were not set' <<<"${out}" \
@@ -280,6 +303,16 @@ if command -v zsh >/dev/null 2>&1; then
         ok "zsh: the next start is silent"
     else
         fail "zsh: second start"; printf '%s\n' "${out}"
+    fi
+    rm -f "${LIST}" "${SEEN}"
+    host_rc no no
+    cp "${WORK}/rc" "${WORK}/zdot/.zshrc"
+    out="$(start_zsh "alias gd='mine'; source '${REPO_ROOT}/lib/loader.sh'; alias gd; alias gst")"
+    if [[ "$(warning_count "${out}")" -eq 1 ]] && grep -Eq "^gd='?mine'?$" <<<"${out}" \
+        && grep -Eq "^gst='?git status'?$" <<<"${out}" && grep -qx 'gd|git|alias' "${LIST}"; then
+        ok "zsh: wb reload keeps an alias the user replaced and reports it once"
+    else
+        fail "zsh: wb reload after a user override"; printf '%s\n' "${out}"
     fi
 else
     skip "zsh is not installed — the zsh loader case was not run"

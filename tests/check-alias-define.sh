@@ -156,6 +156,71 @@ source "${WORK}/host-alias.sh"
 workbench_alias_define hostdiff git "git log | head -n 5"
 printf 'CLASHES=[%s]\n' "\${WORKBENCH_ALIAS_CLASHES}"
 EOF
+    # 10. A reload after the USER replaced an alias workbench set: the user's
+    #     version stays, it is reported as a clash, and it is no longer ours.
+    cat > "${WORK}/case10.sh" <<'EOF'
+workbench_alias_define gd git "git diff"
+alias gd='mine'
+workbench_alias_define gd git "git diff"
+echo "RC=$?"
+alias gd
+workbench_alias_is_ours gd && echo "OURS=yes" || echo "OURS=no"
+printf 'CLASHES=[%s]\n' "${WORKBENCH_ALIAS_CLASHES}"
+EOF
+    # 11. A module update: the value changes between reloads, twice. Each
+    #     takes effect, and the last one can still be told from a user's.
+    cat > "${WORK}/case11.sh" <<'EOF'
+workbench_alias_define upd git "git status"
+workbench_alias_define upd git "git status -s"
+workbench_alias_define upd git "git status -sb"
+echo "RC=$?"
+alias upd
+echo "CLASHES=[${WORKBENCH_ALIAS_CLASHES}]"
+alias upd='mine'
+workbench_alias_define upd git "git status -sb"
+echo "RC2=$?"
+alias upd
+EOF
+    # 12. After a reload-able definition the user put a FUNCTION there.
+    cat > "${WORK}/case12.sh" <<'EOF'
+workbench_alias_define fnlater git "git log"
+unalias fnlater
+fnlater() { echo "user function"; }
+workbench_alias_define fnlater git "git log"
+echo "RC=$?"
+fnlater
+alias fnlater >/dev/null 2>&1 && echo "ALIAS=defined" || echo "ALIAS=none"
+workbench_alias_is_ours fnlater && echo "OURS=yes" || echo "OURS=no"
+printf 'CLASHES=[%s]\n' "${WORKBENCH_ALIAS_CLASHES}"
+EOF
+    # 13. The user removed the alias on purpose: a reload defines it again,
+    #     as a reload always did.
+    cat > "${WORK}/case13.sh" <<'EOF'
+workbench_alias_define gone git "git show"
+unalias gone
+workbench_alias_define gone git "git show"
+echo "RC=$?"
+alias gone
+workbench_alias_is_ours gone && echo "OURS=yes" || echo "OURS=no"
+EOF
+    # 14. An identical alias adopted from an old workbench is remembered too:
+    #     a later user override of it is still seen.
+    cat > "${WORK}/case14.sh" <<'EOF'
+alias adopted='git status'
+workbench_alias_define adopted git "git status"
+echo "RC1=$?"
+alias adopted='mine'
+workbench_alias_define adopted git "git status"
+echo "RC2=$?"
+alias adopted
+EOF
+    # 15. A reload that changes nothing adds nothing to the record.
+    cat > "${WORK}/case15.sh" <<'EOF'
+workbench_alias_define same git "git fetch"
+workbench_alias_define same git "git fetch"
+workbench_alias_define same git "git fetch"
+printf 'RECORDS=%s\n' "$(printf '%s' "${WORKBENCH_ALIAS_VALUES}" | grep -c '^same=')"
+EOF
 }
 write_cases
 
@@ -248,6 +313,51 @@ check_shell() {
         ok "${shell}: a value containing '|' is recorded whole (it is the last field)"
     else
         fail "${shell}: value with a pipe"; printf '%s\n' "${out}"
+    fi
+
+    out="$(run_case "${shell}" "${WORK}/case10.sh")"
+    if grep -q '^RC=1$' <<<"${out}" && grep -Eq "gd='?mine'?" <<<"${out}" && grep -q '^OURS=no$' <<<"${out}" \
+        && grep -q 'gd|git|alias|git diff' <<<"${out}"; then
+        ok "${shell}: a reload leaves an alias the user replaced after workbench set it — kept, reported as a clash, no longer ours"
+    else
+        fail "${shell}: reload after a user override"; printf '%s\n' "${out}"
+    fi
+
+    out="$(run_case "${shell}" "${WORK}/case11.sh")"
+    if grep -q '^RC=0$' <<<"${out}" && grep -q "upd='git status -sb'" <<<"${out}" && grep -q '^CLASHES=\[\]$' <<<"${out}" \
+        && grep -q '^RC2=1$' <<<"${out}" && grep -Eq "upd='?mine'?" <<<"${out}"; then
+        ok "${shell}: successive module updates each take effect on reload, and a user override after them is still kept"
+    else
+        fail "${shell}: chain of updates"; printf '%s\n' "${out}"
+    fi
+
+    out="$(run_case "${shell}" "${WORK}/case12.sh")"
+    if grep -q '^RC=1$' <<<"${out}" && grep -q '^user function$' <<<"${out}" && grep -q '^ALIAS=none$' <<<"${out}" \
+        && grep -q '^OURS=no$' <<<"${out}" && grep -q 'fnlater|git|function|git log' <<<"${out}"; then
+        ok "${shell}: a function the user put in the alias's place is kept on reload, recorded as a function clash"
+    else
+        fail "${shell}: user function after the alias"; printf '%s\n' "${out}"
+    fi
+
+    out="$(run_case "${shell}" "${WORK}/case13.sh")"
+    if grep -q '^RC=0$' <<<"${out}" && grep -q "gone='git show'" <<<"${out}" && grep -q '^OURS=yes$' <<<"${out}"; then
+        ok "${shell}: an alias the user removed is defined again on reload"
+    else
+        fail "${shell}: user removed the alias"; printf '%s\n' "${out}"
+    fi
+
+    out="$(run_case "${shell}" "${WORK}/case14.sh")"
+    if grep -q '^RC1=0$' <<<"${out}" && grep -q '^RC2=1$' <<<"${out}" && grep -Eq "adopted='?mine'?" <<<"${out}"; then
+        ok "${shell}: an identical alias adopted from an older workbench is remembered, so a later user override is kept"
+    else
+        fail "${shell}: adopted alias then override"; printf '%s\n' "${out}"
+    fi
+
+    out="$(run_case "${shell}" "${WORK}/case15.sh")"
+    if grep -q '^RECORDS=1$' <<<"${out}"; then
+        ok "${shell}: three reloads that change nothing leave one value record, not three"
+    else
+        fail "${shell}: record growth"; printf '%s\n' "${out}"
     fi
 }
 
