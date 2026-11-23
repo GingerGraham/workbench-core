@@ -69,8 +69,9 @@ _workbench_detect_platform() {
                 ;;
         esac
         # Same rule as lib/loader.sh's inline copy (D126).
+        # (Characters listed rather than ranged: ranges follow the locale.)
         case "${_distro_id}" in
-            ''|*[!a-z0-9._-]*) WORKBENCH_DISTRO_ID="unknown" ;;
+            ''|*[!abcdefghijklmnopqrstuvwxyz0123456789._-]*) WORKBENCH_DISTRO_ID="unknown" ;;
             *)                 WORKBENCH_DISTRO_ID="${_distro_id}" ;;
         esac
     else

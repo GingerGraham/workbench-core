@@ -173,8 +173,10 @@ if [[ "${WORKBENCH_OS}" == "Linux" && -f /etc/os-release ]]; then
     # Exact os-release ID for distro-tier file selection (D126). Only the
     # os-release(5) character set is accepted; anything else is "unknown"
     # so a basename comparison can never match on a malformed value.
+    # The characters are listed, not given as ranges: a range like a-z follows
+    # the locale's collation and can accept uppercase or accented letters.
     case "${_distro_id}" in
-        ''|*[!a-z0-9._-]*) WORKBENCH_DISTRO_ID="unknown" ;;
+        ''|*[!abcdefghijklmnopqrstuvwxyz0123456789._-]*) WORKBENCH_DISTRO_ID="unknown" ;;
         *)                 WORKBENCH_DISTRO_ID="${_distro_id}" ;;
     esac
     unset _distro_id _distro_id_like

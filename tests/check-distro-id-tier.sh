@@ -96,7 +96,7 @@ if [[ "$(uname -s)" == "Linux" && -f /etc/os-release ]]; then
     # shellcheck disable=SC1091
     LIVE_ID="$(. /etc/os-release 2>/dev/null && echo "${ID:-unknown}")"
     case "${LIVE_ID}" in
-        ''|*[!a-z0-9._-]*) LIVE_ID="unknown" ;;
+        ''|*[!abcdefghijklmnopqrstuvwxyz0123456789._-]*) LIVE_ID="unknown" ;;
     esac
 
     detected="$(env -i HOME="${WORK}/home" PATH="${PATH}" bash -c '
@@ -149,7 +149,7 @@ fi
 cat > "${WORK}/charset.sh" <<'CHARSET'
 for v in fedora opensuse-leap a.b_c-1 '' 'Fedora' 'fed ora' 'fed;ora' 'fed$ora' 'ünï'; do
     case "${v}" in
-        ''|*[!a-z0-9._-]*) r="unknown" ;;
+        ''|*[!abcdefghijklmnopqrstuvwxyz0123456789._-]*) r="unknown" ;;
         *)                 r="${v}" ;;
     esac
     printf '%s=>%s\n' "${v}" "${r}"
@@ -157,18 +157,39 @@ done
 CHARSET
 # shellcheck disable=SC2016  # the value with a dollar sign is literal on purpose
 expected_charset="$(printf '%s\n' 'fedora=>fedora' 'opensuse-leap=>opensuse-leap' 'a.b_c-1=>a.b_c-1' '=>unknown' 'Fedora=>unknown' 'fed ora=>unknown' 'fed;ora=>unknown' 'fed$ora=>unknown' 'ünï=>unknown')"
+# The rule has to be the same text in both detection copies, or this test
+# stops covering the code.
+RULE="''|*[!abcdefghijklmnopqrstuvwxyz0123456789._-]*) WORKBENCH_DISTRO_ID="
+for detection_file in lib/loader.sh lib/core/functions.sh; do
+    if grep -qF -- "${RULE}" "${REPO_ROOT}/${detection_file}"; then
+        ok "${detection_file} uses the listed-characters rule this test checks"
+    else
+        fail "${detection_file} does not contain the rule this test checks"
+    fi
+done
+# A range like a-z follows the locale's collation, and on macOS bash 3.2 in a
+# UTF-8 locale accepts uppercase and accented letters. Run the rule in a
+# UTF-8 locale too, when the host has one.
+LOCALES="C"
+for candidate in en_US.UTF-8 C.UTF-8; do
+    if locale -a 2>/dev/null | grep -qix "$(printf '%s' "${candidate}" | sed 's/UTF-8/utf8/')\|${candidate}"; then
+        LOCALES="${LOCALES} ${candidate}"
+    fi
+done
 for shell in bash zsh; do
     if ! command -v "${shell}" >/dev/null 2>&1; then
         skip "${shell} is not installed — character-set rule not run there"
         continue
     fi
-    got="$("${shell}" -f "${WORK}/charset.sh" 2>&1 </dev/null)"
+    for loc in ${LOCALES}; do
+    got="$(LC_ALL="${loc}" "${shell}" -f "${WORK}/charset.sh" 2>&1 </dev/null)"
     if [[ "${got}" == "${expected_charset}" ]]; then
-        ok "${shell}: the character-set rule accepts a-z 0-9 . _ - and nothing else"
+        ok "${shell}, locale ${loc}: the character-set rule accepts a-z 0-9 . _ - and nothing else"
     else
-        fail "${shell}: character-set rule gave unexpected results"
+        fail "${shell}, locale ${loc}: character-set rule gave unexpected results"
         printf '%s\n' "${got}"
     fi
+    done
 done
 
 # ── 5. Loader and getter agree ──────────────────────────────────────────────
