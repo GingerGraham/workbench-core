@@ -14,14 +14,24 @@ command -v _workbench_register_script_version &>/dev/null && _workbench_register
 # _wb_loader_should_source_by_name <tier> <basename-without-.sh>
 # Filename-as-selector convention for the platform/distro tiers only (every
 # other tier sources everything registered for it unconditionally): a
-# distro-tier file only loads on a matching WORKBENCH_DISTRO; a
-# platform-tier file loads on a matching WORKBENCH_OS (lowercased: Mac ->
+# distro-tier file only loads on a matching WORKBENCH_DISTRO or
+# WORKBENCH_DISTRO_ID; a platform-tier file loads on a matching WORKBENCH_OS (lowercased: Mac ->
 # macos) or the literal "wsl" additionally when WORKBENCH_WSL=true.
 _wb_loader_should_source_by_name() {
     local tier="$1" base="$2"
     case "${tier}" in
         distro)
-            [[ "${base}" == "${WORKBENCH_DISTRO}" ]]
+            # Family (rhel/debian/suse/arch/unknown), or the exact
+            # os-release ID (fedora, ubuntu, pop, ...). Exact ID only --
+            # never ID_LIKE, which on Rocky names fedora (D126).
+            if [[ "${base}" == "${WORKBENCH_DISTRO}" ]]; then
+                return 0
+            fi
+            if [[ -n "${WORKBENCH_DISTRO_ID:-}" && "${WORKBENCH_DISTRO_ID}" != "unknown" \
+                  && "${base}" == "${WORKBENCH_DISTRO_ID}" ]]; then
+                return 0
+            fi
+            return 1
             ;;
         platform)
             local os_name

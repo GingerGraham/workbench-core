@@ -25,7 +25,11 @@ command -v _workbench_register_script_version &>/dev/null && _workbench_register
 # Reconciles loader.sh's inline detection block and functions.sh's separate
 # detect-distro() into one routine, per the build brief's §4 callout.
 _workbench_detect_platform() {
-    [[ "${WORKBENCH_PLATFORM_DETECTED:-false}" == "true" ]] && return 0
+    # A shell started before D126 exports WORKBENCH_PLATFORM_DETECTED=true
+    # but no WORKBENCH_DISTRO_ID; re-detect in that case (idempotent).
+    if [[ "${WORKBENCH_PLATFORM_DETECTED:-false}" == "true" && -n "${WORKBENCH_DISTRO_ID:-}" ]]; then
+        return 0
+    fi
 
     local _raw_os
     _raw_os="$(uname -s)"
@@ -64,10 +68,17 @@ _workbench_detect_platform() {
                 esac
                 ;;
         esac
+        # Same rule as lib/loader.sh's inline copy (D126).
+        case "${_distro_id}" in
+            ''|*[!a-z0-9._-]*) WORKBENCH_DISTRO_ID="unknown" ;;
+            *)                 WORKBENCH_DISTRO_ID="${_distro_id}" ;;
+        esac
     else
         WORKBENCH_DISTRO="unknown"
+        WORKBENCH_DISTRO_ID="unknown"
     fi
     export WORKBENCH_DISTRO
+    export WORKBENCH_DISTRO_ID
 
     if [[ -n "${ZSH_VERSION:-}" ]]; then
         WORKBENCH_SHELL="zsh"

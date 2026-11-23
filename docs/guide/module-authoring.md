@@ -81,7 +81,7 @@ Workbench doesn't check your tags for you yet. Follow this format.
 Two tiers load a file only on matching hosts:
 
 - `platform`: the file's name (without `.sh`) must be `linux`, `macos` or `wsl`.
-- `distro`: the file's name must match the running distribution exactly.
+- `distro`: the file's name must match the distribution family (`rhel`, `debian`, `suse`, `arch`) or the exact `ID` from `/etc/os-release` (`fedora`, `ubuntu`, `pop`, `opensuse-leap`, …). On Fedora, `rhel.sh` and `fedora.sh` both load; list the family file first so the specific one wins. `debian.sh`, `rhel.sh` and `arch.sh` are always family files, so guard anything meant for that one distribution on `WORKBENCH_DISTRO_ID`. Exact-ID files need `core_api: ">=1.11 <2.0"`.
 
 The [Core API reference](https://github.com/GingerGraham/workbench-core/blob/main/contracts/core-api.md) has the full tier rules.
 
