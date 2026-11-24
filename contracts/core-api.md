@@ -26,6 +26,7 @@ tier is sourced later):
 | `WORKBENCH_OS` | `Linux` \| `Mac` | |
 | `WORKBENCH_WSL` | `true` \| `false` | |
 | `WORKBENCH_DISTRO` | `rhel` \| `debian` \| `suse` \| `arch` \| `unknown` | Linux only; `unknown` on macOS. |
+| `WORKBENCH_DISTRO_ID` | os-release `ID` as written (e.g. `fedora`, `ubuntu`, `pop`, `debian`, `arch`, `opensuse-leap`), or `unknown` | Linux only; `unknown` on macOS, without `/etc/os-release`, or for a value outside `a-z 0-9 . _ -`. Selects exact-ID `distro`-tier files. **New in `CORE_API_VERSION` 1.11** (docs/decisions-log.md D126). |
 | `WORKBENCH_SHELL` | `bash` \| `zsh` \| `sh` | |
 | `WORKBENCH_ARCH` | raw `uname -m` (e.g. `x86_64`, `arm64`, `aarch64`) | **New in workbench-core** — did not exist in the donor codebase at all. No universal name-normalizer is provided; see `docs/guide/module-authoring.md` for the two common per-tool normalization snippets. |
 
@@ -287,8 +288,11 @@ numerically — `00-`, `10-`, `20-` — the same way workbench-precursor's
 convention layered on top: a `platform`-tier file only loads if its
 basename (minus `.sh`) is `linux`, `macos`, or `wsl` (the last loading
 *additionally* whenever `WORKBENCH_WSL=true`, not instead of the OS file); a
-`distro`-tier file only loads if its basename matches `WORKBENCH_DISTRO`
-exactly. Every other tier loads unconditionally — a module wanting narrower
+`distro`-tier file loads if its basename matches `WORKBENCH_DISTRO` or
+`WORKBENCH_DISTRO_ID` exactly (never `ID_LIKE`); both load, in
+`register.list` order, when a module ships a family file and an ID file.
+Where an ID equals a family name (`rhel`, `debian`, `arch`), the file is the
+family file. Every other tier loads unconditionally — a module wanting narrower
 conditional loading does so inside its own sourced file (e.g. guard on
 `command -v <tool>`).
 

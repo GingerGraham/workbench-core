@@ -58,7 +58,7 @@ SNAPSHOT_EOF
 # Also drops what the machine running the test contributes on its own and
 # that has nothing to do with workbench: variables a system profile exports
 # (Nix, XDG_DATA_DIRS), the platform facts the loader reads from the host
-# (WORKBENCH_OS, WORKBENCH_DISTRO, WORKBENCH_ARCH), where the test ran (PWD,
+# (WORKBENCH_OS, WORKBENCH_DISTRO, WORKBENCH_DISTRO_ID, WORKBENCH_ARCH), where the test ran (PWD,
 # which macOS reports as /private/var/… rather than /var/…), bash's own
 # default PS1, and what a distro-default system bashrc
 # sets (its PS1, a command_not_found_handle function), which bash reads even
@@ -69,6 +69,7 @@ normalise() {
         -e '/^__ETC_PROFILE_NIX_SOURCED=/d' \
         -e '/^XDG_DATA_DIRS=/d' \
         -e '/^WORKBENCH_DISTRO=/d' \
+        -e '/^WORKBENCH_DISTRO_ID=/d' \
         -e '/^WORKBENCH_ARCH=/d' \
         -e '/^declare -- PS1=.*debian_chroot/d' \
         -e '/^command_not_found_handle$/d' \

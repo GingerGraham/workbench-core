@@ -4,6 +4,17 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Distro-tier files can target one distribution by its exact
+  `/etc/os-release` `ID`.** Core now exports `WORKBENCH_DISTRO_ID` (`fedora`,
+  `ubuntu`, `pop`, `opensuse-leap`, …, or `unknown`; Core API 1.11), and a
+  `distro`-tier file loads when its name matches either the family
+  (`WORKBENCH_DISTRO`) or that ID, never `ID_LIKE`. A module can now ship
+  `fedora.sh` next to `rhel.sh`; list the family file first so the specific
+  one wins. A shell started before this release picks up the new variable
+  the next time `wb` runs. (D126)
+
 ## [2.30.1] - 2026-11-22
 
 ### Fixed
