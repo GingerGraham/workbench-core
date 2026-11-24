@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.31.0] - 2026-11-24
+
 ### Added
 
 - **Distro-tier files can target one distribution by its exact

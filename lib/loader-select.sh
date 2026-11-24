@@ -9,7 +9,7 @@
 # sourced").
 
 # shellcheck disable=SC2015
-command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/loader-select.sh" "0.1.0" || true
+command -v _workbench_register_script_version &>/dev/null && _workbench_register_script_version "lib/loader-select.sh" "0.2.0" || true
 
 # _wb_loader_should_source_by_name <tier> <basename-without-.sh>
 # Filename-as-selector convention for the platform/distro tiers only (every
