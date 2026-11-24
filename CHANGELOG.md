@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.32.0] - 2026-11-24
+
 ### Added
 
 - **`workbench-distro` joins the catalog.** `wb add distro` gives you distro
