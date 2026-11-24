@@ -24,7 +24,7 @@ Answer `y` and it installs them with your system's package manager, then carries
 
 ## Install
 
-Most people want a bundle: workbench plus a set of modules chosen to work together. `workstation` adds the git, gpg, ssh and shell modules:
+Most people want a bundle: workbench plus a set of modules chosen to work together. `workstation` adds the git, gpg, ssh, shell and distro modules:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh | bash -s -- --bundle workstation

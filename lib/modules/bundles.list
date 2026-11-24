@@ -4,10 +4,12 @@
 # §10) — `wb install --bundle workstation` is exactly equivalent to one
 # `wb add` call per listed name, nothing more. workstation, server and
 # minimal mirror the three `dotfiles` profiles for continuity
-# (docs/decisions-log.md D35); full is every catalog module (D88).
-workstation|git,gpg,ssh,shell
-server|git,ssh,shell
+# (docs/decisions-log.md D35); full is every catalog module (D88). distro is in
+# workstation, server and full because the dotfiles profiles had the update
+# aliases through their shared shell config; adding it restores that (D127).
+workstation|git,gpg,ssh,shell,distro
+server|git,ssh,shell,distro
 minimal|git,ssh
 # Every module in modules.list (docs/decisions-log.md D88). Keep in step
 # with modules.list — tests/check-bundles-catalog.sh fails if they drift.
-full|git,gpg,ssh,shell,cloud,iac,containers,security,ai,desktop,devtools
+full|git,gpg,ssh,shell,cloud,iac,containers,security,ai,desktop,devtools,distro

@@ -77,18 +77,19 @@ module works with only core installed.
 | [`ai`](https://github.com/GingerGraham/workbench-ai) | Installers for AI CLIs (Claude Code, GitHub Copilot CLI, Antigravity, Specify/spec-kit) |
 | [`desktop`](https://github.com/GingerGraham/workbench-desktop) | GUI desktop app installers and Flatpak |
 | [`devtools`](https://github.com/GingerGraham/workbench-devtools) | Go/Python/Node dev environment wiring, plus nvm/Edit/jq/uv/snapd installers |
+| [`distro`](https://github.com/GingerGraham/workbench-distro) | Distro updates, release upgrades and DNF tuning: `distro-update`, `distro-upgrade`, `dnf-update`, `apt-update`, and per-distribution release-upgrade commands |
 
 | Bundle | Modules |
 |---|---|
-| `workstation` | git, gpg, ssh, shell |
-| `server` | git, ssh, shell |
+| `workstation` | git, gpg, ssh, shell, distro |
+| `server` | git, ssh, shell, distro |
 | `minimal` | git, ssh |
 | `full` | every module above |
 
 ## Quick start
 
 Most new machines want a bundle: core plus a planned set of modules.
-`workstation` is git, gpg, ssh and shell:
+`workstation` is git, gpg, ssh, shell and distro:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/GingerGraham/workbench-core/main/bootstrap.sh | bash -s -- --bundle workstation
