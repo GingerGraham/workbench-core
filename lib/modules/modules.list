@@ -15,3 +15,4 @@ security|https://github.com/GingerGraham/workbench-security.git|false
 ai|https://github.com/GingerGraham/workbench-ai.git|false
 desktop|https://github.com/GingerGraham/workbench-desktop.git|false
 devtools|https://github.com/GingerGraham/workbench-devtools.git|false
+distro|https://github.com/GingerGraham/workbench-distro.git|false

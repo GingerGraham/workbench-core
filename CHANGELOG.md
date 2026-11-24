@@ -4,6 +4,15 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`workbench-distro` joins the catalog.** `wb add distro` gives you distro
+  updates (`distro-update`, `dnf-update`, `apt-update`, `pacman-update`,
+  `zypper-update`), release upgrades for Fedora, Debian, Ubuntu, Pop!_OS and
+  openSUSE Leap, and `wb tools install dnf-tuning`. It is part of the
+  `workstation`, `server` and `full` bundles, which restores the update
+  commands the old `dotfiles` profiles had. (D127)
+
 ## [2.31.0] - 2026-11-24
 
 ### Added

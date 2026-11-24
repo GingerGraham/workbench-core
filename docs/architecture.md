@@ -96,7 +96,7 @@ Mapping current `dotfiles` pieces to target repos:
 | `shell/config/core/aliases.sh` | `workbench-shell` | Not core — these are opinionated, not structural |
 | `shell/config/core/ssh.sh` (agent helpers, `list-ssh-hosts`) | `workbench-ssh` | Opinionated layer — confirmed separate (D1) |
 | SSH deploy-key generation + `config.d` alias writing (today: `install.sh` Phase 3) | `workbench-core` | **Not** part of `workbench-ssh` — this is bootstrap-critical for *any* private repo, including private independent tools' deploy-key path (§9.1). Gated exactly as today: skipped entirely if nothing private is registered. |
-| `shell/config/distro/*.sh`, platform detection | `workbench-core` | Every module needs distro/OS/arch facts; this is load-bearing infrastructure |
+| `shell/config/distro/*.sh`, platform detection | `workbench-core` (detection), `workbench-distro` (update commands, D127) | Every module needs distro/OS/arch facts; this is load-bearing infrastructure. The update aliases were opinionated user commands, not infrastructure, and core names no distribution in its code (D110 item 7) |
 | `shell/config/lazy/user-extensions.sh`, `DOTFILES_USER_EXT_DIR` | `workbench-core` | Renamed `WORKBENCH_USER_EXT_DIR`, same last-loaded/shadowing semantics |
 | `shell/config/tools/git.sh`, `ansible/roles/git/` | `workbench-git` | Manifest-driven project/context system is a strong existing design — port as-is. **Exception:** `_read_prompt` extracts into `workbench-core`'s Core API surface (§6) — it does not travel with the rest of this file |
 | `shell/config/tools/gpg.sh`, `shell/config/lazy/gpg-management.sh` | `workbench-gpg` | No Ansible role today (interactive shell functions only) — stays that way |
@@ -658,8 +658,8 @@ modules:
   shell: { url: "https://github.com/<you>/workbench-shell.git", private: false }
 
 bundles:
-  workstation: [git, gpg, ssh, shell]
-  server:      [git, ssh, shell]
+  workstation: [git, gpg, ssh, shell, distro]
+  server:      [git, ssh, shell, distro]
   minimal:     [git, ssh]
   full:        [every module in the catalog]   # D88
 ```
@@ -667,7 +667,7 @@ bundles:
 `workstation`, `server` and `minimal` mirror today's three `dotfiles`
 profiles for continuity; `full` is every catalog module
 (`docs/decisions-log.md` D88). Bundles are convenience only — `wb install --bundle workstation` is exactly
-equivalent to four `wb add` calls, nothing more. The catalog is empty of
+equivalent to five `wb add` calls, nothing more. The catalog is empty of
 real URLs until Wave C's module repos exist; the *structure* ships in
 Wave B so `wb add <n>`/`wb install --bundle` have somewhere to resolve
 against from day one.
