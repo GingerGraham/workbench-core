@@ -4,6 +4,14 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`wb functions` and `get-functions` no longer print nothing when run from
+  zsh.** `wb` runs under bash, but it took the shell name from the zsh that
+  started it. With direnv installed, module files then ran direnv's zsh hook in
+  bash, and that error ended `wb` before it printed anything. `wb` now always
+  detects its own shell. (D130)
+
 ## [2.32.1] - 2026-11-25
 
 ### Added
