@@ -4,6 +4,12 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.32.1] - 2026-11-25
+
+### Changed
+
+- Publish module-consumed CI changes since v2.32.0 (.github/actions, module-*.yml, .github/scripts/module-ci) so module CI picks them up (D80, D95).
+
 ## [2.32.0] - 2026-11-24
 
 ### Added
