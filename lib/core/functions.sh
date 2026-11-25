@@ -25,6 +25,20 @@ command -v _workbench_register_script_version &>/dev/null && _workbench_register
 # Reconciles loader.sh's inline detection block and functions.sh's separate
 # detect-distro() into one routine, per the build brief's §4 callout.
 _workbench_detect_platform() {
+    # The shell is a fact about this process, not the session: bin/wb is
+    # always bash, even when started from zsh, which exports
+    # WORKBENCH_SHELL=zsh. Detect it every time, before the cached-result
+    # return below, so a module file sourced inside bin/wb never evals zsh
+    # init code in bash.
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+        WORKBENCH_SHELL="zsh"
+    elif [[ -n "${BASH_VERSION:-}" ]]; then
+        WORKBENCH_SHELL="bash"
+    else
+        WORKBENCH_SHELL="sh"
+    fi
+    export WORKBENCH_SHELL
+
     # A shell started before D126 exports WORKBENCH_PLATFORM_DETECTED=true
     # but no WORKBENCH_DISTRO_ID; re-detect in that case (idempotent).
     if [[ "${WORKBENCH_PLATFORM_DETECTED:-false}" == "true" && -n "${WORKBENCH_DISTRO_ID:-}" ]]; then
@@ -80,15 +94,6 @@ _workbench_detect_platform() {
     fi
     export WORKBENCH_DISTRO
     export WORKBENCH_DISTRO_ID
-
-    if [[ -n "${ZSH_VERSION:-}" ]]; then
-        WORKBENCH_SHELL="zsh"
-    elif [[ -n "${BASH_VERSION:-}" ]]; then
-        WORKBENCH_SHELL="bash"
-    else
-        WORKBENCH_SHELL="sh"
-    fi
-    export WORKBENCH_SHELL
 
     # New, not a rename: raw `uname -m` output. No universal name-normalizer
     # is provided — see docs/guide/module-authoring.md for the two common
