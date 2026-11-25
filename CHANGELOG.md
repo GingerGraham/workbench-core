@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.32.2] - 2026-11-25
+
 ### Fixed
 
 - **`wb functions` and `get-functions` no longer print nothing when run from
