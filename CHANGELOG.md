@@ -4,6 +4,15 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Port helpers in the Core API (Core API 1.12).** `workbench_port_in_use
+  <port>` and `workbench_port_pick <base> <label> [<taken>...]` let any module
+  find a free TCP port without depending on another module. They are the port
+  search `workbench-cloud` wrote for the AWS Emulator, moved here with a
+  caller label, a list of ports to skip, and a check on the base port. A module
+  that calls either declares `core_api: ">=1.12 <2.0"`. (D129)
+
 ## [2.32.0] - 2026-11-24
 
 ### Added
