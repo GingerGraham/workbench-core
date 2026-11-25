@@ -130,6 +130,71 @@ _read_prompt_silent() {
     eval "${_rp_var}=\${_rp_value}"
 }
 
+# ── Port helpers (docs/decisions-log.md D129) ─────────────────────────────
+# Moved here from workbench-cloud's shell/aws-emulator.sh (D128), so any
+# module can find a free port without depending on another module. TCP
+# listeners only.
+
+# workbench_port_in_use <port> — 0 when anything listens on <port> on any
+# address, 1 when nothing does, 2 when there's no tool to tell.
+workbench_port_in_use() {
+    local port="$1"
+    if command -v ss >/dev/null 2>&1; then
+        ss -Hltn 2>/dev/null | awk -v p="${port}" '$4 ~ (":" p "$") { found = 1 } END { exit found ? 0 : 1 }'
+    elif command -v lsof >/dev/null 2>&1; then
+        [ -n "$(lsof -nP -iTCP:"${port}" -sTCP:LISTEN -t 2>/dev/null)" ]
+    else
+        return 2
+    fi
+}
+
+# workbench_port_pick <base> <label> [<taken>...] — prints the first port
+# from <base> to <base>+99 that nothing listens on and that isn't one of
+# <taken> (ports the caller has promised elsewhere, such as a stopped
+# stack's). A port used on any address counts as used: deliberately
+# conservative. Messages start with "<label>:". Without ss or lsof, warns
+# once and prints the first port not in <taken>.
+workbench_port_pick() {
+    local base="$1" label="$2" candidate last rc t skip
+    case "${base}" in
+        ''|*[!0123456789]*)
+            log_error "${label}: port base must be a number (got '${base}')"
+            return 2
+            ;;
+    esac
+    shift 2
+    candidate="${base}"
+    last=$((base + 99))
+    while [ "${candidate}" -le "${last}" ]; do
+        skip=""
+        for t in "$@"; do
+            if [ "${t}" = "${candidate}" ]; then
+                skip=1
+                break
+            fi
+        done
+        if [ -z "${skip}" ]; then
+            workbench_port_in_use "${candidate}"
+            rc=$?
+            case "${rc}" in
+                1)
+                    printf '%s\n' "${candidate}"
+                    return 0
+                    ;;
+                0) ;;
+                *)
+                    log_warn "${label}: can't check ports (no ss or lsof) — trying ${candidate}"
+                    printf '%s\n' "${candidate}"
+                    return 0
+                    ;;
+            esac
+        fi
+        candidate=$((candidate + 1))
+    done
+    log_error "${label}: no free port from ${base} to ${last}"
+    return 1
+}
+
 # ── PATH deduplication ────────────────────────────────────────────────────
 dedupe-path() {
     if ! command -v awk &>/dev/null || ! command -v tr &>/dev/null || ! command -v sed &>/dev/null; then
