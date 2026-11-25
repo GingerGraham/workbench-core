@@ -50,6 +50,17 @@ once core's own `core`-tier registration is sourced:
   is not a terminal. Ported from workbench-precursor's `tools/git.sh` —
   deliberately part of core, not `workbench-git`, since it has no git-
   specific behaviour at all.
+- `workbench_port_in_use <port>` — 0 when anything listens on TCP `<port>`
+  on any address, 1 when nothing does, 2 when neither `ss` nor `lsof` is
+  available. **New in `CORE_API_VERSION` 1.12** (docs/decisions-log.md
+  D129).
+- `workbench_port_pick <base> <label> [<taken>...]` — prints the first port
+  from `<base>` to `<base>+99` that nothing listens on and that isn't one of
+  `<taken>`. A port used on any address counts as used. Messages start with
+  `<label>:`. Without `ss` or `lsof` it warns once and prints the first port
+  not in `<taken>`; when every port in the range is used it logs an error
+  and returns 1; a non-numeric `<base>` returns 2. **New in
+  `CORE_API_VERSION` 1.12.**
 - `_extract_function_names` / `_extract_alias_names` / `_get_functions_in`
   / `_get_aliases_in` — the getter-introspection primitives every
   `get-<domain>-functions` getter (declared via a module's
@@ -178,7 +189,8 @@ pass `<min_major>` to `_ensure_npm` declare `core_api: ">=1.9 <2.0"`: on an
 older core the argument is ignored and the fallback installs whatever
 Node.js the distro has. Modules that call `workbench_alias_define` declare
 `core_api: ">=1.10 <2.0"`: on an older core the function doesn't exist, so
-the alias is never defined.
+the alias is never defined. Modules that call `workbench_port_in_use` or
+`workbench_port_pick` declare `core_api: ">=1.12 <2.0"`.
 
 ## Install-helper functions (`lib/core/installers-common.sh`)
 
