@@ -61,6 +61,21 @@ once core's own `core`-tier registration is sourced:
   not in `<taken>`; when every port in the range is used it logs an error
   and returns 1; a non-numeric `<base>` returns 2. **New in
   `CORE_API_VERSION` 1.12.**
+- `workbench_complete <provider> <command>...` — tab completion for a
+  module's commands, in bash and zsh, from one provider function written in
+  plain shell. Core calls `<provider> <index> <word0> <word1> ...`: `<word0>`
+  is the command, and `<index>` is the position of the word being completed
+  (0 is the command). The provider prints one candidate per line,
+  optionally `candidate<TAB>description` (zsh shows the description, bash
+  the candidate only), or the single line `@files` to hand the word to the
+  shell's own file-name completion. It runs on every TAB, so it must be
+  fast and print nothing on stderr. Command names are letters, digits, `-`
+  and `_`; any other name returns 2 and nothing is registered. In zsh,
+  registrations survive a later `compinit`: a precmd hook restores them.
+  Modules guard the call with `command -v workbench_complete`: a core
+  older than 1.13 refuses the module's new register list but keeps the
+  previous one, which can still source the updated file.
+  **New in `CORE_API_VERSION` 1.13** (docs/decisions-log.md D132).
 - `_extract_function_names` / `_extract_alias_names` / `_get_functions_in`
   / `_get_aliases_in` — the getter-introspection primitives every
   `get-<domain>-functions` getter (declared via a module's
@@ -190,7 +205,8 @@ older core the argument is ignored and the fallback installs whatever
 Node.js the distro has. Modules that call `workbench_alias_define` declare
 `core_api: ">=1.10 <2.0"`: on an older core the function doesn't exist, so
 the alias is never defined. Modules that call `workbench_port_in_use` or
-`workbench_port_pick` declare `core_api: ">=1.12 <2.0"`.
+`workbench_port_pick` declare `core_api: ">=1.12 <2.0"`. Modules that call
+`workbench_complete` declare `core_api: ">=1.13 <2.0"`.
 
 ## Install-helper functions (`lib/core/installers-common.sh`)
 

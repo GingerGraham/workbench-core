@@ -252,8 +252,11 @@ Shows what a module says about itself.
 
 ```sh
 wb module info shell     # where it comes from, what it follows, and a description
-wb module docs shell     # its own help or README
+wb module docs shell     # its own help or README, then a list of its doc topics
+wb module docs containers stacks   # one of its doc topics
 ```
+
+`wb module docs` output is paged like `wb`'s other long output.
 
 `wb module reset <name> <file>` is the same as [`wb files use`](#wb-files).
 

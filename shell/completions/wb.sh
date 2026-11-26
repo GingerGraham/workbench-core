@@ -50,6 +50,15 @@ if [[ -n "${_wb_completion_version}" ]]; then
 
     # shellcheck disable=SC1090
     [[ -f "${_wb_completion_cache}" ]] && source "${_wb_completion_cache}"
+
+    # A compinit run after this one (the user's .zshrc, or a plugin manager
+    # after the first prompt) empties zsh's completion table, and wb's
+    # completion with it. Registering through the Core API's zsh helper as
+    # well puts wb under its precmd hook, which restores it (D132).
+    if [[ -n "${ZSH_VERSION:-}" && -f "${_wb_completion_cache}" ]] \
+        && command -v _wb_complete_zsh_register &>/dev/null; then
+        _wb_complete_zsh_register _wb_completions wb
+    fi
 fi
 
 unset _wb_completion_cache_dir _wb_completion_version _wb_completion_cache
