@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.33.0] - 2026-11-26
+
 ### Added
 
 - **`workbench_complete`, Core API 1.13.** Modules get bash and zsh tab
