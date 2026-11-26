@@ -21,6 +21,7 @@ The full field reference is the [manifest specification](https://github.com/Ging
 - [Declaring function availability](#declaring-function-availability)
 - [Writing for bash and zsh](#writing-for-bash-and-zsh)
 - [Keeping shell start clean](#keeping-shell-start-clean)
+- [Tab completion for your commands](#tab-completion-for-your-commands)
 - [Publishing module info and docs](#publishing-module-info-and-docs)
 - [Normalising the CPU architecture name](#normalising-the-cpu-architecture-name)
 - [Hooks](#hooks)
@@ -449,6 +450,31 @@ A new shell should start quietly, with or without the tools your module wraps. M
 - **Every getter exits 0** in both shells with a bare `PATH`, and lists at least one of your own function or alias names, as ready or as needing a tool. A module that registers no names only needs its `[INFO]` heading.
 - **Every check says what it needs.** No getter lists a name under "module gave no reason".
 
+## Tab completion for your commands
+
+`workbench_complete` gives your commands tab completion in bash and zsh from one function you write in plain shell.
+
+```bash
+# shell/notes.sh
+_notes_complete() {
+    local index="$1" cmd="$2"
+    # $3, $4, ... are the words after the command; $index is the one being completed
+    if [ "${index}" -eq 1 ]; then
+        printf '%s\t%s\n' work "notes for work" home "notes for home"
+    fi
+}
+
+workbench_complete _notes_complete notes-open notes-list
+```
+
+- Workbench calls your function as `<function> <index> <command> <word1> <word2> ...`. `<index>` is the position of the word being completed, and 0 is the command itself.
+- Print one candidate per line. Add a TAB and a description after a candidate, and zsh shows it; bash shows the candidate only.
+- Print the single line `@files` to hand the word to the shell's own file-name completion.
+- Your function runs on every TAB. Keep it fast: no network and no slow programs. Print nothing on stderr.
+- Command names are letters, digits, `-` and `_`. Any other name makes the call return 2, and nothing is registered.
+- In zsh, a `compinit` that runs later, in the user's `.zshrc` or from a plugin manager, would normally drop the completion. Workbench puts it back before the next prompt.
+- Declare `core_api: ">=1.13 <2.0"`.
+
 ## Publishing module info and docs
 
 Optional, but recommended. `wb module info <name>` and `wb module docs <name>` let users find out what your module is and does without leaving the shell. Neither needs `core_api:`, so they work with the simplest manifest.
@@ -463,6 +489,8 @@ info:
 Everything else `wb module info` shows comes from what workbench already knows: the repository, what it follows, the commit. Without a description, users see a "not published yet" line pointing at your repository. Keep it to one line; anything longer belongs in your docs.
 
 **`docs`**: add a `HELP.md` to your repository root, and `wb module docs <name>` prints it in full. There's no manifest field. Without `HELP.md`, your `README.md` is used. With neither, users see a pointer to your repository. No other filenames are checked, so name it exactly `HELP.md` if you want something different from your README.
+
+**Doc topics**: each `docs/<topic>.md` in your repository is a topic, and `wb module docs <name> <topic>` prints it. Topic names are lowercase letters, digits and `-`, starting with a letter or digit; files named any other way aren't offered. `wb module docs <name>` lists your topics after your `HELP.md` or `README.md`, and topic names tab-complete.
 
 ## Normalising the CPU architecture name
 

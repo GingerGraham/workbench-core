@@ -206,6 +206,7 @@ _wb_cmd_complete() {
         tools)              workbench_tools_collect 2>/dev/null | cut -d'|' -f4 ;;
         layer-ids)          _wb_complete_layer_ids "${2:-}" ;;
         reset-targets)      _wb_complete_reset_targets "${2:-}" ;;
+        doc-topics)         _wb_require modules/info.sh; workbench_module_doc_topics "${2:-}" 2>/dev/null ;;
         *)                  return 1 ;;
     esac
 }
@@ -345,6 +346,8 @@ ${flag_case}
                 COMPREPLY=( \$(compgen -W "\$(wb __complete registered-modules 2>/dev/null)" -- "\${cur}") )
             elif [[ \${COMP_CWORD} -eq 4 && "\${COMP_WORDS[2]}" == "reset" ]]; then
                 COMPREPLY=( \$(compgen -W "\$(wb __complete reset-targets "\${COMP_WORDS[3]}" 2>/dev/null) all" -- "\${cur}") )
+            elif [[ \${COMP_CWORD} -eq 4 && "\${COMP_WORDS[2]}" == "docs" ]]; then
+                COMPREPLY=( \$(compgen -W "\$(wb __complete doc-topics "\${COMP_WORDS[3]}" 2>/dev/null)" -- "\${cur}") )
             fi
             ;;
         files)
@@ -485,6 +488,10 @@ ${flag_case}
                 local -a _wb_targets
                 _wb_targets=(\${(f)"\$(wb __complete reset-targets "\${words[4]}" 2>/dev/null)"} all)
                 _describe 'file' _wb_targets
+            elif [[ \${CURRENT} -eq 5 && "\${words[3]}" == "docs" ]]; then
+                local -a _wb_topics
+                _wb_topics=(\${(f)"\$(wb __complete doc-topics "\${words[4]}" 2>/dev/null)"})
+                _describe 'topic' _wb_topics
             fi
             ;;
         files)

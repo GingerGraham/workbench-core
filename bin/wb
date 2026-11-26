@@ -1894,9 +1894,9 @@ _wb_cmd_module_info() {
 }
 
 _wb_cmd_module_docs() {
-    local name="${1:-}"
+    local name="${1:-}" topic="${2:-}" topics
     if [[ -z "${name}" ]]; then
-        log_error "wb module docs: usage: wb module docs <name>"
+        log_error "wb module docs: usage: wb module docs <name> [<topic>]"
         return 2
     fi
     if ! workbench_is_registered "${name}"; then
@@ -1912,12 +1912,35 @@ _wb_cmd_module_docs() {
     fi
 
     local docs_file
+    if [[ -n "${topic}" ]]; then
+        if ! docs_file="$(workbench_module_doc_topic_path "${name}" "${topic}")"; then
+            log_error "wb module docs: '${name}' has no '${topic}' document"
+            topics="$(workbench_module_doc_topics "${name}" | tr '\n' ' ')"
+            [[ -n "${topics}" ]] && log_error "wb module docs: ${name}'s topics: ${topics% }"
+            return 1
+        fi
+        {
+            echo
+            echo "== ${name}: docs/${topic}.md =="
+            echo
+            cat "${docs_file}"
+            echo
+        } | _wb_maybe_page
+        return 0
+    fi
     if docs_file="$(workbench_module_docs_path "${name}")"; then
-        echo
-        echo "== ${name}: $(basename "${docs_file}") =="
-        echo
-        cat "${docs_file}"
-        echo
+        topics="$(workbench_module_doc_topics "${name}" | tr '\n' ' ')"
+        {
+            echo
+            echo "== ${name}: $(basename "${docs_file}") =="
+            echo
+            cat "${docs_file}"
+            echo
+            if [[ -n "${topics}" ]]; then
+                echo "More from ${name}: wb module docs ${name} <topic>, with <topic> one of: ${topics% }"
+                echo
+            fi
+        } | _wb_maybe_page
         return 0
     fi
 
@@ -1945,7 +1968,7 @@ _wb_cmd_module() {
         docs)  _wb_cmd_module_docs "$@" ;;
         reset) _wb_cmd_module_reset "$@" ;;
         *)
-            log_error "wb module: usage: wb module info <name> | wb module docs <name> | wb module reset <name> <target>|all"
+            log_error "wb module: usage: wb module info <name> | wb module docs <name> [<topic>] | wb module reset <name> <target>|all"
             return 2
             ;;
     esac
@@ -4131,7 +4154,7 @@ EOF
 
 _wb_help_module() {
     cat <<'EOF'
-Usage: wb module info <name>  |  wb module docs <name>  |  wb module reset <name> <target>|all [--yes]
+Usage: wb module info <name>  |  wb module docs <name> [<topic>]  |  wb module reset <name> <target>|all [--yes]
 
 Module-published information — distinct from 'wb status' (sync/tracking
 state core already knows regardless of what a module publishes) and from
@@ -4146,6 +4169,9 @@ module).
                  straight from its synced snapshot — nothing else is
                  checked. Neither present prints a pointer to the
                  module's repository instead.
+  docs <name> <topic>
+                 The module's docs/<topic>.md. The topics a module has
+                 are listed at the end of 'wb module docs <name>'.
   reset <name> <target>|all [--follow] [--yes]
                  The same as 'wb files use' — "get me back to the
                  workbench default". Your current version is backed up

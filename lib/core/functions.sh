@@ -200,6 +200,160 @@ workbench_port_pick() {
     return 1
 }
 
+# ── Completion registration (docs/decisions-log.md D132) ──────────────────
+# workbench_complete <provider> <command>... — tab completion for module
+# commands, in bash and zsh, from one provider function the module writes in
+# plain shell. The provider is called as
+#     <provider> <index> <word0> <word1> ...
+# where <word0> is the command and <index> is the position of the word being
+# completed (0 is the command itself). It prints one candidate per line,
+# optionally "candidate<TAB>description" (zsh shows the description, bash
+# shows the candidate only), or the single line "@files" to hand the word to
+# the shell's own file-name completion.
+#
+# zsh: a compinit run after this (the user's .zshrc, or a plugin manager
+# after the first prompt) empties zsh's completion table. A precmd hook
+# notices and registers everything again; the check is one table lookup per
+# prompt.
+
+_WB_COMPLETE_PROVIDERS="${_WB_COMPLETE_PROVIDERS:-}"
+_WB_COMPLETE_ZSH="${_WB_COMPLETE_ZSH:-}"
+
+# _wb_complete_provider <command> — the provider registered for <command>.
+# Entries are " <command>=<provider>"; the last one for a command wins, so
+# registering again after 'wb reload' needs no clean-up.
+_wb_complete_provider() {
+    local rest
+    case "${_WB_COMPLETE_PROVIDERS} " in
+        *" $1="*) ;;
+        *) return 1 ;;
+    esac
+    rest="${_WB_COMPLETE_PROVIDERS##* "$1"=}"
+    printf '%s\n' "${rest%% *}"
+}
+
+# _wb_complete_bash <command> — bash's -F function for every registered
+# command.
+_wb_complete_bash() {
+    local provider line cur values="" files=""
+    COMPREPLY=()
+    provider="$(_wb_complete_provider "$1")" || return 0
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    while IFS= read -r line; do
+        case "${line}" in
+            "") ;;
+            @files) files=1 ;;
+            *) values="${values}${line%%$'\t'*}
+" ;;
+        esac
+    done < <("${provider}" "${COMP_CWORD}" "${COMP_WORDS[@]}" 2>/dev/null)
+    # Nothing in COMPREPLY: complete -o default falls back to file names.
+    [ -n "${files}" ] && return 0
+    local IFS='
+'
+    # shellcheck disable=SC2207  # compgen's output, split on newlines only
+    COMPREPLY=( $(compgen -W "${values}" -- "${cur}") )
+}
+
+# _wb_complete_zsh — zsh's completion function for every registered
+# command.
+_wb_complete_zsh() {
+    local provider out line value desc files=""
+    local -a described
+    described=()
+    # shellcheck disable=SC2154  # words and CURRENT are zsh's completion state
+    provider="$(_wb_complete_provider "${words[1]}")" || return 1
+    out="$("${provider}" "$((CURRENT - 1))" "${words[@]}" 2>/dev/null)"
+    while IFS= read -r line; do
+        case "${line}" in
+            "") ;;
+            @files) files=1 ;;
+            *)
+                value="${line%%$'\t'*}"
+                desc=""
+                case "${line}" in
+                    *$'\t'*) desc="${line#*$'\t'}" ;;
+                esac
+                value="${value//:/\\:}"
+                if [ -n "${desc}" ]; then
+                    described+=("${value}:${desc}")
+                else
+                    described+=("${value}")
+                fi
+                ;;
+        esac
+    done <<EOF
+${out}
+EOF
+    if [ -n "${files}" ]; then
+        _files
+        return
+    fi
+    [ "${#described[@]}" -gt 0 ] && _describe 'value' described
+}
+
+# _wb_complete_zsh_register <zsh-function> <command>... — compdef, kept
+# registered across a later compinit. Core's own wb completion uses it too.
+_wb_complete_zsh_register() {
+    local fn="$1" cmd
+    shift
+    if ! command -v compdef >/dev/null 2>&1; then
+        autoload -Uz compinit && compinit -C
+    fi
+    for cmd in "$@"; do
+        _WB_COMPLETE_ZSH="${_WB_COMPLETE_ZSH} ${cmd}=${fn}"
+    done
+    compdef "${fn}" "$@"
+    case " ${precmd_functions[*]:-} " in
+        *" _wb_complete_rearm "*) ;;
+        *) precmd_functions+=(_wb_complete_rearm) ;;
+    esac
+}
+
+# _wb_complete_rearm — precmd hook. When a later compinit has emptied the
+# table (the first registered command has no completion any more), it
+# registers every command again.
+_wb_complete_rearm() {
+    local first entry
+    command -v compdef >/dev/null 2>&1 || return 0
+    first="${_WB_COMPLETE_ZSH# }"
+    first="${first%%=*}"
+    [ -n "${first}" ] || return 0
+    # shellcheck disable=SC2154  # _comps is zsh's completion table
+    [[ -n "${_comps[${first}]:-}" ]] && return 0
+    while IFS= read -r entry; do
+        [ -n "${entry}" ] || continue
+        compdef "${entry#*=}" "${entry%%=*}"
+    done <<EOF
+$(printf '%s\n' "${_WB_COMPLETE_ZSH}" | tr ' ' '\n')
+EOF
+}
+
+workbench_complete() {
+    local provider="${1:-}" cmd
+    if [ "$#" -lt 2 ]; then
+        log_error "workbench_complete: usage: workbench_complete <provider> <command>..."
+        return 2
+    fi
+    shift
+    for cmd in "$@"; do
+        case "${cmd}" in
+            ''|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-]*)
+                log_error "workbench_complete: '${cmd}' isn't a command name (letters, digits, - and _)"
+                return 2
+                ;;
+        esac
+    done
+    for cmd in "$@"; do
+        _WB_COMPLETE_PROVIDERS="${_WB_COMPLETE_PROVIDERS} ${cmd}=${provider}"
+    done
+    if [ -n "${BASH_VERSION:-}" ]; then
+        complete -o default -F _wb_complete_bash "$@"
+    elif [ -n "${ZSH_VERSION:-}" ]; then
+        _wb_complete_zsh_register _wb_complete_zsh "$@"
+    fi
+}
+
 # ── PATH deduplication ────────────────────────────────────────────────────
 dedupe-path() {
     if ! command -v awk &>/dev/null || ! command -v tr &>/dev/null || ! command -v sed &>/dev/null; then

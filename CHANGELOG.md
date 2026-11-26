@@ -4,6 +4,22 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`workbench_complete`, Core API 1.13.** Modules get bash and zsh tab
+  completion for their commands from one provider function in plain shell;
+  zsh shows descriptions. In zsh, registrations survive a `compinit` run
+  later in your `.zshrc` or by a plugin manager.
+- **`wb module docs <module> <topic>`** shows a module's `docs/<topic>.md`.
+  `wb module docs <module>` lists the topics after the README, and both
+  are paged like `wb`'s other long output. Topics tab-complete.
+
+### Fixed
+
+- **`wb`'s zsh tab completion no longer disappears** when your `.zshrc`, or
+  a plugin manager after the first prompt, runs `compinit` after
+  workbench's loader line.
+
 ## [2.32.2] - 2026-11-25
 
 ### Fixed
