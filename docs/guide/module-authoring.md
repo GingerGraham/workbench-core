@@ -464,7 +464,9 @@ _notes_complete() {
     fi
 }
 
-workbench_complete _notes_complete notes-open notes-list
+if command -v workbench_complete >/dev/null 2>&1; then
+    workbench_complete _notes_complete notes-open notes-list
+fi
 ```
 
 - Workbench calls your function as `<function> <index> <command> <word1> <word2> ...`. `<index>` is the position of the word being completed, and 0 is the command itself.
@@ -473,7 +475,7 @@ workbench_complete _notes_complete notes-open notes-list
 - Your function runs on every TAB. Keep it fast: no network and no slow programs. Print nothing on stderr.
 - Command names are letters, digits, `-` and `_`. Any other name makes the call return 2, and nothing is registered.
 - In zsh, a `compinit` that runs later, in the user's `.zshrc` or from a plugin manager, would normally drop the completion. Workbench puts it back before the next prompt.
-- Declare `core_api: ">=1.13 <2.0"`.
+- Declare `core_api: ">=1.13 <2.0"`, and still guard the call with `command -v` as above. A host on an older core may keep loading your file after an update, and there it should load without completion, not print `command not found` at every shell start.
 
 ## Publishing module info and docs
 

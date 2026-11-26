@@ -72,6 +72,9 @@ once core's own `core`-tier registration is sourced:
   fast and print nothing on stderr. Command names are letters, digits, `-`
   and `_`; any other name returns 2 and nothing is registered. In zsh,
   registrations survive a later `compinit`: a precmd hook restores them.
+  Modules guard the call with `command -v workbench_complete`: a core
+  older than 1.13 refuses the module's new register list but keeps the
+  previous one, which can still source the updated file.
   **New in `CORE_API_VERSION` 1.13** (docs/decisions-log.md D132).
 - `_extract_function_names` / `_extract_alias_names` / `_get_functions_in`
   / `_get_aliases_in` — the getter-introspection primitives every
