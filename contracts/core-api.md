@@ -324,6 +324,29 @@ family file. Every other tier loads unconditionally — a module wanting narrowe
 conditional loading does so inside its own sourced file (e.g. guard on
 `command -v <tool>`).
 
+## Homebrew on PATH
+
+**New in `CORE_API_VERSION` 1.14** (docs/decisions-log.md D134).
+
+Before the first tier, the loader looks for an executable `brew` at
+`$HOMEBREW_PREFIX/bin/brew` (when `HOMEBREW_PREFIX` is set), then at
+`/opt/homebrew` and `/usr/local` on macOS, or `/home/linuxbrew/.linuxbrew` and
+`~/.linuxbrew` on Linux. When it finds one it:
+
+- adds `<prefix>/bin` and `<prefix>/sbin` to `PATH`, at the front on macOS and
+  at the end on Linux, or as `WORKBENCH_BREW_PATH` (`front` | `end` | `off`)
+  says. A directory already on `PATH` is never moved.
+- exports `HOMEBREW_PREFIX`, and `HOMEBREW_CELLAR` and `HOMEBREW_REPOSITORY`
+  when they are unset.
+- in zsh, adds `<prefix>/share/zsh/site-functions` to `fpath`, on the same
+  side as `PATH`.
+
+With `WORKBENCH_BREW_PATH=off` the loader does none of this.
+
+A module may rely on `command -v brew` and `HOMEBREW_PREFIX` from the `env`
+tier on. `detect-package-manager` is unchanged: on Linux a native package
+manager is reported even when brew is on `PATH`.
+
 ## The prompt-ownership convention
 
 Core sets only a bare, functional fallback `PS1`/`PROMPT` — no opinionated

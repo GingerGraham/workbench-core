@@ -121,6 +121,10 @@ fi
 
 # ── 6. lib/loader.sh defensively ensures ~/.local/bin is on PATH ───────────
 LOADER="${REPO_ROOT}/lib/loader.sh"
+# These compare the whole PATH, so keep a host's Homebrew out of it
+# (GitHub's Ubuntu runners have one; D134 puts it on PATH). check-brew-env.sh
+# covers that behaviour.
+export WORKBENCH_BREW_PATH=off
 OUT_PATH="$(PATH="/usr/bin:/bin" HOME="${HOME}" bash -c "source '${LOADER}' >/dev/null 2>&1; printf '%s' \"\${PATH}\"")"
 case ":${OUT_PATH}:" in
     *":${HOME}/.local/bin:"*) ok "sourcing lib/loader.sh adds ~/.local/bin to PATH" ;;

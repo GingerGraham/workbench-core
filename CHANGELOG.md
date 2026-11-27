@@ -4,6 +4,20 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Homebrew is put on `PATH` before any module loads, Core API 1.14.** If
+  Homebrew is installed, workbench finds it, adds its `bin` and `sbin`
+  directories to `PATH`, exports `HOMEBREW_PREFIX`, and adds its zsh
+  completions to `fpath`. They go at the front on macOS and at the end on
+  Linux, so your distribution's packages still win there. A Homebrew
+  directory already on `PATH` is never moved. Set `WORKBENCH_BREW_PATH` to
+  `front`, `end` or `off` in `~/.config/workbench/local/settings.sh` to
+  change it. Modules loaded later see Homebrew's commands, which a
+  Homebrew line added to the end of `~/.bashrc` could not promise.
+- **`wb uninstall`'s notes say Homebrew stays installed** and give the line
+  that keeps it on `PATH`, since workbench was the thing putting it there.
+
 ## [2.33.0] - 2026-11-26
 
 ### Added

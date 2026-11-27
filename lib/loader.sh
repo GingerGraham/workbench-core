@@ -306,6 +306,97 @@ if [[ "${WORKBENCH_PLAIN_SHELL}" == "true" ]]; then
     WORKBENCH_SHOW_FUNCTIONS=false
 fi
 
+# ── Homebrew on PATH (docs/decisions-log.md D134) ──────────────────────────────
+# Before every tier, so env-tier files in any module see brew-installed
+# commands; module-name order inside a tier can't promise that. Writes the
+# variables itself rather than eval'ing `brew shellenv`: that always prepends,
+# costs a subprocess per shell, and prints nothing (fpath included) when PATH
+# already has the prefix.
+#
+# WORKBENCH_BREW_PATH: front | end | off. Default front on macOS (Homebrew's
+# convention), end on Linux (distro packages win, D121). A brew directory
+# already on PATH, in any position, is never moved.
+#
+# Inline variables, not a function: the loader leaves no helpers in the
+# user's shell. Candidates are listed out because an unquoted word list isn't
+# split in zsh.
+_wb_brew_mode="${WORKBENCH_BREW_PATH:-}"
+case "${_wb_brew_mode}" in
+    front|end|off) ;;
+    "")
+        if [[ "${WORKBENCH_OS}" == "Mac" ]]; then _wb_brew_mode="front"; else _wb_brew_mode="end"; fi
+        ;;
+    *)
+        log_warn "WORKBENCH_BREW_PATH='${_wb_brew_mode}' isn't front, end or off; using the default."
+        if [[ "${WORKBENCH_OS}" == "Mac" ]]; then _wb_brew_mode="front"; else _wb_brew_mode="end"; fi
+        ;;
+esac
+
+_wb_brew_prefix=""
+if [[ "${_wb_brew_mode}" != "off" ]]; then
+    if [[ -n "${HOMEBREW_PREFIX:-}" && -x "${HOMEBREW_PREFIX}/bin/brew" ]]; then
+        _wb_brew_prefix="${HOMEBREW_PREFIX}"
+    elif [[ "${WORKBENCH_OS}" == "Mac" ]]; then
+        if [[ -x /opt/homebrew/bin/brew ]]; then
+            _wb_brew_prefix="/opt/homebrew"
+        elif [[ -x /usr/local/bin/brew ]]; then
+            _wb_brew_prefix="/usr/local"
+        fi
+    else
+        if [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+            _wb_brew_prefix="/home/linuxbrew/.linuxbrew"
+        elif [[ -x "${HOME}/.linuxbrew/bin/brew" ]]; then
+            _wb_brew_prefix="${HOME}/.linuxbrew"
+        fi
+    fi
+fi
+
+if [[ -n "${_wb_brew_prefix}" ]]; then
+    if [[ "${_wb_brew_mode}" == "front" ]]; then
+        # sbin first so bin ends up ahead of it.
+        for _wb_brew_dir in "${_wb_brew_prefix}/sbin" "${_wb_brew_prefix}/bin"; do
+            case ":${PATH}:" in
+                *":${_wb_brew_dir}:"*) ;;
+                *) PATH="${_wb_brew_dir}${PATH:+:${PATH}}" ;;
+            esac
+        done
+    else
+        for _wb_brew_dir in "${_wb_brew_prefix}/bin" "${_wb_brew_prefix}/sbin"; do
+            case ":${PATH}:" in
+                *":${_wb_brew_dir}:"*) ;;
+                *) PATH="${PATH:+${PATH}:}${_wb_brew_dir}" ;;
+            esac
+        done
+    fi
+    export PATH
+    export HOMEBREW_PREFIX="${_wb_brew_prefix}"
+    [[ -n "${HOMEBREW_CELLAR:-}" ]] || export HOMEBREW_CELLAR="${_wb_brew_prefix}/Cellar"
+    if [[ -z "${HOMEBREW_REPOSITORY:-}" ]]; then
+        if [[ -d "${_wb_brew_prefix}/Homebrew" ]]; then
+            export HOMEBREW_REPOSITORY="${_wb_brew_prefix}/Homebrew"
+        else
+            export HOMEBREW_REPOSITORY="${_wb_brew_prefix}"
+        fi
+    fi
+    # zsh completions: before any compinit (workbench-shell runs it in a
+    # later tier). Same side of the list as PATH.
+    # shellcheck disable=SC2154,SC2206  # fpath is zsh's own array
+    if [[ -n "${ZSH_VERSION:-}" && -d "${_wb_brew_prefix}/share/zsh/site-functions" ]]; then
+        _wb_brew_dir="${_wb_brew_prefix}/share/zsh/site-functions"
+        case " ${fpath[*]} " in
+            *" ${_wb_brew_dir} "*) ;;
+            *)
+                if [[ "${_wb_brew_mode}" == "front" ]]; then
+                    fpath=("${_wb_brew_dir}" "${fpath[@]}")
+                else
+                    fpath=("${fpath[@]}" "${_wb_brew_dir}")
+                fi
+                ;;
+        esac
+    fi
+fi
+unset _wb_brew_mode _wb_brew_prefix _wb_brew_dir
+
 # ── register.list tier resolution ─────────────────────────────────────────────
 # Six tiers, sourced in this fixed order for every loadable module — the
 # same order workbench-precursor's loader.sh already enforced, just no

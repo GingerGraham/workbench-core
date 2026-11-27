@@ -96,6 +96,9 @@ new_host() {
 # run_shell <rc-file> <command> — an interactive bash with a clean
 # environment that reads only <rc-file>. --rcfile also skips the system
 # bashrc, so the result does not depend on the machine running the test.
+# WORKBENCH_BREW_PATH=off: a host with Homebrew installed (GitHub's Ubuntu
+# runners have it) would have its directories added to PATH (D134), which these
+# comparisons would count as a change. check-brew-env.sh covers that behaviour.
 # Extra KEY=VALUE pairs for the inner shell go in RUN_SHELL_ENV.
 run_shell() {
     local rc_file="$1" command_text="$2"
@@ -108,6 +111,7 @@ run_shell() {
         XDG_CACHE_HOME="${HOST_CACHE}" \
         PATH="${RUN_SHELL_PATH:-/usr/local/bin:/usr/bin:/bin}" \
         TERM=dumb \
+        WORKBENCH_BREW_PATH=off \
         ${RUN_SHELL_ENV:-} \
         bash --noprofile --rcfile "${rc_file}" -i -c "${command_text}" 2>&1 )
 }

@@ -206,6 +206,24 @@ wb remove core
     && ok "'wb remove core' refuses and points to 'wb uninstall'" \
     || { fail "'wb remove core' (rc ${rc})"; cat "${OUT}" "${ERR}"; }
 
+# ── Homebrew (D134): the notes keep it reachable ────────────────────────────
+# HOMEBREW_PREFIX is emptied for the plain preview: a macOS runner has it set.
+HOMEBREW_PREFIX='' wb uninstall --dry-run
+grep -q '### Homebrew' "${OUT}" \
+    && fail "the notes mention Homebrew when none is on this machine" \
+    || ok "no Homebrew: the notes don't mention it"
+HOMEBREW_PREFIX="${HOME}/.linuxbrew" wb uninstall --dry-run
+[[ "${rc}" -eq 0 ]] \
+    && grep -q '^### Homebrew$' "${OUT}" \
+    && grep -qF '`~/.linuxbrew`' "${OUT}" \
+    && grep -qF 'eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"' "${OUT}" \
+    && grep -qF 'https://github.com/Homebrew/install#uninstall-homebrew' "${OUT}" \
+    && ok "Homebrew: the notes say it stays, how to keep it on PATH, and link its uninstaller" \
+    || { fail "Homebrew notes (rc ${rc})"; cat "${OUT}" "${ERR}"; }
+[[ -d "${MODULES}/core" && ! -e "${NOTES}" ]] \
+    && ok "Homebrew: the preview still changes nothing" \
+    || fail "the Homebrew preview changed something"
+
 # ── Refuses without a terminal or --yes ────────────────────────────────────
 wb uninstall
 [[ "${rc}" -ne 0 && -d "${MODULES}/core" && ! -e "${NOTES}" ]] \

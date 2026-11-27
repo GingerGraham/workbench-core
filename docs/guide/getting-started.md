@@ -175,6 +175,7 @@ Your file replaces the bundles workbench ships, rather than adding to them. Copy
 | `WORKBENCH_PLAIN_SHELL=true` | A plain shell: no coloured prompt, and no function list when a shell starts. |
 | `WORKBENCH_SHOW_FUNCTIONS=true` | Print a short list of your functions when each new shell starts. |
 | `WORKBENCH_DEBUG=true` | Detailed logging, for tracking down a problem. |
+| `WORKBENCH_BREW_PATH=front` | Where Homebrew goes on `PATH`: `front`, `end` or `off`. The default is `front` on macOS and `end` on Linux, so your distribution's own packages win where both provide a command. A Homebrew directory that is already on `PATH` is never moved. `off` leaves Homebrew alone entirely. |
 | `WORKBENCH_ALLOW_AUR=true` | Let installers use the Arch User Repository. Off by default, because AUR packages are unreviewed build scripts. Without it, an installer that needs the AUR prints the command for you to run yourself. |
 
 For your own functions and aliases, add any other `*.sh` file to `~/.config/workbench/local/`. Those files load after `settings.sh`, in filename order. New shells pick them up, or run `wb reload` to load them into the current one.

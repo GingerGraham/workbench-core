@@ -458,6 +458,23 @@ _wb_uninstall_write_notes() {
         echo '```'
         echo
         [[ -n "${kept_ssh}" ]] && _wb_uninstall_notes_ssh "${kept_ssh}"
+        if [[ -n "${HOMEBREW_PREFIX:-}" ]]; then
+            # D134: the loader was what put Homebrew on PATH.
+            echo "### Homebrew"
+            echo
+            echo "\`$(_wb_uninstall_tilde "${HOMEBREW_PREFIX}")\`"
+            echo
+            echo "**Why it was left:** it's a package manager with software of yours in it. Workbench was putting it on your \`PATH\`, so new shells stop finding it unless you add it back."
+            echo
+            echo "**To keep using it,** add this to your shell startup file:"
+            echo
+            echo '```sh'
+            echo "eval \"\$($(_wb_uninstall_q "${HOMEBREW_PREFIX}/bin/brew") shellenv)\""
+            echo '```'
+            echo
+            echo "**If you don't want it:** Homebrew's own uninstaller removes it: https://github.com/Homebrew/install#uninstall-homebrew"
+            echo
+        fi
         if [[ -n "${all_tools}" ]]; then
             echo "### Software installed through workbench"
             echo
