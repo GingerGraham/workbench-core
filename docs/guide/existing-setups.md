@@ -43,6 +43,7 @@ This holds on a reload too. If you redefine one of workbench's aliases after wor
 
 - **It adds one line to your shell startup file** (`~/.bashrc`, and the zsh files if you use zsh), after everything already there. Before adding it the first time, it backs up a file that already has content. See [Your existing startup file](#your-existing-startup-file).
 - **It adds `~/.local/bin` to the end of `PATH` if it's missing.** If it's already there, in any position, nothing moves. Directories are added, never reordered. At the end, system commands win over anything in `~/.local/bin`; to prefer a tool you installed there, put the directory first in your own startup file.
+- **It puts Homebrew on `PATH` if it's installed.** It looks in `/opt/homebrew` and `/usr/local` on macOS, and `/home/linuxbrew/.linuxbrew` and `~/.linuxbrew` on Linux. On macOS the directories go at the front, as Homebrew does. On Linux they go at the end, so your distribution's packages win. `WORKBENCH_BREW_PATH=front`, `end` or `off` in `~/.config/workbench/local/settings.sh` changes that. If your own startup file already runs `brew shellenv` before workbench loads, the directories are already on `PATH` and workbench leaves them where they are.
 - **It removes repeated `PATH` entries** once loading finishes. It keeps the first copy of each, so it never changes which directory wins. This is the one place workbench touches something it didn't create.
 - **Some modules set defaults where you have none.** With workbench-shell installed and no `FZF_*` variables of your own, fzf gets workbench's defaults (height, layout, and `fd` to list files). That also changes how your own fzf aliases look and where they list files from. Set the variable yourself and workbench leaves it alone.
 
@@ -115,6 +116,7 @@ Take another snapshot after each `wb add <module>`. Adding modules one at a time
 - **A config file you want to keep.** When the installer asks about an existing file, keep yours. Later: `wb files policy <module> <file> skip`.
 - **A block you don't want in one of your config files.** `wb add <module> --skip-layer <layer>` never adds it. `wb files policy <module> <layer> skip` removes it. See [Workbench blocks in your own files](config-files.md#workbench-blocks-in-your-own-files).
 - **The startup file warning.** If your startup file is meant to stay as it is, the warning prints a `touch '<backup>.acknowledged'` line under each backup. Run it, and that backup stops warning but stays on disk. If workbench later makes a new backup, you'll get a warning for that one.
+- **Homebrew on `PATH`.** Set `WORKBENCH_BREW_PATH=off` in `~/.config/workbench/local/settings.sh` and workbench ignores Homebrew entirely.
 - **A module's shell code.** `wb load disable <name>` turns it off in new shells, while updates and config carry on.
 
 ## Omarchy 4.x
