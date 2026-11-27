@@ -4,6 +4,8 @@ All notable changes to `workbench-core` are documented here.
 
 ## [Unreleased]
 
+## [2.34.0] - 2026-11-27
+
 ### Added
 
 - **Homebrew is put on `PATH` before any module loads, Core API 1.14.** If
